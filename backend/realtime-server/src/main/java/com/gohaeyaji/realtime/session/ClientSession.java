@@ -19,6 +19,8 @@ public final class ClientSession {
     private volatile String sessionId;
     private volatile int channelNo;
     private volatile Integer boothId;
+    private volatile int pid;
+    private volatile long lastMoveAt;
     private volatile long lastPingAt;
     private volatile long lastActivityAt;
 
@@ -30,9 +32,10 @@ public final class ClientSession {
     }
 
     /** Called once, when hello succeeds. */
-    public void ready(String sessionId, int channelNo, long now) {
+    public void ready(String sessionId, int channelNo, int pid, long now) {
         this.sessionId = sessionId;
         this.channelNo = channelNo;
+        this.pid = pid;
         this.lastPingAt = now;
         this.ready = true;
     }
@@ -55,6 +58,19 @@ public final class ClientSession {
 
     public void touchActivity(long now) {
         this.lastActivityAt = now;
+    }
+
+    /** @return true if this move is far enough from the previous accepted one (rate limit) */
+    public boolean acceptMove(long now, long minGapMs) {
+        if (now - lastMoveAt < minGapMs) {
+            return false;
+        }
+        lastMoveAt = now;
+        return true;
+    }
+
+    public int pid() {
+        return pid;
     }
 
     public WebSocketSession socket() {

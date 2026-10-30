@@ -74,6 +74,11 @@ final class TestClient implements AutoCloseable {
         throw new AssertionError("no '" + type + "' message within 5 s, received: " + received);
     }
 
+    /** Every message of this type received so far. */
+    List<JsonNode> all(String type) {
+        return received.stream().filter(m -> type.equals(m.path("type").asText())).toList();
+    }
+
     CloseStatus awaitClose() throws InterruptedException {
         long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
         while (System.nanoTime() < deadline && closeStatus == null) {

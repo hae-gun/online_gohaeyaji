@@ -16,8 +16,17 @@
  *   claim(boothId: number): Promise<{ ok: boolean, reason?: string }>,
  *   release(boothId: number, reason?: 'USER'|'IDLE'): void,
  *   activity(): void,
+ *   onPresence(listener: (e: PresenceEvent) => void): void,
+ *   sendMove(x: number, z: number, ry: number): void,
+ *   sharesPresence: boolean,
  *   idle: { limitMs: number, warnMs: number, dangerMs: number },
  * }} RoomClient
+ *
+ * Positions of other players (protocol v0.3). Rows are [pid, x, z, ry] or, in a reset,
+ * [pid, x, z, ry, boothId or -1]:
+ * @typedef {{ kind: 'reset', you: number|null, players: number[][] }
+ *         | { kind: 'batch', moved: number[][], left: number[] }
+ *         | { kind: 'booth', boothId: number, pid: number|null }} PresenceEvent
  *
  * onForcedRelease fires when the server takes a booth away (IDLE safety net, LEASE_EXPIRED,
  * connection lost). It never fires for a release the client asked for itself.
@@ -65,5 +74,8 @@ export function createLocalRoomClient({ count, simulate = false }) {
       emit();
     },
     activity() { /* nothing to report */ },
+    onPresence() { /* nobody else exists in the simulation */ },
+    sendMove() { /* nobody to tell */ },
+    sharesPresence: false,
   };
 }

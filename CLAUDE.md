@@ -38,13 +38,15 @@ frontend/   Vite 5.4.21 + three.js 0.128.0 (색감 때문에 고정)
   src/controls/        keyboard(e.code 기준), camera-rig(궤도, 벽 충돌, 1인칭), navigation
   src/answer/          답변 엔진: 위기 키워드 > 금지어 > 카테고리 매칭 > 템플릿
   src/net/room-client.js     RoomClient 계약 + 로컬 시뮬레이션
-  src/net/ws-room-client.js  WebSocket 구현 (규약 v0.2)
+  src/net/ws-room-client.js  WebSocket 구현 (규약 v0.3)
+  src/net/move-sender.js     내 위치 전송 시점 (걸을 때 200ms마다, 멈추면 1번)
+  src/world/others.js        다른 유저 캐릭터 (pid로 색, 보간, 고해소 안이면 숨김)
   public/data/         answers/safety/blocked .json(비공개) + .sample.json(공개)
 backend/
   docker-compose.yml   redis + realtime-server
   realtime-server/     Spring Boot 3.3.5, Java 21, 순수 WebSocket(/ws), Redis Lua
   analyzer/            Python 형태소 분석 서비스 (미구현, README만)
-docs/realtime-protocol.md   프론트와 서버의 메시지 규약 (v0.2), 정책 결정 기록
+docs/realtime-protocol.md   프론트와 서버의 메시지 규약 (v0.3), 정책 결정 기록
 .github/workflows/deploy-pages.yml   frontend 빌드 후 Pages 배포, 시크릿으로 비공개 데이터 주입
 ```
 
@@ -63,14 +65,14 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 ./gradlew test                                       # Testcontainers로 Redis 띄움 (Docker 필요)
 ```
 
-## 규약 핵심 (docs/realtime-protocol.md v0.2)
+## 규약 핵심 (docs/realtime-protocol.md v0.3)
 
 - 메시지: hello/welcome, ping/pong(10초), claim/claimResult, release/released, activity, booth(변경분, seq), snapshot, resync, error. 줄서기 메시지(queueJoin, queueCall 등)는 정의만 됨
 - 채널: 고해소 20칸, 정원 60명, 48명(80%) 차면 다음 채널 생성, 앞 채널부터 채움, 남은 12자리는 재접속용
 - 타이머: 하트비트 끊김 30초, 방 임대 30초(ping마다 연장), 재접속 유예 15초, 무입력 90초(20초 남으면 노란색, 10초 남으면 빨간색 카운터, 성호경과 답변 대기 중 멈춤), 서버 안전망 100초, 줄 호출 예약 20초
 - 탭마다 별도 세션(한 세션 방 1개, 줄 1자리). IP당 연결 20개. 메시지 2KB. 허용 Origin: https://hae-gun.github.io, http://localhost:5173
 - 종료 코드: 4001 버전 불일치, 4002 하트비트, 4004 IP 초과, 4005 크기, 4006 남용, 4008 만석
-- 위치 동기화(다음 단계, 규약 v0.3 예정): 움직일 때만 초당 최대 5회 전송, 서버가 0.2초마다 채널 단위로 모아서 전송(배칭), 수신 측 보간, 고해소 입장 시 문 안으로 사라짐, 위치는 서버 메모리만
+- 위치 동기화(v0.3): `move`(움직일 때만 초당 최대 5회, 서버는 150ms 미만 간격 버림), `presence`(서버가 200ms마다 채널 단위로 `[pid,x,z,ry]` 묶음 전송), `welcome.you.pid`, `welcome.players`, `booth.pid`. 식별은 세션 ID 대신 채널별 pid(Redis INCR), 색은 pid로 결정, 첫 move 전에는 안 보임, 위치는 서버 메모리만(서버 여러 대 확장은 6단계)
 
 ## 진행 상황 (2026-10-31 기준)
 
@@ -80,7 +82,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 | 1 | 메시지 규약 v0.2 | 완료 (미결정: D12 버전 확인 유지 여부, D14 로그 보관, D15 점검 공지, Q1/Q2 줄 호출 정책, C1 빈 채널 정리 시간) |
 | 2 | realtime-server v0.1 | 완료. `./gradlew test` 통과, 브라우저 콘솔 두 탭으로 claim 경합, 해제 전파, 탭 닫기 반납, seq 1~4 확인 |
 | 3 | 프론트 WebSocket 연결 | 완료. 실제 Spring 서버 + `npm run dev:server`로 3D 화면 연동 확인 (2026-10-31) |
-| 3.5 | 다른 유저 위치 표시 | 다음 |
+| 3.5 | 다른 유저 위치 표시 | 코드 완료. 테스트 서버로 브라우저 두 개 검증(서로 보임, 고해소 입장 시 숨김, 탭 닫으면 사라짐). 서버 통합 테스트 6개 추가. **맥에서 `./gradlew test`와 실서버 확인은 아직** |
 | 4 | 서버 배포 | 호스팅 미정 (Oracle 무료 등급 실패, 차선은 AWS 신규 크레딧). VM 한 대에 Caddy + Spring + Redis, Docker Compose |
 | 5 | 부하테스트 (k6 또는 nGrinder) | |
 | 6 | 서버 여러 대, Redis Pub/Sub | |
@@ -101,6 +103,6 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 
 ## 다음 할 일
 
-1. 규약 v0.3: 위치 메시지 정의 후 서버 배칭과 프론트 아바타 표시
+1. 맥에서 `./gradlew test` 후 `bootRun` + `npm run dev:server` 창 두 개로 서로 보이는지 확인
 2. 줄서기, 재접속 복구, 레이트리밋
 3. 호스팅 결정 후 배포, 부하테스트

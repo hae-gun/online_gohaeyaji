@@ -18,13 +18,20 @@ public final class Messages {
     public record Idle(long limitMs, long warnMs, long dangerMs) {
     }
 
+    public record You(int pid) {
+    }
+
+    /**
+     * @param players visible players in the channel, each {@code [pid, x, z, ry, boothId or -1]}
+     */
     public record Welcome(String type, int v, String sessionId, String resumeToken, int channelNo,
                           int boothCount, Booths booths, int queueSize, long seq, long heartbeatMs,
-                          Idle idle, long serverTime) {
+                          Idle idle, You you, List<List<Number>> players, long presenceMs, long serverTime) {
         public Welcome(int v, String sessionId, String resumeToken, int channelNo, int boothCount,
-                       Booths booths, int queueSize, long seq, long heartbeatMs, Idle idle, long serverTime) {
+                       Booths booths, int queueSize, long seq, long heartbeatMs, Idle idle,
+                       You you, List<List<Number>> players, long presenceMs, long serverTime) {
             this("welcome", v, sessionId, resumeToken, channelNo, boothCount, booths, queueSize, seq,
-                    heartbeatMs, idle, serverTime);
+                    heartbeatMs, idle, you, players, presenceMs, serverTime);
         }
     }
 
@@ -34,9 +41,23 @@ public final class Messages {
         }
     }
 
-    public record BoothEvent(String type, int boothId, String state, long seq) {
-        public BoothEvent(int boothId, String state, long seq) {
-            this("booth", boothId, state, seq);
+    /** pid: who entered (occupied). Null for "free". */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record BoothEvent(String type, int boothId, String state, long seq, Integer pid) {
+        public BoothEvent(int boothId, String state, long seq, Integer pid) {
+            this("booth", boothId, state, seq, pid);
+        }
+    }
+
+    /**
+     * One batch of position changes in a channel, sent every presenceMs.
+     *
+     * @param moved {@code [pid, x, z, ry]} for everyone who moved since the last batch
+     * @param left  pids that left the channel
+     */
+    public record Presence(String type, long t, List<List<Number>> moved, List<Integer> left) {
+        public Presence(long t, List<List<Number>> moved, List<Integer> left) {
+            this("presence", t, moved, left);
         }
     }
 

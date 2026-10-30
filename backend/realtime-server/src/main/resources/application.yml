@@ -37,4 +37,6 @@ gohaeyaji:
   idle-danger-ms: 10000
   max-message-bytes: 2048
   max-connections-per-ip: 20
+  presence-ms: 200                # position batch interval (protocol section 13)
+  move-min-gap-ms: 150            # drop moves faster than ~5/s (200 ms minus jitter)
   allowed-origins: ${ALLOWED_ORIGINS:https://hae-gun.github.io,http://localhost:5173}

@@ -5,6 +5,7 @@ import { buildHall } from './world/hall.js';
 import { buildExterior, FACADE_Z } from './world/exterior.js';
 import { buildBooths, BOOTH_COUNT } from './world/booths.js';
 import { makeFigure } from './world/figure.js';
+import { createOtherPlayers } from './world/others.js';
 import { buildConfessional } from './world/confessional.js';
 import { createKeyboard } from './controls/keyboard.js';
 import { createNavigation } from './controls/navigation.js';
@@ -14,6 +15,7 @@ import { createAmbient } from './audio/ambient.js';
 import { createVoice } from './audio/voice.js';
 import { createLocalRoomClient } from './net/room-client.js';
 import { createWsRoomClient } from './net/ws-room-client.js';
+import { createMoveSender } from './net/move-sender.js';
 import { history } from './storage/history.js';
 import { $, toast, fade, createBubble, initHistoryPanel } from './ui/hud.js';
 
@@ -133,6 +135,17 @@ rooms.onForcedRelease(({ boothId, reason }) => {
   if (state === 'room') leaveRoom({ notifyServer: false, message });
   else if (state === 'opening') abortEntering(message);
 });
+
+/* ---------- other players (protocol v0.3) ---------- */
+const others = createOtherPlayers(world);
+const moveSender = createMoveSender(rooms);
+rooms.onPresence((e) => {
+  others.handle(e);
+  // after a (re)connect the server does not know where I am; show myself again right away
+  if (e.kind === 'reset' && state === 'hall') moveSender.now(player.position, player.rotation.y);
+});
+if (rooms.sharesPresence) $('#peopleWrap').hidden = false;
+let shownPeople = -1;
 
 
 /* ---------- input ---------- */
@@ -336,6 +349,7 @@ function leaveRoom({ reason = 'USER', notifyServer = true, message = '' } = {}) 
     path = [];
     b.doorTarget = 0;
     current = null;
+    moveSender.now(player.position, player.rotation.y);   // reappear in front of the door
     fade(false);
     if (message) toast(message);
   }, 380);
@@ -356,6 +370,7 @@ $('#startBtn').onclick = () => {
   $('#hallUi').hidden = false;
   state = 'hall';
   rig.yaw = 0;   // the intro sweep leaves yaw rotated; start behind the player facing the doors
+  moveSender.now(player.position, player.rotation.y);   // others start seeing me from here
   if ('ontouchstart' in window) $('#moveHint').textContent = '탭해서 이동, 드래그로 시점 회전, 두 손가락으로 확대';
 };
 
@@ -410,6 +425,7 @@ function updatePlayer(dt) {
   u.arms.R.rotation.x = -swing * 0.8; u.arms.L.rotation.x = swing * 0.8;
   player.position.y = moving ? Math.abs(Math.sin(tq)) * 0.06 : 0;
   player.rotation.z = moving ? Math.sin(tq) * 0.05 : 0;
+  return moving;
 }
 
 function updateSurroundings(dt) {
@@ -460,9 +476,13 @@ function animate() {
     renderer.render(confessional.scene, confessional.camera);
     return;
   }
+  others.update(dt);
   if (state === 'hall' || state === 'intro') {
-    updatePlayer(dt);
+    const moving = updatePlayer(dt);
+    if (state === 'hall') moveSender.update(player.position, player.rotation.y, moving);
     updateSurroundings(dt);
+    const people = others.count() + 1;
+    if (people !== shownPeople) { shownPeople = people; $('#people').textContent = people; }
     if (state === 'intro') {
       rig.updateIntro(t, player.position);
       player.visible = true;

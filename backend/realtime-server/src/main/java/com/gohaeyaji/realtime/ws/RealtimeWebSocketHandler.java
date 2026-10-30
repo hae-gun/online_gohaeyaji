@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gohaeyaji.realtime.booth.BoothService;
 import com.gohaeyaji.realtime.channel.ChannelService;
 import com.gohaeyaji.realtime.config.RealtimeProperties;
+import com.gohaeyaji.realtime.presence.PresenceService;
 import com.gohaeyaji.realtime.protocol.CloseCodes;
 import com.gohaeyaji.realtime.protocol.Messages;
 import com.gohaeyaji.realtime.protocol.Messages.BoothEvent;
@@ -15,6 +16,7 @@ import com.gohaeyaji.realtime.protocol.Messages.Idle;
 import com.gohaeyaji.realtime.protocol.Messages.Pong;
 import com.gohaeyaji.realtime.protocol.Messages.Released;
 import com.gohaeyaji.realtime.protocol.Messages.Welcome;
+import com.gohaeyaji.realtime.protocol.Messages.You;
 import com.gohaeyaji.realtime.session.ClientSession;
 import com.gohaeyaji.realtime.session.SessionRegistry;
 import io.micrometer.core.instrument.Counter;
@@ -35,8 +37,8 @@ import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorato
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 /**
- * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.2:
- * hello/welcome, ping/pong, claim/release, activity, resync.
+ * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.3:
+ * hello/welcome, ping/pong, claim/release, activity, resync, move (positions).
  *
  * Not yet: queue (queueJoin/queueLeave), resume after reconnect, rate limits, confess.
  */
@@ -51,20 +53,23 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     private final SessionRegistry registry;
     private final ChannelService channels;
     private final BoothService booths;
+    private final PresenceService presence;
     private final MessageSender sender;
     private final ObjectMapper mapper;
     private final SecureRandom random = new SecureRandom();
 
     private final Counter claimOk;
     private final Counter claimTaken;
+    private final Counter movesDropped;
 
     public RealtimeWebSocketHandler(RealtimeProperties props, SessionRegistry registry, ChannelService channels,
-                                    BoothService booths, MessageSender sender, ObjectMapper mapper,
-                                    MeterRegistry meters) {
+                                    BoothService booths, PresenceService presence, MessageSender sender,
+                                    ObjectMapper mapper, MeterRegistry meters) {
         this.props = props;
         this.registry = registry;
         this.channels = channels;
         this.booths = booths;
+        this.presence = presence;
         this.sender = sender;
         this.mapper = mapper;
         Gauge.builder("gohaeyaji.sessions", registry, SessionRegistry::size)
@@ -72,6 +77,9 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
                 .register(meters);
         this.claimOk = Counter.builder("gohaeyaji.claims").tag("result", "ok").register(meters);
         this.claimTaken = Counter.builder("gohaeyaji.claims").tag("result", "occupied").register(meters);
+        this.movesDropped = Counter.builder("gohaeyaji.moves.dropped")
+                .description("move messages dropped for arriving faster than the allowed rate")
+                .register(meters);
     }
 
     // ---------------------------------------------------------------- lifecycle
@@ -129,6 +137,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             case "ping" -> onPing(session, msg);
             case "claim" -> onClaim(session, msg, reqId);
             case "release" -> onRelease(session, msg, reqId);
+            case "move" -> onMove(session, msg);
             case "activity" -> session.touchActivity(now());
             case "resync" -> sendSnapshot(session);
             case "queueJoin", "queueLeave", "confess" ->
@@ -148,7 +157,8 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         }
         // TODO: resumeToken (restore booth and queue position within the 15 s grace)
         int channelNo = channels.join();
-        session.ready("s_" + UUID.randomUUID(), channelNo, now());
+        int pid = presence.allocatePid(channelNo);
+        session.ready("s_" + UUID.randomUUID(), channelNo, pid, now());
         // join the broadcast set before reading the snapshot, so no event can fall between them;
         // the client drops events whose seq is not above the snapshot seq
         registry.joinChannel(session);
@@ -165,7 +175,24 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
                 snap.seq(),
                 props.heartbeatMs(),
                 new Idle(props.idleLimitMs(), props.idleWarnMs(), props.idleDangerMs()),
+                new You(pid),
+                presence.snapshot(channelNo),
+                props.presenceMs(),
                 now()));
+    }
+
+    private void onMove(ClientSession session, JsonNode msg) {
+        if (session.boothId() != null) {
+            return; // inside a booth the avatar is hidden; positions mean nothing
+        }
+        if (!session.acceptMove(now(), props.moveMinGapMs())) {
+            movesDropped.increment();
+            return;
+        }
+        presence.move(session.channelNo(), session.pid(),
+                msg.path("x").asDouble(Double.NaN),
+                msg.path("z").asDouble(Double.NaN),
+                msg.path("ry").asDouble(0));
     }
 
     private void onPing(ClientSession session, JsonNode msg) {
@@ -196,6 +223,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             seq = booths.claim(session.channelNo(), boothId, session.sessionId());
             if (seq > 0) {
                 session.enterBooth(boothId, now());
+                presence.enterBooth(session.channelNo(), session.pid(), boothId);
             }
         }
 
@@ -207,7 +235,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         }
         claimOk.increment();
         sender.send(session, ClaimResult.ok(reqId, boothId, props.leaseMs()));
-        sender.broadcast(session.channelNo(), new BoothEvent(boothId, Messages.OCCUPIED, seq));
+        sender.broadcast(session.channelNo(), new BoothEvent(boothId, Messages.OCCUPIED, seq, session.pid()));
     }
 
     private void onRelease(ClientSession session, JsonNode msg, String reqId) {
@@ -242,6 +270,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         int channelNo = session.channelNo();
+        presence.leaveBooth(channelNo, session.pid());
         long seq = booths.release(channelNo, boothId, session.sessionId());
         if (seq == 0) {
             // the lock had already expired; announce "free" only if nobody took it since
@@ -251,7 +280,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             sender.send(session, new Released(boothId, reason));
         }
         if (seq > 0) {
-            sender.broadcast(channelNo, new BoothEvent(boothId, Messages.FREE, seq));
+            sender.broadcast(channelNo, new BoothEvent(boothId, Messages.FREE, seq, null));
         }
     }
 
@@ -267,6 +296,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         if (session.isReady()) {
             // TODO: keep the booth for the 15 s resume grace instead of releasing at once
             releaseBooth(session, null);
+            presence.remove(session.channelNo(), session.pid());
             channels.leave(session.channelNo());
         }
     }

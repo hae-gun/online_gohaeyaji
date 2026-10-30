@@ -1,6 +1,6 @@
 # realtime-server
 
-Spring Boot 3.3 + Java 21 실시간 서버. 메시지 형식과 정책은 [`docs/realtime-protocol.md`](../../docs/realtime-protocol.md) 를 따릅니다.
+Spring Boot 3.3 + Java 21 실시간 서버. 규약 v0.3 구현. 메시지 형식과 정책은 [`docs/realtime-protocol.md`](../../docs/realtime-protocol.md) 를 따릅니다.
 
 ## 실행
 
@@ -35,6 +35,7 @@ src/main/java/com/gohaeyaji/realtime/
 ├── ws/            RealtimeWebSocketHandler(메시지 처리), MessageSender(전송, 브로드캐스트)
 ├── session/       ClientSession(연결 하나의 상태), SessionRegistry(이 서버의 연결, 채널별 목록)
 ├── booth/         BoothService(방 잠금, 해제, 연장, 스냅샷)
+├── presence/      PresenceService(위치, 메모리 전용), PresenceBroadcaster(200ms 배칭 전송)
 ├── channel/       ChannelService(채널 배정, 퇴장)
 ├── redis/         RedisKeys(키 규칙), LuaScripts(스크립트 로딩)
 ├── protocol/      Messages(서버가 보내는 메시지), CloseCodes(종료 코드)
@@ -73,6 +74,7 @@ src/main/resources/redis/   원자적으로 처리해야 하는 모든 상태 �
 - [x] 무입력 안전망 (90초 + 10초)
 - [x] IP당 연결 20개 제한, 메시지 2KB 제한, 허용 Origin
 - [x] 지표: 접속 수, 입장 성공 실패 수
+- [x] 위치 동기화 (`move`, `presence`, 200ms 배칭, pid, 초당 5회 제한) (규약 v0.3)
 - [ ] 줄서기 (`queueJoin`, `queueCall`, 20초 예약)
 - [ ] 재접속 복구 (`resumeToken`, 15초 유예)
 - [ ] 레이트리밋

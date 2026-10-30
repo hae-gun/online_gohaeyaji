@@ -205,4 +205,103 @@ class RealtimeFlowTest {
             assertThat(c.await("pong").path("t").asLong()).isEqualTo(12345);
         }
     }
+
+    // ------------------------------------------------------------ presence (protocol v0.3)
+
+    @Test
+    void movesReachOthersInABatch() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            b.hello();
+            a.send("{\"type\":\"move\",\"x\":1.234,\"z\":20.5,\"ry\":3.14}");
+            JsonNode p = b.await("presence", m -> containsPid(m.path("moved"), pidA));
+            JsonNode entry = findPid(p.path("moved"), pidA);
+            assertThat(entry.get(1).asDouble()).isEqualTo(1.23);   // rounded to 2 decimals
+            assertThat(entry.get(2).asDouble()).isEqualTo(20.5);
+        }
+    }
+
+    @Test
+    void fastMovesAreThrottledAndBatched() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            b.hello();
+            // 20 moves in ~1 s: the server keeps at most one per 150 ms and sends one batch per 200 ms
+            for (int i = 0; i < 20; i++) {
+                a.send("{\"type\":\"move\",\"x\":0,\"z\":" + (30 - i * 0.1) + ",\"ry\":0}");
+                Thread.sleep(50);
+            }
+            Thread.sleep(500);
+            long batchesWithA = b.all("presence").stream().filter(m -> containsPid(m.path("moved"), pidA)).count();
+            assertThat(batchesWithA).isBetween(1L, 8L);
+        }
+    }
+
+    @Test
+    void welcomeListsPlayersAlreadyWalking() throws Exception {
+        try (TestClient a = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            a.send("{\"type\":\"move\",\"x\":-1,\"z\":12,\"ry\":0}");
+            Thread.sleep(300);
+            try (TestClient b = TestClient.connect(port)) {
+                JsonNode welcome = b.hello();
+                assertThat(containsPid(welcome.path("players"), pidA)).isTrue();
+                assertThat(welcome.path("you").path("pid").asInt()).isNotEqualTo(pidA);
+            }
+        }
+    }
+
+    @Test
+    void notVisibleBeforeFirstMove() throws Exception {
+        try (TestClient a = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            try (TestClient b = TestClient.connect(port)) {
+                assertThat(containsPid(b.hello().path("players"), pidA)).isFalse();
+            }
+        }
+    }
+
+    @Test
+    void leavingIsAnnounced() throws Exception {
+        try (TestClient b = TestClient.connect(port)) {
+            b.hello();
+            TestClient a = TestClient.connect(port);
+            int pidA = a.hello().path("you").path("pid").asInt();
+            a.send("{\"type\":\"move\",\"x\":0,\"z\":25,\"ry\":0}");
+            b.await("presence", m -> containsPid(m.path("moved"), pidA));
+            a.close();
+            b.await("presence", m -> {
+                for (JsonNode left : m.path("left")) {
+                    if (left.asInt() == pidA) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+        }
+    }
+
+    @Test
+    void boothEventCarriesWhoEntered() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            b.hello();
+            a.send("{\"type\":\"claim\",\"reqId\":\"r1\",\"boothId\":4}");
+            JsonNode event = b.await("booth", m -> m.path("boothId").asInt() == 4 && "occupied".equals(m.path("state").asText()));
+            assertThat(event.path("pid").asInt()).isEqualTo(pidA);
+        }
+    }
+
+    private static boolean containsPid(JsonNode rows, int pid) {
+        return findPid(rows, pid) != null;
+    }
+
+    private static JsonNode findPid(JsonNode rows, int pid) {
+        for (JsonNode row : rows) {
+            if (row.get(0).asInt() == pid) {
+                return row;
+            }
+        }
+        return null;
+    }
 }

@@ -22,6 +22,8 @@ public record RealtimeProperties(
         long idleDangerMs,
         int maxMessageBytes,
         int maxConnectionsPerIp,
+        long presenceMs,
+        long moveMinGapMs,
         List<String> allowedOrigins
 ) {
 }

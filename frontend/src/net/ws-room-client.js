@@ -1,11 +1,11 @@
 import { DEFAULT_IDLE } from './room-client.js';
 
 /**
- * RoomClient over WebSocket. Follows docs/realtime-protocol.md v0.2.
+ * RoomClient over WebSocket. Follows docs/realtime-protocol.md v0.3.
  *
  * Handles: hello/welcome, ping every heartbeatMs, claim/release with reqId,
  * booth events ordered by seq (resync on a gap), server-forced releases,
- * reconnect with exponential backoff and jitter.
+ * reconnect with exponential backoff and jitter, and positions (move, presence).
  */
 const PROTOCOL_VERSION = 1;
 const CLAIM_TIMEOUT_MS = 5_000;
@@ -17,6 +17,7 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
   const changeListeners = [];
   const statusListeners = [];
   const releaseListeners = [];
+  const presenceListeners = [];
 
   let ws = null;
   let ready = false;
@@ -33,6 +34,7 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
   const client = { idle: { ...DEFAULT_IDLE } };
 
   const emitChange = () => changeListeners.forEach((fn) => fn(new Set(occupied)));
+  const emitPresence = (event) => presenceListeners.forEach((fn) => fn(event));
   const setStatus = (patch) => {
     status = { ...status, ...patch };
     statusListeners.forEach((fn) => fn({ ...status }));
@@ -66,8 +68,12 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         clearInterval(heartbeat);
         heartbeat = setInterval(() => send({ type: 'ping', t: Date.now() }), heartbeatMs);
         setStatus({ state: 'ready', channelNo: msg.channelNo });
+        emitPresence({ kind: 'reset', you: msg.you?.pid ?? null, players: msg.players || [] });
         break;
       }
+      case 'presence':
+        if (ready) emitPresence({ kind: 'batch', moved: msg.moved || [], left: msg.left || [] });
+        break;
       case 'snapshot':
         applySnapshot(msg.booths, msg.seq);
         break;
@@ -78,6 +84,7 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         if (msg.state === 'free') occupied.delete(msg.boothId);
         else occupied.add(msg.boothId);
         emitChange();
+        emitPresence({ kind: 'booth', boothId: msg.boothId, pid: msg.state === 'free' ? null : (msg.pid ?? null) });
         if (gap) send({ type: 'resync' });                 // we missed something; ask for full state
         break;
       }
@@ -136,6 +143,15 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
     onChange(fn) { changeListeners.push(fn); fn(new Set(occupied)); },
     onStatus(fn) { statusListeners.push(fn); fn({ ...status }); },
     onForcedRelease(fn) { releaseListeners.push(fn); },
+    onPresence(fn) { presenceListeners.push(fn); },
+    sharesPresence: true,
+
+    /** My position. Rate is decided by the caller (move-sender.js); the server drops anything faster. */
+    sendMove(x, z, ry) {
+      if (!ready) return;
+      const r2 = (v) => Math.round(v * 100) / 100;
+      send({ type: 'move', x: r2(x), z: r2(z), ry: r2(ry) });
+    },
 
     claim(boothId) {
       if (!ready) return Promise.resolve({ ok: false, reason: 'OFFLINE' });

@@ -17,6 +17,10 @@ public final class RedisKeys {
         return CHANNEL_PREFIX + channelNo + ":seq";
     }
 
+    public static String pidSeq(int channelNo) {
+        return CHANNEL_PREFIX + channelNo + ":pid";
+    }
+
     public static String booth(int channelNo, int boothId) {
         return CHANNEL_PREFIX + channelNo + ":booth:" + boothId;
     }
