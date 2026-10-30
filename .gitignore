@@ -1,0 +1,38 @@
+# dependencies and builds
+node_modules/
+dist/
+build/
+target/
+out/
+.gradle/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# private content: every data file stays out of the repo except *.sample.json
+# (real answer copy, crisis keywords, blocked words). New files here are ignored by default.
+frontend/public/data/*.json
+!frontend/public/data/*.sample.json
+backend/**/private-data/
+
+# secrets and local settings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+application-local.yml
+application-secret.yml
+
+# editors and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# logs and test output
+*.log
+logs/
+load-test-results/
