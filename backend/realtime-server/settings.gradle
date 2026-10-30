@@ -1,0 +1,6 @@
+plugins {
+    // lets Gradle download a JDK 21 automatically if the machine only has an older one
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
+rootProject.name = 'realtime-server'

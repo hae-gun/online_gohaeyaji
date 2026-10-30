@@ -1,0 +1,28 @@
+# Local development:   docker compose up -d redis      then run the server from the IDE or ./gradlew bootRun
+# Everything in Docker: docker compose up --build
+#
+# The same file is meant to run on the deploy VM later; Caddy (HTTPS) will be added then.
+
+services:
+  redis:
+    image: redis:7-alpine
+    # booth locks and channel counts are short-lived state, so no persistence
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+  realtime-server:
+    build: ./realtime-server
+    environment:
+      REDIS_HOST: redis
+      ALLOWED_ORIGINS: https://hae-gun.github.io,http://localhost:5173
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy

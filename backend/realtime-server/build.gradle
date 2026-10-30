@@ -1,0 +1,59 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.5'
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+
+group = 'com.gohaeyaji'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+// Docker Desktop 4.52+ ships Engine 29, which rejects Docker API versions below 1.44.
+// The Testcontainers version managed by Spring Boot 3.3.5 (1.20.x) still uses an older one
+// and fails with "Could not find a valid Docker environment". 1.21.4 negotiates correctly.
+ext['testcontainers.version'] = '1.21.4'
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// only the executable boot jar is needed
+tasks.named('jar') {
+    enabled = false
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+
+    // Colima keeps its Docker socket under ~/.colima instead of /var/run/docker.sock, and
+    // Testcontainers does not read docker contexts. When DOCKER_HOST is not set and a Colima
+    // socket exists, point the tests at it. No effect for Docker Desktop users.
+    if (!System.getenv('DOCKER_HOST')) {
+        def home = System.getProperty('user.home')
+        def colimaSocket = [new File(home, '.colima/default/docker.sock'), new File(home, '.colima/docker.sock')]
+                .find { it.exists() }
+        if (colimaSocket) {
+            environment 'DOCKER_HOST', "unix://${colimaSocket.absolutePath}"
+            // path of the socket inside the Colima VM, used by the Testcontainers cleanup container
+            environment 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE', '/var/run/docker.sock'
+        }
+    }
+}

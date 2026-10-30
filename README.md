@@ -36,6 +36,8 @@ gohaeyaji/
 │       ├── audio/            배경음, 신부 음성
 │       ├── storage/          고해 기록 (브라우저 로컬 저장)
 │       └── ui/               말풍선, 토스트, 기록 패널
+├── docs/
+│   └── realtime-protocol.md  프론트와 실시간 서버의 WebSocket 메시지 규약
 └── backend/
     ├── realtime-server/      Spring Boot, WebSocket 채널과 고해소 점유 (예정)
     └── analyzer/             Python, 형태소 분석과 카테고리 분류 (예정)
@@ -64,6 +66,18 @@ npm run build      # dist/ 를 CDN에 올리면 됩니다
 - `?sim=0` 을 붙이면 다른 사람이 고해소를 쓰는 시뮬레이션이 꺼집니다 (테스트용)
 - 조작: WASD 이동, 드래그로 시점 회전, 휠 또는 두 손가락으로 확대, V로 1인칭, E로 문 열기, 화면을 클릭하거나 탭하면 그곳으로 걸어감
 - 한글 입력 상태에서도 이동과 E 키가 동작합니다 (물리 키 위치로 판별)
+
+## 임시 배포 (GitHub Pages)
+
+`main`에 `frontend/` 변경이 푸시되면 GitHub Actions가 빌드해서 `https://hae-gun.github.io/online_gohaeyaji/` 에 배포합니다 (`.github/workflows/deploy-pages.yml`).
+
+1. 저장소 Settings > Pages > Build and deployment > Source 를 **GitHub Actions** 로 설정
+2. (선택) 실제 답변 문구를 쓰려면 Settings > Secrets and variables > Actions 에 아래 시크릿을 등록. 값은 각 JSON 파일 내용 전체
+   - `ANSWERS_JSON` (`answers.json`), `SAFETY_JSON` (`safety.json`), `BLOCKED_JSON` (`blocked.json`)
+   - gh CLI가 있다면: `gh secret set ANSWERS_JSON < frontend/public/data/answers.json`
+3. 시크릿이 없으면 샘플 데이터로 배포되고, JSON이 깨져 있으면 배포하지 않고 실패합니다
+
+GitHub Pages는 정적 호스팅이라 고해소 점유는 각자 브라우저 안의 시뮬레이션입니다. 시크릿으로 넣은 파일도 배포된 사이트에서는 주소로 열람할 수 있으니, 레포에서만 빠진다는 점은 같습니다.
 
 ## 답변 데이터
 
