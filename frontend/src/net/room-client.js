@@ -1,32 +1,36 @@
 /**
  * Room client: the only place that decides whether a booth is free.
  *
- * Today this is a local simulation so the demo runs without a server.
- * The realtime server (backend/realtime-server) will implement the same contract
- * over WebSocket, and main.js will not need to change:
+ * Two implementations share this contract:
+ *  - createLocalRoomClient (this file): in-browser simulation, used when no server URL is set
+ *    (GitHub Pages demo, `npm run dev`)
+ *  - createWsRoomClient (ws-room-client.js): talks to backend/realtime-server over WebSocket,
+ *    following docs/realtime-protocol.md
  *
- *   client -> server   { type: 'claim',   boothId }
- *                      { type: 'release', boothId }
- *   server -> client   { type: 'snapshot',    channelId, occupied: number[] }
- *                      { type: 'claimResult', boothId, ok: boolean }
- *
- * The server must grant a claim atomically (e.g. Redis SET NX with a TTL that the
- * client keeps alive), so two people pressing E at the same moment never both get in.
- * A dropped connection or an expired TTL releases the booth.
- *
+ * @typedef {'connecting'|'ready'|'reconnecting'|'outdated'|'closed'} ConnectionState
+ * @typedef {{ state: ConnectionState, channelNo: number }} Status
  * @typedef {{
  *   onChange(listener: (occupied: Set<number>) => void): void,
- *   claim(boothId: number): Promise<{ ok: boolean }>,
- *   release(boothId: number): void,
+ *   onStatus(listener: (status: Status) => void): void,
+ *   onForcedRelease(listener: (e: { boothId: number, reason: string }) => void): void,
+ *   claim(boothId: number): Promise<{ ok: boolean, reason?: string }>,
+ *   release(boothId: number, reason?: 'USER'|'IDLE'): void,
+ *   activity(): void,
+ *   idle: { limitMs: number, warnMs: number, dangerMs: number },
  * }} RoomClient
+ *
+ * onForcedRelease fires when the server takes a booth away (IDLE safety net, LEASE_EXPIRED,
+ * connection lost). It never fires for a release the client asked for itself.
  */
+
+export const DEFAULT_IDLE = { limitMs: 90_000, warnMs: 20_000, dangerMs: 10_000 };
 
 /**
  * @param {{ count: number, simulate?: boolean }} opts
- *   simulate: fake other confessors coming and going (turn off with ?sim=0)
+ *   simulate: fake other confessors coming and going (off by default, turn on with ?sim=1)
  * @returns {RoomClient}
  */
-export function createLocalRoomClient({ count, simulate = true }) {
+export function createLocalRoomClient({ count, simulate = false }) {
   const occupied = new Set();
   const listeners = [];
   let mine = null;
@@ -44,9 +48,12 @@ export function createLocalRoomClient({ count, simulate = true }) {
   }
 
   return {
+    idle: DEFAULT_IDLE,
     onChange(fn) { listeners.push(fn); fn(new Set(occupied)); },
+    onStatus(fn) { fn({ state: 'ready', channelNo: 1 }); },
+    onForcedRelease() { /* the simulation never takes a booth away */ },
     async claim(boothId) {
-      if (occupied.has(boothId)) return { ok: false };
+      if (occupied.has(boothId)) return { ok: false, reason: 'OCCUPIED' };
       occupied.add(boothId);
       mine = boothId;
       emit();
@@ -57,5 +64,6 @@ export function createLocalRoomClient({ count, simulate = true }) {
       if (mine === boothId) mine = null;
       emit();
     },
+    activity() { /* nothing to report */ },
   };
 }

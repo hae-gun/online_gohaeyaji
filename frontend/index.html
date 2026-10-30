@@ -46,6 +46,7 @@
     <div class="roomFoot">
       <div class="penance" id="penance" hidden><small>오늘의 보속</small><p id="penanceText"></p></div>
       <div class="chat">
+        <div class="idleCounter" id="idleCounter" role="timer" aria-live="polite" hidden></div>
         <div class="guide" id="guide">신부님이 기도를 시작합니다</div>
         <form id="chatForm" autocomplete="off">
           <input id="confess" maxlength="200" placeholder="예) 시험 전날인데 쇼츠만 3시간 봤어요" disabled>
@@ -79,6 +80,7 @@
   </div>
 
   <div id="toast" hidden></div>
+  <div id="netStatus" role="status" hidden></div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

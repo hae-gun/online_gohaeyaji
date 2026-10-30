@@ -13,6 +13,7 @@ import { loadAnswerData, createAnswerEngine } from './answer/engine.js';
 import { createAmbient } from './audio/ambient.js';
 import { createVoice } from './audio/voice.js';
 import { createLocalRoomClient } from './net/room-client.js';
+import { createWsRoomClient } from './net/ws-room-client.js';
 import { history } from './storage/history.js';
 import { $, toast, fade, createBubble, initHistoryPanel } from './ui/hud.js';
 
@@ -23,7 +24,6 @@ import { $, toast, fade, createBubble, initHistoryPanel } from './ui/hud.js';
  * World building lives in world/, input in controls/, the booth lock in net/.
  */
 
-const IDLE_MS = 90_000;
 const BUSY_MESSAGE = '현재 고해성사가 진행중입니다. 다른분의 고해가 들리지 않도록 다른 장소를 이용해 주십시오.';
 
 /* ---------- renderer ---------- */
@@ -71,8 +71,15 @@ addEventListener('resize', resize);
 resize();
 
 /* ---------- services ---------- */
+// VITE_REALTIME_URL set (npm run dev:server, or a build with the variable) -> real server.
+// Not set (npm run dev, GitHub Pages) -> in-browser simulation.
+const REALTIME_URL = import.meta.env.VITE_REALTIME_URL;
 const params = new URLSearchParams(location.search);
-const rooms = createLocalRoomClient({ count: BOOTH_COUNT, simulate: params.get('sim') !== '0' });
+const rooms = REALTIME_URL
+  ? createWsRoomClient({ url: REALTIME_URL })
+  // fake confessors are off by default so local testing is not confused by them; ?sim=1 turns them on
+  : createLocalRoomClient({ count: BOOTH_COUNT, simulate: params.get('sim') === '1' });
+
 rooms.onChange((occupied) => {
   booths.forEach((b) => b.setOccupied(occupied.has(b.id)));
   $('#occ').textContent = occupied.size;
@@ -93,12 +100,40 @@ let state = 'intro';           // 'intro' | 'hall' | 'opening' | 'room'
 let current = null;            // booth the player is inside
 let nearBooth = null;
 let isOutside = true;
-let idleTimer = null;
 let path = [];                 // tap-to-walk waypoints
 let walkBooth = null;          // booth to face when the path ends
 let stuck = 0;
 let walkPhase = 0;
 let muted = false;
+
+/* ---------- connection status and server-side releases ---------- */
+let channelNo = 1;
+const NET_MESSAGE = {
+  connecting: '고해소 서버에 연결하는 중입니다',
+  reconnecting: '연결이 끊겼습니다. 다시 연결하는 중입니다',
+  outdated: '새 버전이 있습니다. 새로고침해 주세요',
+  closed: '서버와 연결할 수 없습니다. 잠시 후 새로고침해 주세요',
+};
+rooms.onStatus((s) => {
+  if (s.channelNo) channelNo = s.channelNo;
+  const banner = $('#netStatus');
+  banner.hidden = s.state === 'ready';
+  banner.textContent = NET_MESSAGE[s.state] || '';
+  if (!isOutside) $('#placeName').textContent = `고해소 ${channelNo}채널`;
+});
+
+// the server took our booth away (idle safety net, lease expired, connection lost)
+rooms.onForcedRelease(({ boothId, reason }) => {
+  if (!current || current.id !== boothId) return;
+  const message = {
+    IDLE: '오랫동안 입력이 없어 고해소에서 나왔습니다. 자리는 다른 분께 돌아갔습니다.',
+    LEASE_EXPIRED: '연결이 불안정해 고해소 자리가 반납되었습니다.',
+    DISCONNECTED: '연결이 끊겨 고해소에서 나왔습니다.',
+  }[reason] || '고해소에서 나왔습니다.';
+  if (state === 'room') leaveRoom({ notifyServer: false, message });
+  else if (state === 'opening') abortEntering(message);
+});
+
 
 /* ---------- input ---------- */
 const keys = createKeyboard((k) => {
@@ -137,21 +172,41 @@ function toggleView() {
 }
 
 /* ---------- booth flow ---------- */
+const CLAIM_FAILED = {
+  OCCUPIED: BUSY_MESSAGE,
+  RESERVED: '줄을 선 분을 위해 비워둔 고해소입니다.',
+  RATE_LIMITED: '조금 천천히 시도해 주세요.',
+  OFFLINE: '서버와 연결되어 있지 않습니다. 연결되면 다시 시도해 주세요.',
+  TIMEOUT: '서버 응답이 늦습니다. 잠시 후 다시 시도해 주세요.',
+};
+
 async function tryEnter() {
   const b = nearBooth;
   if (!b) return;
   if (b.occupied) { toast(BUSY_MESSAGE); return; }
   state = 'opening';   // block double presses while the claim is in flight
-  const { ok } = await rooms.claim(b.id);
-  if (!ok) { state = 'hall'; toast(BUSY_MESSAGE); return; }
+  // the door opens only after the server grants the booth
+  const { ok, reason } = await rooms.claim(b.id);
+  if (state !== 'opening') return;
+  if (!ok) { state = 'hall'; toast(CLAIM_FAILED[reason] || BUSY_MESSAGE); return; }
 
   current = b;
   b.doorTarget = 1.3;
   $('#actBtn').hidden = true;
   $('#prompt').hidden = true;
   player.rotation.y = b.side < 0 ? -Math.PI / 2 : Math.PI / 2;
-  setTimeout(() => fade(true), 450);
-  setTimeout(enterRoom, 850);
+  setTimeout(() => { if (state === 'opening') fade(true); }, 450);
+  setTimeout(() => { if (state === 'opening') enterRoom(); }, 850);
+}
+
+/** Lost the booth between the claim and the room opening. */
+function abortEntering(message) {
+  const b = current;
+  current = null;
+  state = 'hall';
+  if (b) b.doorTarget = 0;
+  fade(false);
+  toast(message);
 }
 
 function enterRoom() {
@@ -167,39 +222,72 @@ function enterRoom() {
   $('#guide').textContent = '신부님이 기도를 시작합니다';
   fade(false);
   confessional.startBlessing();
-  setTimeout(() => bubble.say('성부와 성자와 성령의 이름으로. 아멘.'), 300);
+  idle.pause();   // the priest is praying; nobody gets kicked out during the blessing
+  setTimeout(() => { if (state === 'room') bubble.say('성부와 성자와 성령의 이름으로. 아멘.'); }, 300);
   setTimeout(readyForConfession, 6200);
-  resetIdle();
 }
 
 function readyForConfession() {
   if (state !== 'room') return;
   $('#guide').textContent = '고해하실 내용을 작성하세요';
   setInputEnabled(true);
+  idle.start();
   try { $('#confess').focus({ preventScroll: true }); } catch (_) { /* older browsers */ }
 }
+
+/*
+ * Idle countdown (protocol section 7). The browser owns the 90 s limit and leaves on its own;
+ * the server only has a 100 s safety net. Paused while the priest prays or answers.
+ * 20 s left: yellow counter. 10 s left: red counter.
+ * Driven by setInterval, not the render loop: browsers pause requestAnimationFrame in background
+ * tabs, and someone who switched tabs must still give the booth back on time.
+ */
+const idle = {
+  deadline: 0,
+  running: false,
+  start() {
+    this.running = true;
+    this.deadline = performance.now() + rooms.idle.limitMs;
+    rooms.activity();
+  },
+  touch() {
+    if (!this.running) return;
+    this.deadline = performance.now() + rooms.idle.limitMs;
+    rooms.activity();
+  },
+  pause() {
+    this.running = false;
+    $('#idleCounter').hidden = true;
+  },
+  tick() {
+    if (!this.running || state !== 'room') return;
+    const left = this.deadline - performance.now();
+    const el = $('#idleCounter');
+    if (left <= 0) {
+      this.pause();
+      leaveRoom({ reason: 'IDLE', message: '오랫동안 입력이 없어 고해소에서 나왔습니다. 자리는 다른 분께 돌아갔습니다.' });
+      return;
+    }
+    if (left > rooms.idle.warnMs) { el.hidden = true; return; }
+    el.hidden = false;
+    el.classList.toggle('danger', left <= rooms.idle.dangerMs);
+    el.textContent = `신부님이 기다리고 계십니다. ${Math.ceil(left / 1000)}초 뒤 고해소에서 나가게 됩니다`;
+  },
+};
 
 function setInputEnabled(on) {
   $('#confess').disabled = !on;
   $('#sendBtn').disabled = !on;
 }
 
-function resetIdle() {
-  clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => {
-    if (state !== 'room') return;
-    leaveRoom();
-    toast('오랫동안 입력이 없어 고해소에서 나왔습니다. 자리는 다른 분께 돌아갔습니다.');
-  }, IDLE_MS);
-}
-
-$('#confess').addEventListener('input', resetIdle);
+setInterval(() => idle.tick(), 250);
+$('#confess').addEventListener('input', () => idle.touch());
 $('#chatForm').addEventListener('submit', (e) => {
   e.preventDefault();
   if (state !== 'room' || !engine) return;
   const text = $('#confess').value.trim();
   if (!text) return;
-  resetIdle();
+  idle.pause();   // waiting for the priest
   $('#confess').value = '';
   setInputEnabled(false);
   $('#guide').textContent = '신부님이 듣고 계십니다';
@@ -219,33 +307,41 @@ $('#chatForm').addEventListener('submit', (e) => {
     }
     $('#guide').textContent = '더 고해하실 것이 있으면 작성하세요';
     setInputEnabled(true);
+    idle.start();
   }, 2200);
 });
 
-function leaveRoom() {
+/**
+ * @param {{ reason?: 'USER'|'IDLE', notifyServer?: boolean, message?: string }} opts
+ *   notifyServer=false when the server already took the booth away
+ */
+function leaveRoom({ reason = 'USER', notifyServer = true, message = '' } = {}) {
   if (state !== 'room') return;
-  clearTimeout(idleTimer);
+  idle.pause();
   bubble.stop();
+  const b = current;
+  // free the booth right away so others see the LED go off; the door animation is local only
+  if (notifyServer) rooms.release(b.id, reason);
+  state = 'leaving';
   fade(true);
   setTimeout(() => {
     state = 'hall';
     ambient.setPlace('hall');
     $('#roomUi').hidden = true;
     $('#hallUi').hidden = false;
-    const b = current;
     player.position.copy(b.spot);
     player.position.x -= b.side * 0.3;
     player.rotation.y = Math.PI;
     rig.yaw = 0;
     path = [];
     b.doorTarget = 0;
-    setTimeout(() => rooms.release(b.id), 500);
     current = null;
     fade(false);
+    if (message) toast(message);
   }, 380);
 }
 
-$('#exitBtn').onclick = leaveRoom;
+$('#exitBtn').onclick = () => leaveRoom();
 $('#actBtn').onclick = tryEnter;
 $('#viewBtn').onclick = toggleView;
 $('#sndBtn').onclick = () => {
@@ -326,7 +422,7 @@ function updateSurroundings(dt) {
   if (out !== isOutside) {
     isOutside = out;
     if (state === 'hall') ambient.setPlace(out ? 'yard' : 'hall');
-    $('#placeName').textContent = out ? '성당 앞마당' : '고해소 1채널';
+    $('#placeName').textContent = out ? '성당 앞마당' : `고해소 ${channelNo}채널`;
   }
 
   // which booth door the player stands at
@@ -359,7 +455,7 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
   booths.forEach((b) => { b.hinge.rotation.y += (b.doorTarget - b.hinge.rotation.y) * Math.min(1, dt * 8); });
 
-  if (state === 'room') {
+  if (state === 'room' || state === 'leaving') {
     confessional.update(dt, t);
     renderer.render(confessional.scene, confessional.camera);
     return;

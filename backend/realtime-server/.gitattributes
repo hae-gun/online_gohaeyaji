@@ -1,0 +1,4 @@
+# keep line endings stable across macOS, Linux (Docker build) and Windows
+gradlew text eol=lf
+*.bat text eol=crlf
+*.jar binary

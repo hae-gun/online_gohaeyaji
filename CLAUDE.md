@@ -1,0 +1,106 @@
+# 고해야지 (온라인 고해성사 프로젝트) 프로젝트 메모리
+
+이 파일은 이 레포에서 작업하는 사람과 AI가 먼저 읽는 프로젝트 맥락입니다. 결정이 바뀌면 여기와 `docs/realtime-protocol.md`를 같이 고칩니다.
+
+## 한 줄 요약
+
+"공부해야지, 운동해야지, 그리고 고해야지." 매일 다짐하고 자주 실패하는 일상의 작은 일을 털어놓는 3D 온라인 고해소. 진짜 목표는 **대규모 트래픽 백엔드 경험**(동시성, 실시간 브로드캐스트, 부하테스트, 수평 확장)을 직접 설계하고 측정하는 것.
+
+- 영감: 산사(sansatemple.com, 온라인 절)가 2026년 10월 인스타그램에서 바이럴
+- 레포: https://github.com/hae-gun/online_gohaeyaji
+- 프론트 배포: https://hae-gun.github.io/online_gohaeyaji/ (GitHub Pages, GitHub Actions)
+- 로컬 경로: `~/project/gohaeyaji`
+
+## 작업 규칙
+
+- 문서와 대화는 한국어. 코드 주석과 식별자는 영어
+- **가운뎃점(·) 쓰지 않기** (문서, UI 문구, 주석 모두)
+- 사용자 말에 무조건 동의하지 말고, 반대 의견은 근거와 함께 말하기
+- 실제 답변 문구, 위기 키워드, 금지어는 **git에 올리지 않음** (`frontend/public/data/*.json` 중 `*.sample.json`만 커밋)
+- 커밋과 푸시는 사용자가 맥에서 직접 함
+
+## 콘셉트와 정책 (확정)
+
+- 타겟 10~30대. 고해 카테고리: 도파민(폰, 쇼츠, 게임), 공부, 운동, 금연, 금주, 배달, 늦잠, 미루기, 충동구매, 전 애인 연락, 범용
+- 신부 NPC는 진지한 말투, 내용만 현실적이라 웃긴 무표정 개그. 그래픽은 90년대 조악한 3D(도형 조합, 모델 파일 없음). 신부는 안경, 검은 수단, 보라색 영대
+- 신성모독 금지 원칙: 웃음의 대상은 고해자의 일상, 성경과 기도문을 비틀지 않음, "죄를 사하노라" 흉내 없이 보속만, 사용자 문장을 그대로 따라 하지 않고 사전 키워드만 답변에 사용, 위기 신호(자해, 자살 등)는 농담을 끄고 109, 1388 안내
+- 성호경: "성부와 성자와 성령의 이름으로. 아멘." 동작은 이마, 가슴, 왼쪽 어깨, 오른쪽 어깨, 합장
+- 입장 시 패러디 주의 문구, 고해 원문은 서버에 저장하지 않음, 기록은 브라우저 localStorage에만
+- 답변은 생성형 AI 없이 키워드 사전 + 템플릿 조합(공감, 보속, 마무리). 음성은 지금 브라우저 TTS, 최종은 문장별 사전 생성 음성 파일을 CDN 서빙
+- 다른 유저 표시: 이름 없이 색만. 데모용 NPC는 넣지 않음
+
+## 구조
+
+```
+frontend/   Vite 5.4.21 + three.js 0.128.0 (색감 때문에 고정)
+  src/main.js          상태 전이(intro, hall, opening, room, leaving), 프레임 루프
+  src/world/           앞마당, 성당 정면, 복도, 고해소 20칸, 캐릭터, 고해소 내부와 성호경
+  src/controls/        keyboard(e.code 기준), camera-rig(궤도, 벽 충돌, 1인칭), navigation
+  src/answer/          답변 엔진: 위기 키워드 > 금지어 > 카테고리 매칭 > 템플릿
+  src/net/room-client.js     RoomClient 계약 + 로컬 시뮬레이션
+  src/net/ws-room-client.js  WebSocket 구현 (규약 v0.2)
+  public/data/         answers/safety/blocked .json(비공개) + .sample.json(공개)
+backend/
+  docker-compose.yml   redis + realtime-server
+  realtime-server/     Spring Boot 3.3.5, Java 21, 순수 WebSocket(/ws), Redis Lua
+  analyzer/            Python 형태소 분석 서비스 (미구현, README만)
+docs/realtime-protocol.md   프론트와 서버의 메시지 규약 (v0.2), 정책 결정 기록
+.github/workflows/deploy-pages.yml   frontend 빌드 후 Pages 배포, 시크릿으로 비공개 데이터 주입
+```
+
+## 실행
+
+```bash
+# 프론트, 서버 없이 시뮬레이션
+cd frontend && npm install && npm run dev            # localhost:5173 (가짜 점유는 기본 꺼짐, ?sim=1 이면 켬)
+# 프론트, 로컬 서버 연결
+npm run dev:server                                   # VITE_REALTIME_URL=ws://localhost:8080/ws
+
+# 서버
+colima status                                        # 사용자는 Docker Desktop이 아니라 Colima 사용
+cd backend && docker compose up -d redis
+cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
+./gradlew test                                       # Testcontainers로 Redis 띄움 (Docker 필요)
+```
+
+## 규약 핵심 (docs/realtime-protocol.md v0.2)
+
+- 메시지: hello/welcome, ping/pong(10초), claim/claimResult, release/released, activity, booth(변경분, seq), snapshot, resync, error. 줄서기 메시지(queueJoin, queueCall 등)는 정의만 됨
+- 채널: 고해소 20칸, 정원 60명, 48명(80%) 차면 다음 채널 생성, 앞 채널부터 채움, 남은 12자리는 재접속용
+- 타이머: 하트비트 끊김 30초, 방 임대 30초(ping마다 연장), 재접속 유예 15초, 무입력 90초(20초 남으면 노란색, 10초 남으면 빨간색 카운터, 성호경과 답변 대기 중 멈춤), 서버 안전망 100초, 줄 호출 예약 20초
+- 탭마다 별도 세션(한 세션 방 1개, 줄 1자리). IP당 연결 20개. 메시지 2KB. 허용 Origin: https://hae-gun.github.io, http://localhost:5173
+- 종료 코드: 4001 버전 불일치, 4002 하트비트, 4004 IP 초과, 4005 크기, 4006 남용, 4008 만석
+- 위치 동기화(다음 단계, 규약 v0.3 예정): 움직일 때만 초당 최대 5회 전송, 서버가 0.2초마다 채널 단위로 모아서 전송(배칭), 수신 측 보간, 고해소 입장 시 문 안으로 사라짐, 위치는 서버 메모리만
+
+## 진행 상황 (2026-10-31 기준)
+
+| 단계 | 내용 | 상태 |
+|---|---|---|
+| 0 | 3D 데모, GitHub Pages 배포 | 완료 |
+| 1 | 메시지 규약 v0.2 | 완료 (미결정: D12 버전 확인 유지 여부, D14 로그 보관, D15 점검 공지, Q1/Q2 줄 호출 정책, C1 빈 채널 정리 시간) |
+| 2 | realtime-server v0.1 | 완료. `./gradlew test` 통과, 브라우저 콘솔 두 탭으로 claim 경합, 해제 전파, 탭 닫기 반납, seq 1~4 확인 |
+| 3 | 프론트 WebSocket 연결 | 완료. 실제 Spring 서버 + `npm run dev:server`로 3D 화면 연동 확인 (2026-10-31) |
+| 3.5 | 다른 유저 위치 표시 | 다음 |
+| 4 | 서버 배포 | 호스팅 미정 (Oracle 무료 등급 실패, 차선은 AWS 신규 크레딧). VM 한 대에 Caddy + Spring + Redis, Docker Compose |
+| 5 | 부하테스트 (k6 또는 nGrinder) | |
+| 6 | 서버 여러 대, Redis Pub/Sub | |
+| 7 | 답변 엔진 서버 이전 | 출시 전 필수 (지금은 배포 사이트에서 /data/*.json 열람 가능) |
+
+서버 미구현: 줄서기, 재접속 복구(resumeToken), 레이트리밋, 빈 채널 정리, 서버 비정상 종료 시 인원 수 보정, analyzer 연동.
+
+## 알아둘 함정
+
+- **한글 입력 상태**: 키 판별은 `e.key`가 아니라 `e.code`. 아니면 W가 'ㅈ'로 들어와 이동이 안 됨
+- **백그라운드 탭**: requestAnimationFrame이 멈추므로 시간 제한 로직(무입력 카운터)은 `setInterval`로
+- **인트로 카메라**: 인트로에서 돌던 yaw를 시작 시 0으로 리셋하지 않으면 W가 대각선으로 감
+- **Testcontainers**: Docker Engine 29는 API 1.44 미만을 거부. `ext['testcontainers.version'] = '1.21.4'`로 해결. Colima는 소켓이 `~/.colima/default/docker.sock`이라 build.gradle에서 자동 지정
+- **Vite 취약점**: 5.4.21로 대부분 해결, 나머지는 6.4.4+ 메이저 업그레이드 필요. 개발 서버는 LAN에 열지 않음
+- **배포 사이트는 HTTPS**라 실서버도 wss(TLS) 필수
+- `answers.json` 등 비공개 데이터는 Pages 빌드에서 GitHub Secrets(ANSWERS_JSON, SAFETY_JSON, BLOCKED_JSON)로 주입
+- 고해소 점유는 오직 `room-client` 계약을 통해서만 결정. 문 열림 애니메이션은 서버 승인 후에만
+
+## 다음 할 일
+
+1. 규약 v0.3: 위치 메시지 정의 후 서버 배칭과 프론트 아바타 표시
+2. 줄서기, 재접속 복구, 레이트리밋
+3. 호스팅 결정 후 배포, 부하테스트
