@@ -10,7 +10,8 @@ import * as THREE from 'three';
  *
  * One at a time. Walking and turning the camera keep working: the arms and head follow the emote,
  * the legs keep walking (a kneel stands up while walking and kneels again on stopping).
- * Stepped timing on purpose, like the priest's sign of the cross: cheap 90s animation.
+ * Motion is smooth: every emote eases in from the resting pose and eases back out at the end,
+ * and poses in between are blended, never snapped.
  */
 export const EMOTES = [
   { id: 'pray', label: '기도', dur: 4.0 },
@@ -22,7 +23,10 @@ export const EMOTE_IDS = EMOTES.map((e) => e.id);
 const BY_ID = Object.fromEntries(EMOTES.map((e) => [e.id, e]));
 
 const DOWN = new THREE.Vector3(0, -1, 0);
-const FPS = 8;   // stepped animation
+const EASE_IN = 0.35;   // seconds to blend from rest into the emote
+const EASE_OUT = 0.4;   // and back to rest at the end
+const smooth = (x) => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); };
+const easeInOut = (x) => { const k = Math.min(1, Math.max(0, x)); return k < 0.5 ? 2 * k * k : 1 - ((-2 * k + 2) ** 2) / 2; };
 
 function aim(fig, side, target) {
   const d = target.clone().sub(fig.userData.pose.shoulder[side]);
@@ -82,11 +86,16 @@ export function createEmotePlayer(fig) {
   const keys = crossKeys(P);
 
   let id = null, t = 0;
+  let kneel = 0;   // 0 standing .. 1 kneeling, eased so getting up and down is not a jump
+  const tmpQ = new THREE.Quaternion();
 
-  function setArm(side, a, b, k) {
+  /** Arm between poses a and b (k 0..1), then blended from rest by w (0..1). */
+  function setArm(side, a, b, k, w = 1) {
     const pivot = u.arms[side];
-    pivot.quaternion.copy(a.q).slerp(b.q, k);
-    pivot.scale.set(1, a.s + (b.s - a.s) * k, 1);
+    tmpQ.copy(a.q).slerp(b.q, k);
+    pivot.quaternion.identity().slerp(tmpQ, w);
+    const s = a.s + (b.s - a.s) * k;
+    pivot.scale.set(1, 1 + (s - 1) * w, 1);
   }
 
   function stop() {
@@ -96,6 +105,7 @@ export function createEmotePlayer(fig) {
     u.legs.forEach((l) => { l.rotation.x = 0; });
     u.face.set({});
     zzz.visible = false;
+    kneel = 0;
   }
 
   return {
@@ -113,44 +123,56 @@ export function createEmotePlayer(fig) {
     update(dt, moving) {
       if (!id) return;
       t += dt;
-      if (t >= BY_ID[id].dur) { stop(); return; }
-      const ts = Math.floor(t * FPS) / FPS;
+      const dur = BY_ID[id].dur;
+      if (t >= dur) { stop(); return; }
+      // weight of the whole emote: eases in at the start and out at the end
+      const w = smooth(t / EASE_IN) * smooth((dur - t) / EASE_OUT);
+      let kneelGoal = 0;
 
       if (id === 'pray') {
         const p = pose('R', P.pray.R), q = pose('L', P.pray.L);
-        const k = Math.min(1, ts / 0.5) * Math.min(1, (BY_ID.pray.dur - ts) / 0.5);
-        setArm('R', rest.R, p, k); setArm('L', rest.L, q, k);
-        u.head.rotation.x = 0.28 * k;
-        u.face.set({ eyes: k > 0.5 ? 'closed' : 'open' });
+        setArm('R', p, p, 0, w); setArm('L', q, q, 0, w);
+        u.head.rotation.x = 0.28 * w;
+        u.face.set({ eyes: w > 0.6 ? 'closed' : 'open' });
       } else if (id === 'cross') {
+        // keyframes start and end at rest, so the cross blends in and out by itself
         let a = keys[0], b = keys[keys.length - 1];
-        for (let i = 0; i < keys.length - 1; i++) if (ts >= keys[i][0] && ts <= keys[i + 1][0]) { a = keys[i]; b = keys[i + 1]; break; }
-        let k = Math.min(1, Math.max(0, (ts - a[0]) / Math.max(1e-4, b[0] - a[0])));
-        k = k * k * (3 - 2 * k);
+        for (let i = 0; i < keys.length - 1; i++) if (t >= keys[i][0] && t <= keys[i + 1][0]) { a = keys[i]; b = keys[i + 1]; break; }
+        const k = easeInOut((t - a[0]) / Math.max(1e-4, b[0] - a[0]));
         setArm('R', pose('R', a[1]), pose('R', b[1]), k);
         setArm('L', pose('L', a[2]), pose('L', b[2]), k);
-        u.head.rotation.x = ts > 3.6 ? 0.2 : 0;
-        u.face.set({ eyes: ts > 3.6 ? 'closed' : 'open' });
+        const bow = smooth((t - 3.5) / 0.3) * smooth((dur - t) / EASE_OUT);
+        u.head.rotation.x = 0.2 * bow;
+        u.face.set({ eyes: bow > 0.6 ? 'closed' : 'open' });
       } else if (id === 'hooray') {
-        // arms pump between half up and all the way up, twice a second
-        const up = Math.floor(ts * 4) % 2 === 0;
-        const r = pose('R', up ? P.up.R : P.halfUp.R), l = pose('L', up ? P.up.L : P.halfUp.L);
-        setArm('R', r, r, 0); setArm('L', l, l, 0);
-        u.head.rotation.x = -0.25;
-        if (!moving) {
-          u.legs.forEach((leg) => { leg.rotation.x = 1.45; });   // shins fold back: kneeling
-          fig.position.y = -0.2;
-        }
-        u.face.set({ eyes: 'happy', mouth: 2 });
+        // arms swing smoothly between half up and all the way up, twice a second
+        const swing = 0.5 + 0.5 * Math.sin(t * Math.PI * 4 - Math.PI / 2);
+        setArm('R', pose('R', P.halfUp.R), pose('R', P.up.R), swing, w);
+        setArm('L', pose('L', P.halfUp.L), pose('L', P.up.L), swing, w);
+        u.head.rotation.x = -0.25 * w;
+        kneelGoal = moving ? 0 : w;
+        u.face.set(w > 0.4 ? { eyes: 'happy', mouth: 2 } : {});
       } else if (id === 'doze') {
-        // the head sinks slowly, then jerks back up
-        const cycle = ts % 1.6;
-        u.head.rotation.x = cycle < 1.3 ? (cycle / 1.3) * 0.5 : -0.15;
+        // the head sinks slowly, jerks up, settles, and sinks again
+        const c = t % 1.6;
+        let nod;
+        if (c < 1.25) nod = 0.5 * easeInOut(c / 1.25);
+        else if (c < 1.37) nod = 0.5 + (-0.18 - 0.5) * smooth((c - 1.25) / 0.12);
+        else nod = -0.18 * (1 - smooth((c - 1.37) / 0.23));
+        u.head.rotation.x = nod * w;
         const limp = pose('R', P.limp.R), limpL = pose('L', P.limp.L);
-        setArm('R', limp, limp, 0); setArm('L', limpL, limpL, 0);
+        setArm('R', limp, limp, 0, w); setArm('L', limpL, limpL, 0, w);
         zzz.visible = true;
-        zzz.position.y = P.headTop + 0.15 + (ts % 1) * 0.25;
-        u.face.set({ eyes: cycle < 1.3 ? 'closed' : 'wide' });
+        zzz.material.opacity = w;
+        zzz.position.y = P.headTop + 0.15 + (t % 1.2) * 0.22;
+        u.face.set({ eyes: c >= 1.25 && c < 1.5 ? 'wide' : 'closed' });
+      }
+
+      // kneeling eases down and up; walking stands up, stopping kneels again
+      kneel += (kneelGoal - kneel) * Math.min(1, dt * 8);
+      if (kneel > 0.001) {
+        u.legs.forEach((leg) => { leg.rotation.x = leg.rotation.x * (1 - kneel) + 1.45 * kneel; });
+        fig.position.y -= 0.2 * kneel;
       }
     },
   };

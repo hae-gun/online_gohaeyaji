@@ -4,7 +4,7 @@ import { makeGlassTexture } from './core/three-utils.js';
 import { buildHall } from './world/hall.js';
 import { buildExterior, FACADE_Z } from './world/exterior.js';
 import { buildBooths, BOOTH_COUNT } from './world/booths.js';
-import { makeFigure } from './world/figure.js';
+import { makeFigure, walkPose } from './world/figure.js';
 import { createOtherPlayers } from './world/others.js';
 import { buildConfessional } from './world/confessional.js';
 import { createKeyboard } from './controls/keyboard.js';
@@ -112,6 +112,7 @@ let path = [];                 // tap-to-walk waypoints
 let walkBooth = null;          // booth to face when the path ends
 let stuck = 0;
 let walkPhase = 0;
+let walkAmp = 0;               // 0..1, eases the gait in and out
 let muted = false;
 
 /* ---------- connection status and server-side releases ---------- */
@@ -621,14 +622,8 @@ function updatePlayer(dt) {
     if (moving) walkPhase += dt * 9;
   }
 
-  // choppy gait, on purpose
-  const tq = Math.floor(walkPhase * 2) / 2;
-  const swing = moving ? Math.sin(tq) * 0.55 : 0;
-  const u = player.userData;
-  u.legs[0].rotation.x = swing; u.legs[1].rotation.x = -swing;
-  u.arms.R.rotation.x = -swing * 0.8; u.arms.L.rotation.x = swing * 0.8;
-  player.position.y = moving ? Math.abs(Math.sin(tq)) * 0.06 : 0;
-  player.rotation.z = moving ? Math.sin(tq) * 0.05 : 0;
+  walkAmp += ((moving ? 1 : 0) - walkAmp) * Math.min(1, dt * 10);
+  walkPose(player, walkPhase, walkAmp);
   myEmote.update(dt, moving);
   return moving;
 }

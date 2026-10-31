@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeFigure, NAME_HEIGHT } from './figure.js';
+import { makeFigure, NAME_HEIGHT, walkPose } from './figure.js';
 import { hiddenFaces } from '../net/faces.js';
 import { createEmotePlayer } from './emotes.js';
 
@@ -198,14 +198,10 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
         diff = Math.atan2(Math.sin(diff), Math.cos(diff));
         f.rotation.y += diff * Math.min(1, dt * 10);
 
-        // same choppy gait as the local player
+        // same gait as the local player, eased in and out
         if (moving) p.phase += dt * 9;
-        const tq = Math.floor(p.phase * 2) / 2;
-        const swing = moving ? Math.sin(tq) * 0.55 : 0;
-        const u = f.userData;
-        u.legs[0].rotation.x = swing; u.legs[1].rotation.x = -swing;
-        u.arms.R.rotation.x = -swing * 0.8; u.arms.L.rotation.x = swing * 0.8;
-        f.position.y = moving ? Math.abs(Math.sin(tq)) * 0.06 : 0;
+        p.amp = (p.amp || 0) + ((moving ? 1 : 0) - (p.amp || 0)) * Math.min(1, dt * 10);
+        walkPose(f, p.phase, p.amp);
         p.emote.update(dt, moving);
       }
     },

@@ -192,8 +192,8 @@ function createFace(priest, look) {
  * left shoulder then right shoulder (Holy Spirit), then hands joined (Amen).
  *
  * Each pose is the point the hand should reach in the priest's own space;
- * the arm rotates toward it and stretches to reach it. Interpolation is stepped
- * on purpose so it moves like a cheap 90s animation.
+ * the arm rotates toward it and stretches to reach it. Each move eases in and out
+ * so the hand glides between points instead of jumping.
  */
 function createSignOfCross(priest, face) {
   const DOWN = new THREE.Vector3(0, -1, 0);
@@ -236,8 +236,8 @@ function createSignOfCross(priest, face) {
       if (t >= KEYS[i][0] && t <= KEYS[i + 1][0]) { a = KEYS[i]; b = KEYS[i + 1]; break; }
     }
     let u = Math.min(1, Math.max(0, (t - a[0]) / Math.max(0.0001, b[0] - a[0])));
-    u = Math.floor(u * 6) / 6;
-    u = u * u * (3 - 2 * u);
+    // ease in and out of every point instead of jumping between them
+    u = u < 0.5 ? 2 * u * u : 1 - ((-2 * u + 2) ** 2) / 2;
     for (const [idx, side] of [[1, 'R'], [2, 'L']]) {
       const pa = poses[a[idx]], pb = poses[b[idx]], pivot = priest.userData.arms[side];
       pivot.quaternion.copy(pa.q).slerp(pb.q, u);

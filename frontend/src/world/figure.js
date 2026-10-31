@@ -236,3 +236,16 @@ export function makeFigure(o) {
 export const NAME_HEIGHT = 1.78;
 /** First person eye height for the kid. */
 export const EYE_HEIGHT = 1.2;
+
+/**
+ * Walking pose for a kid: legs and arms swing on a sine, the body bobs and sways a little.
+ * amp (0..1) eases in when walking starts and out when it stops, so the legs never snap.
+ */
+export function walkPose(fig, phase, amp) {
+  const u = fig.userData;
+  const swing = Math.sin(phase) * 0.55 * amp;
+  u.legs[0].rotation.x = swing; u.legs[1].rotation.x = -swing;
+  u.arms.R.rotation.x = -swing * 0.8; u.arms.L.rotation.x = swing * 0.8;
+  fig.position.y = Math.abs(Math.sin(phase)) * 0.06 * amp;
+  fig.rotation.z = Math.sin(phase) * 0.05 * amp;
+}
