@@ -44,13 +44,27 @@ export function makeFigure(o) {
     head.add(e); eyes.push(e);
   }
   const nose = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.17, 5), skin); nose.rotation.x = Math.PI / 2; nose.position.set(0, 0.27, 0.33); head.add(nose);
-  const mouth = new THREE.Mesh(new THREE.BoxGeometry(o.priest ? 0.14 : 0.17, 0.025, 0.03), B(o.priest ? 0x5a2b22 : 0xc0392b));
-  mouth.position.set(0, 0.16, 0.28); head.add(mouth);
+  // mouth = a lip line plus a dark opening behind it; the priest's face animates both (confessional.js)
+  const mouth = new THREE.Group(); mouth.position.set(0, 0.16, 0.28); head.add(mouth);
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(o.priest ? 0.14 : 0.17, 0.025, 0.03), B(o.priest ? 0x5a2b22 : 0xc0392b));
+  mouth.add(lip);
+  const opening = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.02), B(0x7a1a14));
+  opening.position.set(0, -0.012, 0.004); opening.scale.y = 0.01; opening.visible = false; mouth.add(opening);
+  // lower lip drops with the jaw so open and closed read clearly from a distance
+  const lowerLip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.022, 0.03), B(o.priest ? 0x5a2b22 : 0xc0392b));
+  lowerLip.visible = false; mouth.add(lowerLip);
+  const corners = [];
+  for (const s of [-1, 1]) {
+    const c = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.022, 0.03), B(o.priest ? 0x5a2b22 : 0xc0392b));
+    c.position.set(s * 0.078, 0, 0); mouth.add(c); corners.push(c);
+  }
+  const brows = [];
 
   if (o.priest) {
     for (const s of [-1, 1]) {
       const rim = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.012, 4, 10), B(0x222222)); rim.position.set(s * 0.11, 0.34, 0.31); head.add(rim);
       const brow = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.025, 0.03), B(0x55504a)); brow.position.set(s * 0.11, 0.45, 0.29); brow.rotation.z = -s * 0.12; head.add(brow);
+      brow.userData.side = s; brows.push(brow);
       const tuft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.26), M(0xb9b4ad)); tuft.position.set(s * 0.29, 0.32, -0.02); head.add(tuft);
     }
     const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.012), B(0x222222)); bridge.position.set(0, 0.35, 0.32); head.add(bridge);
@@ -68,6 +82,6 @@ export function makeFigure(o) {
     arms[s < 0 ? 'R' : 'L'] = pivot; // figure faces +z, so its right hand is on -x
   }
 
-  g.userData = { legs, arms, head, eyes, ARM };
+  g.userData = { legs, arms, head, eyes, ARM, face: { lip, opening, lowerLip, corners, brows } };
   return g;
 }

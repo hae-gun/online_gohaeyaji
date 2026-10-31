@@ -14,22 +14,52 @@ export function fade(on) {
 }
 
 /** Speech bubble above the priest with a typewriter effect. */
+const TYPE_MS = 38;
+// browser TTS at rate 0.82 says roughly one Korean syllable per 0.15 s
+const SPEAK_SEC_PER_CHAR = 0.15;
+
 export function createBubble(voice) {
   let typer;
+  let full = '';
+
+  function typeTo(target, from) {
+    const el = $('#bubbleText');
+    clearInterval(typer);
+    let i = from;
+    el.textContent = target.slice(0, i);
+    typer = setInterval(() => {
+      i += 1;
+      el.textContent = target.slice(0, i);
+      if (i >= target.length) clearInterval(typer);
+    }, TYPE_MS);
+  }
+
+  /** Seconds the priest's mouth should move for this text. */
+  function talkSeconds(text, silent) {
+    if (silent || !voice.speaking) return Math.max(0.6, text.length * TYPE_MS / 1000);
+    return Math.max(0.6, text.replace(/[\s.,!?…]/g, '').length * SPEAK_SEC_PER_CHAR);
+  }
+
   return {
+    /** Replaces the bubble text. Returns how long the priest talks, in seconds. */
     say(text, { safety = false, silent = false } = {}) {
-      const bubble = $('#bubble'), el = $('#bubbleText');
+      const bubble = $('#bubble');
       bubble.hidden = false;
       bubble.classList.toggle('safety', safety);
-      clearInterval(typer);
-      el.textContent = '';
-      let i = 0;
-      typer = setInterval(() => {
-        i += 1;
-        el.textContent = text.slice(0, i);
-        if (i >= text.length) clearInterval(typer);
-      }, 38);
+      full = text;
+      typeTo(full, 0);
       if (!silent) voice.speak(text);
+      return talkSeconds(text, silent);
+    },
+    /** Adds a phrase after what is already shown and speaks only that phrase. */
+    append(text) {
+      const bubble = $('#bubble');
+      if (bubble.hidden) { bubble.hidden = false; bubble.classList.remove('safety'); full = ''; }
+      const from = full.length;
+      full = full ? `${full} ${text}` : text;
+      typeTo(full, from);
+      voice.speak(text, { queue: true });
+      return talkSeconds(text, false);
     },
     stop() { clearInterval(typer); voice.stop(); },
   };

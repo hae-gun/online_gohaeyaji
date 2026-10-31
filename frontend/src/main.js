@@ -100,6 +100,7 @@ loadAnswerData()
 /* ---------- state ---------- */
 let state = 'intro';           // 'intro' | 'hall' | 'opening' | 'room'
 let current = null;            // booth the player is inside
+let priest = null;             // persona of the priest in that booth ({ id, name })
 let nearBooth = null;
 let isOutside = true;
 let path = [];                 // tap-to-walk waypoints
@@ -227,17 +228,18 @@ function enterRoom() {
   ambient.setPlace('room');
   $('#hallUi').hidden = true;
   $('#roomUi').hidden = false;
-  $('#roomName').textContent = `${current.id + 1}번 고해소`;
+  priest = engine ? engine.personaForBooth(current.id) : null;
+  voice.setTone(priest && priest.id);
+  $('#roomName').textContent = `${current.id + 1}번 고해소, ${priest ? priest.name : '신부님'}`;
   $('#bubble').hidden = true;
   $('#penance').hidden = true;
   setInputEnabled(false);
   $('#confess').value = '';
   $('#guide').textContent = '신부님이 기도를 시작합니다';
   fade(false);
-  confessional.startBlessing();
   idle.pause();   // the priest is praying; nobody gets kicked out during the blessing
-  setTimeout(() => { if (state === 'room') bubble.say('성부와 성자와 성령의 이름으로. 아멘.'); }, 300);
-  setTimeout(readyForConfession, 6200);
+  // each word is spoken when the hand reaches its point (forehead, chest, shoulders, joined hands)
+  confessional.startBlessing((word) => (state === 'room' ? bubble.append(word) : 0), readyForConfession);
 }
 
 function readyForConfession() {
@@ -305,16 +307,18 @@ $('#chatForm').addEventListener('submit', (e) => {
   setInputEnabled(false);
   $('#guide').textContent = '신부님이 듣고 계십니다';
   bubble.say('……', { silent: true });
+  confessional.setMood('listen');
   confessional.nod();
 
-  const r = engine.answer(text);
+  const r = engine.answer(text, priest && priest.id);
   setTimeout(() => {
     if (state !== 'room') return;
-    bubble.say(r.line, { safety: r.kind === 'safety' });
+    const sec = bubble.say(r.line, { safety: r.kind === 'safety' });
+    confessional.talk(sec, faceFor(r));
     if (r.kind === 'answer') {
       $('#penanceText').textContent = r.penance;
       $('#penance').hidden = false;
-      history.add({ t: Date.now(), q: text, c: r.category, p: r.penance });
+      history.add({ t: Date.now(), q: text, c: r.category, p: r.penance, pr: r.persona });
     } else {
       $('#penance').hidden = true;
     }
@@ -325,6 +329,29 @@ $('#chatForm').addEventListener('submit', (e) => {
 });
 
 /**
+ * Expression while the priest answers. A normal answer goes empathy (worried brows),
+ * penance (stern), closing line (a small smile that stays a moment). Crisis replies never smile.
+ */
+function faceFor(r) {
+  if (r.kind === 'safety') return { script: [[0, 'concern']], after: 'concern', hold: 4 };
+  if (r.kind === 'blocked') return { script: [[0, 'stern']], after: 'stern', hold: 1.5 };
+  if (r.kind === 'chat') {
+    const mood = { jin: 'neutral', eom: 'stern', yu: 'smile' }[r.persona] || 'neutral';
+    return { script: [[0, mood]], after: r.persona === 'eom' ? 'neutral' : 'smile', hold: 1.2 };
+  }
+  if (r.kind !== 'answer') return { script: [[0, r.persona === 'eom' ? 'stern' : 'neutral']] };
+  const len = r.line.length;
+  const pen = (r.penanceAt || 0) / len, close = Math.min(0.95, (r.closingAt || len) / len);
+  // jin: worried, stern, warm smile / eom: stern all the way, softens at the very end / yu: grins through it
+  const faces = {
+    jin: [[0, 'concern'], [pen, 'stern'], [close, 'smile']],
+    eom: [[0, 'stern'], [close, 'neutral']],
+    yu: [[0, 'smile'], [pen, 'neutral'], [close, 'smile']],
+  };
+  return { script: faces[r.persona] || faces.jin, after: r.persona === 'eom' ? 'neutral' : 'smile', hold: 1.5 };
+}
+
+/**
  * @param {{ reason?: 'USER'|'IDLE', notifyServer?: boolean, message?: string }} opts
  *   notifyServer=false when the server already took the booth away
  */
@@ -332,6 +359,7 @@ function leaveRoom({ reason = 'USER', notifyServer = true, message = '' } = {}) 
   if (state !== 'room') return;
   idle.pause();
   bubble.stop();
+  confessional.reset();
   const b = current;
   // free the booth right away so others see the LED go off; the door animation is local only
   if (notifyServer) rooms.release(b.id, reason);
@@ -457,7 +485,7 @@ function updateSurroundings(dt) {
       prompt.textContent = `${nb.id + 1}번 고해소: 고해성사가 진행중입니다`;
       act.hidden = true;
     } else {
-      prompt.innerHTML = `<kbd>E</kbd>${nb.id + 1}번 고해소 문 열기`;
+      prompt.innerHTML = `<kbd>E</kbd>${nb.id + 1}번 고해소${engine ? ', ' + engine.personaForBooth(nb.id).name : ''} 문 열기`;
       act.hidden = false;
     }
   } else {
