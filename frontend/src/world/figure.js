@@ -9,18 +9,34 @@ import { M, B } from '../core/three-utils.js';
  *
  * The figure faces +z. userData exposes legs, arms (R/L from the figure's own view),
  * head, eyes and ARM (arm length) for animation.
+ *
+ * Priests come in three looks that match their persona (o.look). All keep the cassock, collar
+ * and purple stole, which is what any priest wears for confession; only body and face differ.
+ *   jin  serious:  round glasses, neatly combed grey hair, plain brows
+ *   eom  scolding: older, long narrow face, thick black brows, white moustache, square glasses
+ *   yu   humorous: young, round chubby face, curly hair, rosy cheeks, no glasses
  */
+const LOOKS = {
+  jin: { skin: 0xe8b994, body: [0.33, 0.46], skull: [1, 1, 1], brow: [0.12, 0.025, 0x55504a, 0], glasses: 'round', side: 0xb9b4ad, combed: 0x8f8a84 },
+  eom: { skin: 0xdba88a, body: [0.31, 0.44], skull: [0.92, 1.12, 0.96], brow: [0.15, 0.05, 0x1c1916, -0.01], glasses: 'square', side: 0xe8e4dc, moustache: 0xe8e4dc },
+  yu:  { skin: 0xf2c6a0, body: [0.39, 0.52], skull: [1.13, 0.96, 1.05], brow: [0.1, 0.02, 0x4a2e1c, 0.01], glasses: null, curls: 0x3a2416, cheeks: 0xf08a8a },
+};
+
 export function makeFigure(o) {
   const g = new THREE.Group();
-  const skin = M(o.skin || 0xefc39b);
+  const look = o.priest ? (LOOKS[o.look] || LOOKS.jin) : null;
+  const skin = M(look ? look.skin : (o.skin || 0xefc39b));
   const legs = [];
 
   if (o.priest) {
-    const cassock = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.46, 1.8, 7), M(0x161419)); cassock.position.y = 0.92; g.add(cassock);
+    const cassock = new THREE.Mesh(new THREE.CylinderGeometry(look.body[0], look.body[1], 1.8, 7), M(0x161419)); cassock.position.y = 0.92; g.add(cassock);
     const collar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, 0.04), B(0xffffff)); collar.position.set(0, 1.76, 0.21); g.add(collar);
+    // the stole lies on the front face of the cassock, which slopes outward toward the hem
+    const [rTop, rBot] = look.body, slope = (rBot - rTop) / 1.8;
+    const front = (y) => (rTop + (1.82 - y) * slope) * Math.cos(Math.PI / 7) + 0.025;
     for (const s of [-1, 1]) {
       const stole = new THREE.Mesh(new THREE.BoxGeometry(0.11, 1.15, 0.03), M(0x8a5cc0, { shininess: 70 }));
-      stole.position.set(s * 0.14, 1.18, 0.25); stole.rotation.z = s * 0.08; g.add(stole);
+      stole.position.set(s * 0.14, 1.18, front(1.18)); stole.rotation.set(-Math.atan(slope), 0, s * 0.08); g.add(stole);
     }
   } else {
     for (const s of [-1, 1]) {
@@ -35,6 +51,7 @@ export function makeFigure(o) {
   const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.12, 6), o.priest ? M(0x161419) : skin); neck.position.y = 1.82; g.add(neck);
   const head = new THREE.Group(); head.position.y = 1.84; g.add(head);
   const skull = new THREE.Mesh(new THREE.SphereGeometry(0.3, 9, 7), skin); skull.position.y = 0.3; head.add(skull);
+  if (look) skull.scale.set(...look.skull);
 
   const eyes = [];
   for (const s of [-1, 1]) {
@@ -61,13 +78,55 @@ export function makeFigure(o) {
   const brows = [];
 
   if (o.priest) {
+    const [bw, bh, bc, bdy] = look.brow;
+    const sx = look.skull[0];
     for (const s of [-1, 1]) {
-      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.012, 4, 10), B(0x222222)); rim.position.set(s * 0.11, 0.34, 0.31); head.add(rim);
-      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.025, 0.03), B(0x55504a)); brow.position.set(s * 0.11, 0.45, 0.29); brow.rotation.z = -s * 0.12; head.add(brow);
-      brow.userData.side = s; brows.push(brow);
-      const tuft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.26), M(0xb9b4ad)); tuft.position.set(s * 0.29, 0.32, -0.02); head.add(tuft);
+      // brows: mood sets y and tilt (confessional.js); dy shifts them per look
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, 0.03), B(bc)); brow.position.set(s * 0.11, 0.45 + bdy, 0.29); brow.rotation.z = -s * 0.12; head.add(brow);
+      brow.userData.side = s; brow.userData.dy = bdy; brows.push(brow);
+      if (look.glasses === 'round') {
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.012, 4, 10), B(0x222222)); rim.position.set(s * 0.11, 0.34, 0.31); head.add(rim);
+      } else if (look.glasses === 'square') {
+        // four bars instead of a torus: a heavy, old-fashioned square frame
+        const fr = B(0x3a2a1a);
+        for (const [w, h, x, y] of [[0.17, 0.018, 0, 0.065], [0.17, 0.018, 0, -0.06], [0.018, 0.14, -0.085, 0], [0.018, 0.14, 0.085, 0]]) {
+          const bar = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.015), fr); bar.position.set(s * 0.11 + x, 0.34 + y, 0.31); head.add(bar);
+        }
+      }
+      if (look.side) {
+        const tuft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.26), M(look.side)); tuft.position.set(s * 0.29 * sx, 0.32, -0.02); head.add(tuft);
+      }
+      if (look.cheeks) {
+        const cheek = new THREE.Mesh(new THREE.CircleGeometry(0.05, 6), B(look.cheeks)); cheek.position.set(s * 0.2, 0.21, 0.27 * sx); cheek.rotation.y = s * 0.55; head.add(cheek);
+      }
     }
-    const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.012), B(0x222222)); bridge.position.set(0, 0.35, 0.32); head.add(bridge);
+    if (look.glasses) {
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.012), B(0x222222)); bridge.position.set(0, 0.35, 0.32); head.add(bridge);
+    }
+    if (look.combed) {
+      // short side-parted cap of hair
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.315, 9, 6, 0, Math.PI * 2, 0, Math.PI * 0.4), M(look.combed));
+      cap.position.y = 0.31; cap.rotation.set(-0.3, 0, 0.12); head.add(cap);
+      const part = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.012, 0.22), B(0x6a655f)); part.position.set(0.1, 0.6, 0.06); part.rotation.z = -0.35; head.add(part);
+    }
+    if (look.moustache) {
+      // two angled blocks, drooping at the ends: makes every line sound like a reprimand
+      for (const s of [-1, 1]) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.045, 0.05), M(look.moustache)); m.position.set(s * 0.055, 0.2, 0.3); m.rotation.z = s * -0.3; head.add(m);
+      }
+    }
+    if (look.curls) {
+      // a crude mop of curls: a dozen low-poly balls around the top of the head
+      const hm = M(look.curls);
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI * 2, ring = i % 2 ? 0.2 : 0.26;
+        const c = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 4), hm);
+        c.position.set(Math.cos(a) * ring * sx, 0.5 + (i % 3) * 0.03, Math.sin(a) * ring - 0.04);
+        if (c.position.z > 0.14) c.position.y += 0.04;   // keep the fringe above the brows
+        head.add(c);
+      }
+      const top = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 4), hm); top.position.set(0, 0.6, -0.04); head.add(top);
+    }
   } else {
     const hair = new THREE.Mesh(new THREE.SphereGeometry(0.315, 9, 6, 0, Math.PI * 2, 0, Math.PI * 0.42), M(o.hair || 0x3b2618));
     hair.position.y = 0.31; hair.rotation.x = -0.25; head.add(hair);

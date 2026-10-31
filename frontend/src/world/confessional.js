@@ -40,47 +40,64 @@ export function buildConfessional() {
   const flame = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), B(0xffc864)); flame.scale.y = 1.8; flame.position.set(0.9, 2.02, -1.8); scene.add(flame);
   const stand = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.55, 0.4), wood); stand.position.set(0.9, 0.77, -1.8); scene.add(stand);
 
-  const priest = makeFigure({ priest: true, skin: 0xe8b994 });
-  priest.position.set(0, 0, -2.35);
-  scene.add(priest);
+  // one figure per persona; only the priest of the current booth is shown
+  const crew = {};
+  for (const id of ['jin', 'eom', 'yu']) {
+    const fig = makeFigure({ priest: true, look: id });
+    fig.position.set(0, 0, -2.35);
+    fig.visible = false;
+    scene.add(fig);
+    const face = createFace(fig);
+    crew[id] = { fig, face, cross: createSignOfCross(fig, face) };
+  }
+  let active = crew.jin;
+  active.fig.visible = true;
   camera.position.set(0, 1.9, 2.7);
   camera.lookAt(0, 1.86, -2.35);
 
-  const face = createFace(priest);
-  const cross = createSignOfCross(priest, face);
   let nodT = -1;
 
   return {
     scene,
     camera,
+    /** Shows the priest of this booth: 'jin' | 'eom' | 'yu'. Call before startBlessing. */
+    setPriest(id) {
+      const next = crew[id] || crew.jin;
+      if (next === active) return;
+      active.face.reset(); active.cross.stop(); active.fig.userData.head.rotation.x = 0;
+      active.fig.visible = false;
+      active = next;
+      active.fig.visible = true;
+    },
     /**
      * Starts the sign of the cross (about 6 seconds). onWord(text) fires when the hand reaches
      * each point, so the spoken words follow the hand instead of running ahead of it.
      * onWord returns how long that word is spoken, in seconds. onDone fires when the hands are back
      * down; it runs on the animation clock, so a slow device never cuts the prayer short.
      */
-    startBlessing(onWord, onDone) { face.setMood('pray'); cross.start(onWord, onDone); },
+    startBlessing(onWord, onDone) { active.face.setMood('pray'); active.cross.start(onWord, onDone); },
     /** A slow nod while the priest "listens". */
     nod() { nodT = 0; },
     /** 'neutral' | 'pray' | 'listen' | 'concern' | 'stern' | 'smile' */
-    setMood(m) { face.setMood(m); },
+    setMood(m) { active.face.setMood(m); },
     /**
      * Moves the mouth for `seconds`. script: [[fraction of the speech, mood], ...] switches the
      * expression while talking; `after` is the mood once he stops, held for `hold` seconds.
      */
-    talk(seconds, opts) { face.talk(seconds, opts); },
+    talk(seconds, opts) { active.face.talk(seconds, opts); },
     /** Leaving the booth: stop talking, reset the face and arms. */
-    reset() { face.reset(); cross.stop(); nodT = -1; priest.userData.head.rotation.x = 0; },
+    reset() { active.face.reset(); active.cross.stop(); nodT = -1; active.fig.userData.head.rotation.x = 0; },
     update(dt, t) {
+      const { fig, face, cross } = active;
       cross.update(dt);
       face.update(dt);
-      const head = priest.userData.head;
+      const head = fig.userData.head;
       if (nodT >= 0) {
         nodT += dt;
         head.rotation.x = Math.sin(Math.min(nodT, 2) * Math.PI * 1.5) * 0.18;
         if (nodT > 2) { nodT = -1; head.rotation.x = 0; }
       }
-      priest.scale.y = 1 + Math.sin(t * 1.4) * 0.006;
+      fig.scale.y = 1 + Math.sin(t * 1.4) * 0.006;
       flame.scale.set(1 + Math.sin(t * 11) * 0.12, 1.8 + Math.sin(t * 7) * 0.2, 1);
       candleL.intensity = 1.3 + Math.sin(t * 9) * 0.12;
     },
@@ -123,7 +140,7 @@ function createFace(priest) {
   function draw(blink) {
     brows.forEach((b) => {
       const s = b.userData.side;
-      b.position.y = mood.browY;
+      b.position.y = mood.browY + (b.userData.dy || 0);
       b.rotation.z = -s * mood.browRot;
     });
     const eye = blink ? Math.min(mood.eye, 0.12) : mood.eye;
