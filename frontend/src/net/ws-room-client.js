@@ -1,14 +1,16 @@
 import { DEFAULT_IDLE } from './room-client.js';
+import { storedName } from './names.js';
 
 /**
- * RoomClient over WebSocket. Follows docs/realtime-protocol.md v0.3.
+ * RoomClient over WebSocket. Follows docs/realtime-protocol.md v0.4.
  *
  * Handles: hello/welcome, ping every heartbeatMs, claim/release with reqId,
  * booth events ordered by seq (resync on a gap), server-forced releases,
- * reconnect with exponential backoff and jitter, and positions (move, presence).
+ * reconnect with exponential backoff and jitter, positions (move, presence) and names (rename).
  */
 const PROTOCOL_VERSION = 1;
 const CLAIM_TIMEOUT_MS = 5_000;
+const RENAME_TIMEOUT_MS = 5_000;
 const ACTIVITY_MIN_GAP_MS = 5_000;   // protocol: at most one activity message per 5 s
 const NO_RECONNECT = new Set([1000, 4001, 4003, 4006]);
 
@@ -18,6 +20,7 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
   const statusListeners = [];
   const releaseListeners = [];
   const presenceListeners = [];
+  const nameListeners = [];
 
   let ws = null;
   let ready = false;
@@ -31,7 +34,14 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
   let myBooth = null;
   let lastActivitySent = 0;
   const pendingClaims = new Map();   // reqId -> resolve
-  const client = { idle: { ...DEFAULT_IDLE } };
+  const pendingRenames = new Map();  // reqId -> resolve
+  const client = { idle: { ...DEFAULT_IDLE }, myName: storedName.load() || '' };
+  const setMyName = (name) => {
+    if (!name) return;
+    client.myName = name;
+    storedName.save(name);   // the same name comes back after a reload or reconnect
+    nameListeners.forEach((fn) => fn(name));
+  };
 
   const emitChange = () => changeListeners.forEach((fn) => fn(new Set(occupied)));
   const emitPresence = (event) => presenceListeners.forEach((fn) => fn(event));
@@ -47,7 +57,11 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
   function connect() {
     ready = false;
     ws = new WebSocket(url);
-    ws.onopen = () => send({ type: 'hello', v: PROTOCOL_VERSION, client: { app: 'web', version: appVersion } });
+    ws.onopen = () => send({
+      type: 'hello', v: PROTOCOL_VERSION, client: { app: 'web', version: appVersion },
+      // the server keeps it if it passes its checks, otherwise hands out a random baptismal name
+      ...(client.myName ? { name: client.myName } : {}),
+    });
     ws.onmessage = (e) => {
       let msg;
       try { msg = JSON.parse(e.data); } catch (_) { return; }
@@ -68,11 +82,12 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         clearInterval(heartbeat);
         heartbeat = setInterval(() => send({ type: 'ping', t: Date.now() }), heartbeatMs);
         setStatus({ state: 'ready', channelNo: msg.channelNo });
-        emitPresence({ kind: 'reset', you: msg.you?.pid ?? null, players: msg.players || [] });
+        setMyName(msg.you?.name);
+        emitPresence({ kind: 'reset', you: msg.you?.pid ?? null, players: msg.players || [], names: msg.names || [] });
         break;
       }
       case 'presence':
-        if (ready) emitPresence({ kind: 'batch', moved: msg.moved || [], left: msg.left || [] });
+        if (ready) emitPresence({ kind: 'batch', moved: msg.moved || [], left: msg.left || [], named: msg.named || [] });
         break;
       case 'snapshot':
         applySnapshot(msg.booths, msg.seq);
@@ -94,6 +109,14 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         pendingClaims.delete(msg.reqId);
         if (msg.ok) myBooth = msg.boothId;
         resolve(msg.ok ? { ok: true } : { ok: false, reason: msg.reason });
+        break;
+      }
+      case 'renameResult': {
+        const resolve = pendingRenames.get(msg.reqId);
+        if (!resolve) return;
+        pendingRenames.delete(msg.reqId);
+        if (msg.ok) setMyName(msg.name);
+        resolve(msg.ok ? { ok: true, name: msg.name } : { ok: false, reason: msg.reason });
         break;
       }
       case 'released':
@@ -125,6 +148,8 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
     // a claim in flight will never be answered by this socket
     pendingClaims.forEach((resolve) => resolve({ ok: false, reason: 'OFFLINE' }));
     pendingClaims.clear();
+    pendingRenames.forEach((resolve) => resolve({ ok: false, reason: 'OFFLINE' }));
+    pendingRenames.clear();
     // the server releases our booth when the socket drops (no resume yet)
     if (myBooth !== null) {
       const b = myBooth;
@@ -144,6 +169,20 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
     onStatus(fn) { statusListeners.push(fn); fn({ ...status }); },
     onForcedRelease(fn) { releaseListeners.push(fn); },
     onPresence(fn) { presenceListeners.push(fn); },
+    onName(fn) { nameListeners.push(fn); if (client.myName) fn(client.myName); },
+
+    /** Ask the server for a new display name. Resolves with the name it accepted, or why not. */
+    rename(name) {
+      if (!ready) return Promise.resolve({ ok: false, reason: 'OFFLINE' });
+      const reqId = nextReq();
+      return new Promise((resolve) => {
+        pendingRenames.set(reqId, resolve);
+        send({ type: 'rename', reqId, name });
+        setTimeout(() => {
+          if (pendingRenames.delete(reqId)) resolve({ ok: false, reason: 'TIMEOUT' });
+        }, RENAME_TIMEOUT_MS);
+      });
+    },
     sharesPresence: true,
 
     /** My position. Rate is decided by the caller (move-sender.js); the server drops anything faster. */

@@ -16,6 +16,7 @@ import { createVoice } from './audio/voice.js';
 import { createLocalRoomClient } from './net/room-client.js';
 import { createWsRoomClient } from './net/ws-room-client.js';
 import { createMoveSender } from './net/move-sender.js';
+import { checkName, normalizeName, randomSaintName, NAME_REASON } from './net/names.js';
 import { history } from './storage/history.js';
 import { $, toast, fade, createBubble, initHistoryPanel } from './ui/hud.js';
 
@@ -138,7 +139,7 @@ rooms.onForcedRelease(({ boothId, reason }) => {
 });
 
 /* ---------- other players (protocol v0.3) ---------- */
-const others = createOtherPlayers(world);
+const others = createOtherPlayers(world, $('#nameTags'));
 const moveSender = createMoveSender(rooms);
 rooms.onPresence((e) => {
   others.handle(e);
@@ -146,11 +147,49 @@ rooms.onPresence((e) => {
   if (e.kind === 'reset' && state === 'hall') moveSender.now(player.position, player.rotation.y);
 });
 if (rooms.sharesPresence) $('#peopleWrap').hidden = false;
+
+/* ---------- my baptismal name (protocol v0.4) ---------- */
+rooms.onName((name) => { $('#myName').textContent = name; });
+const namePanel = $('#namePanel'), nameInput = $('#nameInput'), nameError = $('#nameError');
+function showNameError(reason) {
+  nameError.textContent = NAME_REASON[reason] || NAME_REASON.INVALID;
+  nameError.hidden = false;
+}
+function closeNamePanel() { namePanel.hidden = true; }
+$('#nameBtn').onclick = () => {
+  nameInput.value = rooms.myName || '';
+  nameError.hidden = true;
+  namePanel.hidden = false;
+  try { nameInput.focus(); nameInput.select(); } catch (_) { /* ignore */ }
+};
+$('#nameRandom').onclick = () => {
+  let next;
+  do { next = randomSaintName(); } while (next === nameInput.value);
+  nameInput.value = next;
+  nameError.hidden = true;
+};
+$('#nameCancel').onclick = closeNamePanel;
+nameInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNamePanel(); });
+nameInput.addEventListener('input', () => { nameError.hidden = true; });
+$('#nameForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = normalizeName(nameInput.value);
+  if (name === rooms.myName) { closeNamePanel(); return; }
+  const verdict = checkName(name);           // quick answer for the obvious cases
+  if (verdict !== 'OK') { showNameError(verdict); return; }
+  $('#nameSave').disabled = true;
+  const r = await rooms.rename(name);        // the server has the final say
+  $('#nameSave').disabled = false;
+  if (!r.ok) { showNameError(r.reason); return; }
+  closeNamePanel();
+  toast(`이제 ${r.name}(으)로 불립니다`);
+});
 let shownPeople = -1;
 
 
 /* ---------- input ---------- */
 const keys = createKeyboard((k) => {
+  if (!namePanel.hidden) return;   // a dialog is open: buttons inside it may hold focus
   if (k === 'e' && state === 'hall') tryEnter();
   if (k === 'v' && state === 'hall') toggleView();
   if (k === 'escape' && state === 'room') leaveRoom();
@@ -230,6 +269,7 @@ function enterRoom() {
   $('#roomUi').hidden = false;
   priest = engine ? engine.personaForBooth(current.id) : null;
   voice.setTone(priest && priest.id);
+  confessional.setPriest(priest ? priest.id : 'jin');
   $('#roomName').textContent = `${current.id + 1}번 고해소, ${priest ? priest.name : '신부님'}`;
   $('#bubble').hidden = true;
   $('#penance').hidden = true;
@@ -407,7 +447,7 @@ const clock = new THREE.Clock();
 
 function updatePlayer(dt) {
   let vx = 0, vz = 0;
-  if (state === 'hall') {
+  if (state === 'hall' && namePanel.hidden) {
     let f = 0, r = 0;
     if (keys.w || keys.arrowup) f += 1;
     if (keys.s || keys.arrowdown) f -= 1;
@@ -500,6 +540,7 @@ function animate() {
   booths.forEach((b) => { b.hinge.rotation.y += (b.doorTarget - b.hinge.rotation.y) * Math.min(1, dt * 8); });
 
   if (state === 'room' || state === 'leaving') {
+    others.updateTags(camera, player.position, innerWidth, innerHeight, false);
     confessional.update(dt, t);
     renderer.render(confessional.scene, confessional.camera);
     return;
@@ -511,6 +552,7 @@ function animate() {
     updateSurroundings(dt);
     const people = others.count() + 1;
     if (people !== shownPeople) { shownPeople = people; $('#people').textContent = people; }
+    others.updateTags(camera, player.position, innerWidth, innerHeight, state === 'hall');
     if (state === 'intro') {
       rig.updateIntro(t, player.position);
       player.visible = true;

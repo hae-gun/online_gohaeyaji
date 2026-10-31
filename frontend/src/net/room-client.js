@@ -20,19 +20,25 @@
  *   sendMove(x: number, z: number, ry: number): void,
  *   sharesPresence: boolean,
  *   idle: { limitMs: number, warnMs: number, dangerMs: number },
+ *   myName: string,
+ *   onName(listener: (name: string) => void): void,
+ *   rename(name: string): Promise<{ ok: boolean, name?: string, reason?: string }>,
  * }} RoomClient
  *
  * Positions of other players (protocol v0.3). Rows are [pid, x, z, ry] or, in a reset,
- * [pid, x, z, ry, boothId or -1]:
- * @typedef {{ kind: 'reset', you: number|null, players: number[][] }
- *         | { kind: 'batch', moved: number[][], left: number[] }
+ * [pid, x, z, ry, boothId or -1]. Names (v0.4) come as [pid, name] pairs:
+ * @typedef {{ kind: 'reset', you: number|null, players: number[][], names: [number, string][] }
+ *         | { kind: 'batch', moved: number[][], left: number[], named: [number, string][] }
  *         | { kind: 'booth', boothId: number, pid: number|null }} PresenceEvent
  *
  * onForcedRelease fires when the server takes a booth away (IDLE safety net, LEASE_EXPIRED,
  * connection lost). It never fires for a release the client asked for itself.
  */
 
+import { checkName, normalizeName, randomSaintName, storedName } from './names.js';
+
 export const DEFAULT_IDLE = { limitMs: 90_000, warnMs: 20_000, dangerMs: 10_000 };
+const RENAME_GAP_MS = 10_000;
 
 /**
  * @param {{ count: number, simulate?: boolean }} opts
@@ -44,6 +50,12 @@ export function createLocalRoomClient({ count, simulate = false }) {
   const listeners = [];
   let mine = null;
   const emit = () => listeners.forEach((fn) => fn(new Set(occupied)));
+  // no server: keep the remembered name if it still passes the basic rules, else pick one
+  const remembered = storedName.load();
+  let myName = remembered && checkName(remembered) === 'OK' ? normalizeName(remembered) : randomSaintName();
+  storedName.save(myName);
+  const nameListeners = [];
+  let lastRename = 0;
 
   if (simulate) {
     for (let i = 0; i < count; i++) if (Math.random() < 0.3) occupied.add(i);
@@ -77,5 +89,18 @@ export function createLocalRoomClient({ count, simulate = false }) {
     onPresence() { /* nobody else exists in the simulation */ },
     sendMove() { /* nobody to tell */ },
     sharesPresence: false,
+    get myName() { return myName; },
+    onName(fn) { nameListeners.push(fn); fn(myName); },
+    /** Basic rules only; the blocked word list is checked by the real server. */
+    async rename(raw) {
+      const verdict = checkName(raw);
+      if (verdict !== 'OK') return { ok: false, reason: verdict };
+      if (Date.now() - lastRename < RENAME_GAP_MS) return { ok: false, reason: 'TOO_SOON' };
+      lastRename = Date.now();
+      myName = normalizeName(raw);
+      storedName.save(myName);
+      nameListeners.forEach((fn) => fn(myName));
+      return { ok: true, name: myName };
+    },
   };
 }

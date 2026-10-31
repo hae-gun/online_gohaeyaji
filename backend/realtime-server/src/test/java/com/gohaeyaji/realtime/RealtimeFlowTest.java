@@ -29,7 +29,9 @@ import org.testcontainers.utility.DockerImageName;
  */
 // every test client connects from 127.0.0.1, so lift the per-IP limit (20) for the 49-client test
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "gohaeyaji.max-connections-per-ip=500")
+        properties = {"gohaeyaji.max-connections-per-ip=500",
+                // a fake blocked word list, so the real (private) one is never needed for tests
+                "gohaeyaji.blocked-words-file=src/test/resources/blocked-test.json"})
 @Testcontainers
 class RealtimeFlowTest {
 
@@ -290,6 +292,73 @@ class RealtimeFlowTest {
             JsonNode event = b.await("booth", m -> m.path("boothId").asInt() == 4 && "occupied".equals(m.path("state").asText()));
             assertThat(event.path("pid").asInt()).isEqualTo(pidA);
         }
+    }
+
+    // ------------------------------------------------------------ names (protocol v0.4)
+
+    @Test
+    void everyoneGetsARandomBaptismalName() throws Exception {
+        try (TestClient a = TestClient.connect(port)) {
+            JsonNode you = a.hello().path("you");
+            assertThat(you.path("name").asText()).isNotBlank();
+            try (TestClient b = TestClient.connect(port)) {
+                JsonNode names = b.hello().path("names");
+                assertThat(nameOf(names, you.path("pid").asInt())).isEqualTo(you.path("name").asText());
+            }
+        }
+    }
+
+    @Test
+    void helloKeepsARememberedNameAndReplacesABadOne() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            a.send("{\"type\":\"hello\",\"v\":1,\"name\":\"  성실한   토마스 \"}");
+            assertThat(a.await("welcome").path("you").path("name").asText()).isEqualTo("성실한 토마스");
+            b.send("{\"type\":\"hello\",\"v\":1,\"name\":\"진 신부님\"}");
+            String given = b.await("welcome").path("you").path("name").asText();
+            assertThat(given).isNotBlank().doesNotContain("신부");
+        }
+    }
+
+    @Test
+    void renameReachesTheChannel() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            b.hello();
+            a.send("{\"type\":\"rename\",\"reqId\":\"n1\",\"name\":\"새벽기도 요한\"}");
+            JsonNode r = a.await("renameResult");
+            assertThat(r.path("ok").asBoolean()).isTrue();
+            assertThat(r.path("name").asText()).isEqualTo("새벽기도 요한");
+            b.await("presence", m -> "새벽기도 요한".equals(nameOf(m.path("named"), pidA)));
+        }
+    }
+
+    @Test
+    void badNamesAreRefusedWithAReason() throws Exception {
+        try (TestClient a = TestClient.connect(port)) {
+            a.hello();
+            assertThat(rename(a, "r1", "ㅋㅋㅋ")).isEqualTo("INVALID");
+            assertThat(rename(a, "r2", "가")).isEqualTo("INVALID");
+            assertThat(rename(a, "r3", "엄 신 부")).isEqualTo("RESERVED");     // spaces do not hide it
+            assertThat(rename(a, "r4", "나 쁜 말쟁이")).isEqualTo("BLOCKED");
+            assertThat(rename(a, "r5", "BadWord")).isEqualTo("BLOCKED");
+            assertThat(rename(a, "r6", "아녜스")).isEqualTo("OK");
+            assertThat(rename(a, "r7", "루치아")).isEqualTo("TOO_SOON");      // 10 s between changes
+        }
+    }
+
+    private static String rename(TestClient c, String reqId, String name) throws Exception {
+        c.send("{\"type\":\"rename\",\"reqId\":\"" + reqId + "\",\"name\":\"" + name + "\"}");
+        JsonNode r = c.await("renameResult", m -> reqId.equals(m.path("reqId").asText()));
+        return r.path("ok").asBoolean() ? "OK" : r.path("reason").asText();
+    }
+
+    private static String nameOf(JsonNode pairs, int pid) {
+        for (JsonNode pair : pairs) {
+            if (pair.get(0).asInt() == pid) {
+                return pair.get(1).asText();
+            }
+        }
+        return null;
     }
 
     private static boolean containsPid(JsonNode rows, int pid) {

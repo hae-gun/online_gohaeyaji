@@ -18,6 +18,8 @@ final class ChannelPresence {
     private final Map<Integer, Player> players = new HashMap<>();
     private final Set<Integer> dirty = new LinkedHashSet<>();
     private final Set<Integer> left = new LinkedHashSet<>();
+    private final Map<Integer, String> names = new HashMap<>();
+    private final Set<Integer> renamed = new LinkedHashSet<>();
 
     synchronized void move(int pid, double x, double z, double ry) {
         Player p = players.computeIfAbsent(pid, Player::new);
@@ -35,8 +37,15 @@ final class ChannelPresence {
         }
     }
 
+    synchronized void setName(int pid, String name) {
+        names.put(pid, name);
+        renamed.add(pid);
+    }
+
     synchronized void remove(int pid) {
         dirty.remove(pid);
+        renamed.remove(pid);
+        names.remove(pid);
         if (players.remove(pid) != null) {
             left.add(pid);
         }
@@ -44,7 +53,7 @@ final class ChannelPresence {
 
     /** Changes since the last call, or null if nothing changed. */
     synchronized Batch drain() {
-        if (dirty.isEmpty() && left.isEmpty()) {
+        if (dirty.isEmpty() && left.isEmpty() && renamed.isEmpty()) {
             return null;
         }
         List<List<Number>> moved = new ArrayList<>(dirty.size());
@@ -54,9 +63,14 @@ final class ChannelPresence {
                 moved.add(List.of(pid, p.x, p.z, p.ry));
             }
         }
-        Batch batch = new Batch(moved, new ArrayList<>(left));
+        List<List<Object>> named = new ArrayList<>(renamed.size());
+        for (int pid : renamed) {
+            named.add(List.of(pid, names.get(pid)));
+        }
+        Batch batch = new Batch(moved, new ArrayList<>(left), named);
         dirty.clear();
         left.clear();
+        renamed.clear();
         return batch;
     }
 
@@ -69,7 +83,14 @@ final class ChannelPresence {
         return all;
     }
 
-    record Batch(List<List<Number>> moved, List<Integer> left) {
+    /** Every name in the channel: {@code [pid, name]}. */
+    synchronized List<List<Object>> names() {
+        List<List<Object>> all = new ArrayList<>(names.size());
+        names.forEach((pid, name) -> all.add(List.of(pid, name)));
+        return all;
+    }
+
+    record Batch(List<List<Number>> moved, List<Integer> left, List<List<Object>> named) {
     }
 
     private static final class Player {

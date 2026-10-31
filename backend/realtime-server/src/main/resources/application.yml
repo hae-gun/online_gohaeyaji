@@ -21,7 +21,7 @@ management:
       exposure:
         include: health,info,metrics,prometheus
 
-# Values follow docs/realtime-protocol.md (v0.2)
+# Values follow docs/realtime-protocol.md (v0.4)
 gohaeyaji:
   protocol-version: 1
   booth-count: 20
@@ -39,4 +39,8 @@ gohaeyaji:
   max-connections-per-ip: 20
   presence-ms: 200                # position batch interval (protocol section 13)
   move-min-gap-ms: 150            # drop moves faster than ~5/s (200 ms minus jitter)
+  rename-min-gap-ms: 10000        # one name change per 10 s
+  # private blocked word list (git-ignored), same file the browser uses; relative to the working directory.
+  # The default works for ./gradlew bootRun from backend/realtime-server. In Docker, mount the file and set the variable.
+  blocked-words-file: ${BLOCKED_WORDS_FILE:../../frontend/public/data/blocked.json}
   allowed-origins: ${ALLOWED_ORIGINS:https://hae-gun.github.io,http://localhost:5173}

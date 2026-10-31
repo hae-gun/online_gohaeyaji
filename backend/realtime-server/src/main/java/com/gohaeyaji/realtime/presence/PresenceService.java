@@ -55,6 +55,16 @@ public class PresenceService {
         channel(channelNo).setBooth(pid, -1);
     }
 
+    /** The name reaches the channel with the next batch (protocol section 14). */
+    public void setName(int channelNo, int pid, String name) {
+        channel(channelNo).setName(pid, name);
+    }
+
+    public List<List<Object>> names(int channelNo) {
+        ChannelPresence presence = channels.get(channelNo);
+        return presence == null ? List.of() : presence.names();
+    }
+
     public void remove(int channelNo, int pid) {
         ChannelPresence presence = channels.get(channelNo);
         if (presence != null) {

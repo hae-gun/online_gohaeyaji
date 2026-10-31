@@ -18,20 +18,24 @@ public final class Messages {
     public record Idle(long limitMs, long warnMs, long dangerMs) {
     }
 
-    public record You(int pid) {
+    /** name: my display name; the one I asked for in hello, or a random baptismal name. */
+    public record You(int pid, String name) {
     }
 
     /**
      * @param players visible players in the channel, each {@code [pid, x, z, ry, boothId or -1]}
+     * @param names   display names in the channel, each {@code [pid, name]} (also for players not yet visible)
      */
     public record Welcome(String type, int v, String sessionId, String resumeToken, int channelNo,
                           int boothCount, Booths booths, int queueSize, long seq, long heartbeatMs,
-                          Idle idle, You you, List<List<Number>> players, long presenceMs, long serverTime) {
+                          Idle idle, You you, List<List<Number>> players, List<List<Object>> names,
+                          long presenceMs, long serverTime) {
         public Welcome(int v, String sessionId, String resumeToken, int channelNo, int boothCount,
                        Booths booths, int queueSize, long seq, long heartbeatMs, Idle idle,
-                       You you, List<List<Number>> players, long presenceMs, long serverTime) {
+                       You you, List<List<Number>> players, List<List<Object>> names,
+                       long presenceMs, long serverTime) {
             this("welcome", v, sessionId, resumeToken, channelNo, boothCount, booths, queueSize, seq,
-                    heartbeatMs, idle, you, players, presenceMs, serverTime);
+                    heartbeatMs, idle, you, players, names, presenceMs, serverTime);
         }
     }
 
@@ -54,10 +58,25 @@ public final class Messages {
      *
      * @param moved {@code [pid, x, z, ry]} for everyone who moved since the last batch
      * @param left  pids that left the channel
+     * @param named {@code [pid, name]} for everyone who joined or changed name since the last batch;
+     *              left out when empty
      */
-    public record Presence(String type, long t, List<List<Number>> moved, List<Integer> left) {
-        public Presence(long t, List<List<Number>> moved, List<Integer> left) {
-            this("presence", t, moved, left);
+    public record Presence(String type, long t, List<List<Number>> moved, List<Integer> left,
+                           @JsonInclude(JsonInclude.Include.NON_EMPTY) List<List<Object>> named) {
+        public Presence(long t, List<List<Number>> moved, List<Integer> left, List<List<Object>> named) {
+            this("presence", t, moved, left, named);
+        }
+    }
+
+    /** Answer to "rename". On failure name is what the server read, reason says why. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record RenameResult(String type, String reqId, boolean ok, String name, String reason) {
+        public static RenameResult ok(String reqId, String name) {
+            return new RenameResult("renameResult", reqId, true, name, null);
+        }
+
+        public static RenameResult fail(String reqId, String name, String reason) {
+            return new RenameResult("renameResult", reqId, false, name, reason);
         }
     }
 
@@ -104,6 +123,12 @@ public final class Messages {
     public static final String RELEASED_USER = "USER";
     public static final String RELEASED_IDLE = "IDLE";
     public static final String RELEASED_LEASE_EXPIRED = "LEASE_EXPIRED";
+
+    /** renameResult reasons. */
+    public static final String NAME_INVALID = "INVALID";
+    public static final String NAME_BLOCKED = "BLOCKED";
+    public static final String NAME_RESERVED = "RESERVED";
+    public static final String NAME_TOO_SOON = "TOO_SOON";
 
     /** error codes. */
     public static final String ERR_BAD_MESSAGE = "BAD_MESSAGE";

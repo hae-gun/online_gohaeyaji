@@ -21,6 +21,10 @@ services:
     environment:
       REDIS_HOST: redis
       ALLOWED_ORIGINS: https://hae-gun.github.io,http://localhost:5173
+      # private blocked word list for display names (git-ignored); without it only the basic rules apply
+      BLOCKED_WORDS_FILE: /data/blocked.json
+    volumes:
+      - ../frontend/public/data/blocked.json:/data/blocked.json:ro
     ports:
       - "8080:8080"
     depends_on:

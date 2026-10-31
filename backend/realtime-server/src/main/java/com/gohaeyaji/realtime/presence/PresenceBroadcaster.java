@@ -35,7 +35,7 @@ public class PresenceBroadcaster {
     public void tick() {
         long now = System.currentTimeMillis();
         presence.drainAll((channelNo, batch) -> {
-            sender.broadcast(channelNo, new Presence(now, batch.moved(), batch.left()));
+            sender.broadcast(channelNo, new Presence(now, batch.moved(), batch.left(), batch.named()));
             batches.increment();
             entries.increment(batch.moved().size());
         });

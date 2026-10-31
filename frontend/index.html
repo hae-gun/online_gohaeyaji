@@ -15,6 +15,7 @@
 </head>
 <body>
   <div id="stage"></div>
+  <div id="nameTags" aria-hidden="true"></div>
   <div id="fade"></div>
 
   <!-- yard and corridor HUD -->
@@ -22,6 +23,7 @@
     <div class="top">
       <div class="sign"><b id="placeName">성당 앞마당</b><span><i class="dot"></i>사용 중 <span id="occ">0</span> / 20<span id="peopleWrap" hidden>, 함께 있는 사람 <span id="people">1</span>명</span></span></div>
       <div class="btns">
+        <button id="nameBtn" type="button" title="세례명 바꾸기">세례명 <b id="myName">…</b></button>
         <button id="viewBtn" type="button">1인칭 시점</button>
         <button id="histBtn" type="button">나의 고해 기록</button>
         <button id="sndBtn" type="button">소리 끄기</button>
@@ -77,6 +79,21 @@
         <button class="primary" id="histClose" type="button">닫기</button>
       </div>
     </div>
+  </div>
+
+  <div class="overlay" id="namePanel" hidden>
+    <form class="card" id="nameForm" autocomplete="off">
+      <h2>세례명 바꾸기</h2>
+      <p>다른 사람이 가까이 오면 내 머리 위에 보이는 이름입니다. 처음에는 무작위 세례명이 정해지고, 이 브라우저에 기억됩니다.</p>
+      <input id="nameInput" maxlength="10" aria-describedby="nameRule nameError">
+      <p class="rule" id="nameRule">2~10자, 한글 영문 숫자. 신부님이나 운영자처럼 보이는 이름과 고운 말이 아닌 이름은 쓸 수 없습니다.</p>
+      <p class="error" id="nameError" role="alert" hidden></p>
+      <div class="row">
+        <button id="nameRandom" type="button">무작위 세례명</button>
+        <button id="nameCancel" type="button">취소</button>
+        <button class="primary" id="nameSave" type="submit">바꾸기</button>
+      </div>
+    </form>
   </div>
 
   <div id="toast" hidden></div>

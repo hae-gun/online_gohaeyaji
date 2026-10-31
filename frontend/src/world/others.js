@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { makeFigure } from './figure.js';
 
 /**
@@ -7,17 +8,30 @@ import { makeFigure } from './figure.js';
  * Positions arrive in batches every ~200 ms. Each avatar walks toward its latest known position
  * at a little above walking speed, which hides the gaps between batches; a big jump (reconnect,
  * leaving a booth) snaps instead.
+ *
+ * Names (protocol v0.4) are shown only for people close by, as plain DOM labels over the canvas:
+ * sixty floating names at once would bury the corridor.
  */
 const SHIRTS = [0x3a7bd5, 0x2fa36b, 0xe0a526, 0x8e5cc2, 0x1fb2b8, 0xd35d9c, 0x6d8a2e, 0xe0703a, 0x4a5bdc, 0x9a6b3f];
 const PANTS = [0x2e3a52, 0x3b3b3b, 0x4a3426, 0x1f3d3a];
 const WALK_SPEED = 3.4;            // same as the local player
 const CATCH_UP = 1.35;             // a bit faster so they never lag a whole batch behind
 const SNAP_DISTANCE = 3;
+const NAME_DISTANCE = 3;           // metres; farther than this the name is hidden
+const NAME_HEIGHT = 2.45;          // just above the head
 
-export function createOtherPlayers(scene) {
-  const players = new Map();       // pid -> { fig, tx, tz, try, inBooth, phase }
+export function createOtherPlayers(scene, tagLayer) {
+  const players = new Map();       // pid -> { fig, tx, tz, try, inBooth, phase, tag }
   const boothOwner = new Map();    // boothId -> pid
+  const names = new Map();         // pid -> name (may arrive before the first move)
+  const v = new THREE.Vector3();
   let me = null;
+
+  function setName(pid, name) {
+    names.set(pid, name);
+    const p = players.get(pid);
+    if (p && p.tag) p.tag.textContent = name;
+  }
 
   function ensure(pid, x, z, ry) {
     let p = players.get(pid);
@@ -26,7 +40,12 @@ export function createOtherPlayers(scene) {
       fig.position.set(x, 0, z);
       fig.rotation.y = ry;
       scene.add(fig);
-      p = { fig, tx: x, tz: z, try: ry, inBooth: false, phase: Math.random() * 6 };
+      const tag = document.createElement('div');
+      tag.className = 'nameTag';
+      tag.hidden = true;
+      tag.textContent = names.get(pid) || '';
+      tagLayer.appendChild(tag);
+      p = { fig, tx: x, tz: z, try: ry, inBooth: false, phase: Math.random() * 6, tag };
       players.set(pid, p);
     }
     return p;
@@ -34,8 +53,10 @@ export function createOtherPlayers(scene) {
 
   function remove(pid) {
     const p = players.get(pid);
+    names.delete(pid);
     if (!p) return;
     scene.remove(p.fig);
+    p.tag.remove();
     players.delete(pid);
   }
 
@@ -52,13 +73,16 @@ export function createOtherPlayers(scene) {
       if (e.kind === 'reset') {
         for (const pid of [...players.keys()]) remove(pid);
         boothOwner.clear();
+        names.clear();
         me = e.you;
+        for (const [pid, name] of e.names || []) names.set(pid, name);
         for (const [pid, x, z, ry, boothId] of e.players) {
           if (pid === me) continue;
           ensure(pid, x, z, ry);
           if (boothId >= 0) { boothOwner.set(boothId, pid); setInBooth(pid, true); }
         }
       } else if (e.kind === 'batch') {
+        for (const [pid, name] of e.named || []) setName(pid, name);
         for (const [pid, x, z, ry] of e.moved) {
           if (pid === me) continue;
           const p = ensure(pid, x, z, ry);
@@ -85,6 +109,26 @@ export function createOtherPlayers(scene) {
       let n = 0;
       for (const p of players.values()) if (!p.inBooth) n++;
       return n;
+    },
+
+    /**
+     * Places the name labels of people within NAME_DISTANCE of me.
+     * @param {THREE.Camera} camera @param {{x:number,z:number}} mePos @param {number} w @param {number} h
+     */
+    updateTags(camera, mePos, w, h, show = true) {
+      for (const p of players.values()) {
+        const f = p.fig;
+        const near = show && !p.inBooth && Math.hypot(f.position.x - mePos.x, f.position.z - mePos.z) < NAME_DISTANCE;
+        if (near) {
+          v.set(f.position.x, NAME_HEIGHT, f.position.z).project(camera);
+          if (v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1) {
+            p.tag.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, -100%)`;
+            p.tag.hidden = !p.tag.textContent;
+            continue;
+          }
+        }
+        p.tag.hidden = true;
+      }
     },
 
     update(dt) {

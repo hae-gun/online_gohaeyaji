@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gohaeyaji.realtime.booth.BoothService;
 import com.gohaeyaji.realtime.channel.ChannelService;
 import com.gohaeyaji.realtime.config.RealtimeProperties;
+import com.gohaeyaji.realtime.name.NameService;
 import com.gohaeyaji.realtime.presence.PresenceService;
 import com.gohaeyaji.realtime.protocol.CloseCodes;
 import com.gohaeyaji.realtime.protocol.Messages;
@@ -15,6 +16,7 @@ import com.gohaeyaji.realtime.protocol.Messages.ErrorMessage;
 import com.gohaeyaji.realtime.protocol.Messages.Idle;
 import com.gohaeyaji.realtime.protocol.Messages.Pong;
 import com.gohaeyaji.realtime.protocol.Messages.Released;
+import com.gohaeyaji.realtime.protocol.Messages.RenameResult;
 import com.gohaeyaji.realtime.protocol.Messages.Welcome;
 import com.gohaeyaji.realtime.protocol.Messages.You;
 import com.gohaeyaji.realtime.session.ClientSession;
@@ -37,8 +39,8 @@ import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorato
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 /**
- * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.3:
- * hello/welcome, ping/pong, claim/release, activity, resync, move (positions).
+ * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.4:
+ * hello/welcome, ping/pong, claim/release, activity, resync, move (positions), rename (names).
  *
  * Not yet: queue (queueJoin/queueLeave), resume after reconnect, rate limits, confess.
  */
@@ -54,6 +56,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     private final ChannelService channels;
     private final BoothService booths;
     private final PresenceService presence;
+    private final NameService names;
     private final MessageSender sender;
     private final ObjectMapper mapper;
     private final SecureRandom random = new SecureRandom();
@@ -63,13 +66,14 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     private final Counter movesDropped;
 
     public RealtimeWebSocketHandler(RealtimeProperties props, SessionRegistry registry, ChannelService channels,
-                                    BoothService booths, PresenceService presence, MessageSender sender,
-                                    ObjectMapper mapper, MeterRegistry meters) {
+                                    BoothService booths, PresenceService presence, NameService names,
+                                    MessageSender sender, ObjectMapper mapper, MeterRegistry meters) {
         this.props = props;
         this.registry = registry;
         this.channels = channels;
         this.booths = booths;
         this.presence = presence;
+        this.names = names;
         this.sender = sender;
         this.mapper = mapper;
         Gauge.builder("gohaeyaji.sessions", registry, SessionRegistry::size)
@@ -138,6 +142,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             case "claim" -> onClaim(session, msg, reqId);
             case "release" -> onRelease(session, msg, reqId);
             case "move" -> onMove(session, msg);
+            case "rename" -> onRename(session, msg, reqId);
             case "activity" -> session.touchActivity(now());
             case "resync" -> sendSnapshot(session);
             case "queueJoin", "queueLeave", "confess" ->
@@ -158,7 +163,12 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         // TODO: resumeToken (restore booth and queue position within the 15 s grace)
         int channelNo = channels.join();
         int pid = presence.allocatePid(channelNo);
+        // the name the browser remembered; anything that fails the checks quietly becomes a random one
+        NameService.Check asked = msg.hasNonNull("name") ? names.check(msg.get("name").asText()) : null;
+        String name = asked != null && asked.ok() ? asked.name() : names.randomName();
         session.ready("s_" + UUID.randomUUID(), channelNo, pid, now());
+        session.name(name);
+        presence.setName(channelNo, pid, name);
         // join the broadcast set before reading the snapshot, so no event can fall between them;
         // the client drops events whose seq is not above the snapshot seq
         registry.joinChannel(session);
@@ -175,8 +185,9 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
                 snap.seq(),
                 props.heartbeatMs(),
                 new Idle(props.idleLimitMs(), props.idleWarnMs(), props.idleDangerMs()),
-                new You(pid),
+                new You(pid, name),
                 presence.snapshot(channelNo),
+                presence.names(channelNo),
                 props.presenceMs(),
                 now()));
     }
@@ -193,6 +204,27 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
                 msg.path("x").asDouble(Double.NaN),
                 msg.path("z").asDouble(Double.NaN),
                 msg.path("ry").asDouble(0));
+    }
+
+    private void onRename(ClientSession session, JsonNode msg, String reqId) {
+        NameService.Check check = names.check(msg.path("name").asText(null));
+        if (!check.ok()) {
+            String reason = switch (check.verdict()) {
+                case BLOCKED -> Messages.NAME_BLOCKED;
+                case RESERVED -> Messages.NAME_RESERVED;
+                default -> Messages.NAME_INVALID;
+            };
+            sender.send(session, RenameResult.fail(reqId, check.name(), reason));
+            return;
+        }
+        // only accepted changes count toward the limit, so a typo does not lock the person out
+        if (!session.acceptRename(now(), props.renameMinGapMs())) {
+            sender.send(session, RenameResult.fail(reqId, check.name(), Messages.NAME_TOO_SOON));
+            return;
+        }
+        session.name(check.name());
+        presence.setName(session.channelNo(), session.pid(), check.name());
+        sender.send(session, RenameResult.ok(reqId, check.name()));
     }
 
     private void onPing(ClientSession session, JsonNode msg) {

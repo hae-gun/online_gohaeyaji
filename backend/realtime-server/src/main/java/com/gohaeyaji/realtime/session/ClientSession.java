@@ -21,6 +21,8 @@ public final class ClientSession {
     private volatile Integer boothId;
     private volatile int pid;
     private volatile long lastMoveAt;
+    private volatile long lastRenameAt;
+    private volatile String name;
     private volatile long lastPingAt;
     private volatile long lastActivityAt;
 
@@ -67,6 +69,23 @@ public final class ClientSession {
         }
         lastMoveAt = now;
         return true;
+    }
+
+    /** @return true if enough time has passed since the last accepted name change */
+    public boolean acceptRename(long now, long minGapMs) {
+        if (lastRenameAt != 0 && now - lastRenameAt < minGapMs) {
+            return false;
+        }
+        lastRenameAt = now;
+        return true;
+    }
+
+    public void name(String name) {
+        this.name = name;
+    }
+
+    public String name() {
+        return name;
     }
 
     public int pid() {

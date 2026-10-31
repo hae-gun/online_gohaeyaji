@@ -24,6 +24,8 @@ public record RealtimeProperties(
         int maxConnectionsPerIp,
         long presenceMs,
         long moveMinGapMs,
+        long renameMinGapMs,
+        String blockedWordsFile,
         List<String> allowedOrigins
 ) {
 }

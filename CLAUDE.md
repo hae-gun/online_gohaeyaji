@@ -28,7 +28,8 @@
 - 신부 표정: 말하는 동안 입이 초당 약 9번 열렸다 닫힘. 기도 중 눈 감음, 듣는 중 눈썹 올림, 답변은 공감(걱정 눈썹) > 보속(엄격) > 마무리(옅은 미소, 1.5초 유지). 위기 답변은 걱정 표정만, 웃지 않음
 - 입장 시 패러디 주의 문구, 고해 원문은 서버에 저장하지 않음, 기록은 브라우저 localStorage에만
 - 답변은 생성형 AI 없이 키워드 사전 + 템플릿 조합(공감, 보속, 마무리). 음성은 지금 브라우저 TTS, 최종은 문장별 사전 생성 음성 파일을 CDN 서빙
-- 다른 유저 표시: 이름 없이 색만. 데모용 NPC는 넣지 않음
+- 다른 유저 표시: 색은 pid로, 이름은 무작위 세례명(직접 변경 가능)이 3m 안에 있을 때만 머리 위에. 데모용 NPC는 넣지 않음
+- 이름 규칙(규약 v0.4, 14장): 2~10자 한글 영문 숫자, 사칭(신부, 주교, 운영 등) 금지, 금지어는 서버가 비공개 `blocked.json`을 읽어 검사, 변경은 10초에 1회, 브라우저 localStorage `gohaeyaji-name`에 기억
 
 ## 구조
 
@@ -41,13 +42,14 @@ frontend/   Vite 5.4.21 + three.js 0.128.0 (색감 때문에 고정)
   src/net/room-client.js     RoomClient 계약 + 로컬 시뮬레이션
   src/net/ws-room-client.js  WebSocket 구현 (규약 v0.3)
   src/net/move-sender.js     내 위치 전송 시점 (걸을 때 200ms마다, 멈추면 1번)
-  src/world/others.js        다른 유저 캐릭터 (pid로 색, 보간, 고해소 안이면 숨김)
+  src/world/others.js        다른 유저 캐릭터 (pid로 색, 보간, 고해소 안이면 숨김, 3m 안이면 이름표)
+  src/net/names.js           세례명 목록(서버 saint-names.txt와 같게 유지), 이름 기본 규칙, localStorage
   public/data/         answers/safety/blocked .json(비공개) + .sample.json(공개)
 backend/
   docker-compose.yml   redis + realtime-server
   realtime-server/     Spring Boot 3.3.5, Java 21, 순수 WebSocket(/ws), Redis Lua
   analyzer/            Python 형태소 분석 서비스 (미구현, README만)
-docs/realtime-protocol.md   프론트와 서버의 메시지 규약 (v0.3), 정책 결정 기록
+docs/realtime-protocol.md   프론트와 서버의 메시지 규약 (v0.4), 정책 결정 기록
 .github/workflows/deploy-pages.yml   frontend 빌드 후 Pages 배포, 시크릿으로 비공개 데이터 주입
 ```
 
@@ -66,7 +68,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 ./gradlew test                                       # Testcontainers로 Redis 띄움 (Docker 필요)
 ```
 
-## 규약 핵심 (docs/realtime-protocol.md v0.3)
+## 규약 핵심 (docs/realtime-protocol.md v0.4)
 
 - 메시지: hello/welcome, ping/pong(10초), claim/claimResult, release/released, activity, booth(변경분, seq), snapshot, resync, error. 줄서기 메시지(queueJoin, queueCall 등)는 정의만 됨
 - 채널: 고해소 20칸, 정원 60명, 48명(80%) 차면 다음 채널 생성, 앞 채널부터 채움, 남은 12자리는 재접속용
@@ -74,6 +76,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 - 탭마다 별도 세션(한 세션 방 1개, 줄 1자리). IP당 연결 20개. 메시지 2KB. 허용 Origin: https://hae-gun.github.io, http://localhost:5173
 - 종료 코드: 4001 버전 불일치, 4002 하트비트, 4004 IP 초과, 4005 크기, 4006 남용, 4008 만석
 - 위치 동기화(v0.3): `move`(움직일 때만 초당 최대 5회, 서버는 150ms 미만 간격 버림), `presence`(서버가 200ms마다 채널 단위로 `[pid,x,z,ry]` 묶음 전송), `welcome.you.pid`, `welcome.players`, `booth.pid`. 식별은 세션 ID 대신 채널별 pid(Redis INCR), 색은 pid로 결정, 첫 move 전에는 안 보임, 위치는 서버 메모리만(서버 여러 대 확장은 6단계)
+- 이름(v0.4): `hello.name`(기억한 이름), `welcome.you.name`, `welcome.names`(`[pid, 이름]`), `presence.named`(들어오거나 바꾼 사람만), `rename`/`renameResult`(INVALID, BLOCKED, RESERVED, TOO_SOON). 서버 `NameService`, 세례명 목록 `saint-names.txt`, 금지어 파일은 `gohaeyaji.blocked-words-file`(기본 `../../frontend/public/data/blocked.json`, Docker는 `BLOCKED_WORDS_FILE`로 마운트)
 
 ## 진행 상황 (2026-10-31 기준)
 
@@ -84,6 +87,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 | 2 | realtime-server v0.1 | 완료. `./gradlew test` 통과, 브라우저 콘솔 두 탭으로 claim 경합, 해제 전파, 탭 닫기 반납, seq 1~4 확인 |
 | 3 | 프론트 WebSocket 연결 | 완료. 실제 Spring 서버 + `npm run dev:server`로 3D 화면 연동 확인 (2026-10-31) |
 | 3.5 | 다른 유저 위치 표시 | 코드 완료. 테스트 서버로 브라우저 두 개 검증(서로 보임, 고해소 입장 시 숨김, 탭 닫으면 사라짐). 서버 통합 테스트 6개 추가. **맥에서 `./gradlew test`와 실서버 확인은 아직** |
+| 3.6 | 세례명 (규약 v0.4) | 코드 완료. Node 목 서버로 브라우저 두 개 검증(무작위 세례명, 사칭/금지어/자음만/10초 제한 거절, 3m 안 이름표, 새로고침 후 유지). 서버 통합 테스트 4개 추가. **맥에서 `./gradlew test` 아직** |
 | 4 | 서버 배포 | 호스팅 미정 (Oracle 무료 등급 실패, 차선은 AWS 신규 크레딧). VM 한 대에 Caddy + Spring + Redis, Docker Compose |
 | 5 | 부하테스트 (k6 또는 nGrinder) | |
 | 6 | 서버 여러 대, Redis Pub/Sub | |
@@ -104,7 +108,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 
 ## 다음 할 일
 
-1. 맥에서 `./gradlew test` 후 `bootRun` + `npm run dev:server` 창 두 개로 서로 보이는지 확인
+1. 맥에서 `./gradlew test`(테스트 20개) 후 `bootRun` + `npm run dev:server` 창 두 개로 서로 보이는지, 이름표가 뜨는지 확인
 2. 줄서기, 재접속 복구, 레이트리밋
 3. 호스팅 결정 후 배포, 부하테스트
 
@@ -113,6 +117,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 - 고해소 번호로 신부님이 정해짐: 1, 4, 7번은 진 신부님(진지), 2, 5, 8번은 엄 신부님(꾸짖음), 3, 6, 9번은 유 신부님(유머). `engine.personaForBooth(index)`
 - `answers.json`의 `personas`에 이름, 보속 도입부(`lead`), 짧은 입력 안내(`tooShort`). empathy와 closing은 `{ jin, eom, yu }`로 나뉘고, penance는 고해의 결과라서 세 분이 같음. 배열 하나만 두면 공용
 - `chatter`: 고해가 아닌 말(인사, 칭찬, 재미없다, 외모, 디자인, 교회/성당, AI냐, 사용법, 웃음, 울음 등 18가지). 고해 카테고리에 하나도 안 걸릴 때만 사용. 보속 카드 없음, 기록에 안 남김(`kind: 'chat'`)
+- 외모도 성격별로 다름(`figure.js`의 `LOOKS`, `makeFigure({ priest: true, look })`): 진 신부님은 동그란 안경에 단정한 회색 가르마 머리, 엄 신부님은 나이 들고 긴 얼굴에 굵은 검은 눈썹, 흰 콧수염, 각진 안경, 유 신부님은 젊고 통통한 둥근 얼굴에 곱슬머리, 발그레한 볼, 안경 없음. 수단, 로만 칼라, 보라색 영대(고해성사 때 실제로 매는 색)는 세 분 모두 같음. 고해소 장면에 세 분을 미리 만들어 두고 `confessional.setPriest(id)`로 보이는 분만 바꿈
 - 엔진은 `penanceAt`, `closingAt` 오프셋을 돌려주고 main.js의 `faceFor`가 신부님별 표정 순서에 씀. 음성 톤은 `voice.setTone(id)`
 - 샘플 파일(`answers.sample.json`)은 예전 배열 형식 그대로여도 동작함(세 분이 같은 문구를 쓰고 도입부만 다름)
 - 이전 데이터 백업: `public/data/answers.v1.backup.json`(10개 카테고리), `answers.v2.backup.json`(22개 카테고리, 신부님 구분 전)
