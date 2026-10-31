@@ -18,6 +18,7 @@ import { createLocalRoomClient } from './net/room-client.js';
 import { createWsRoomClient } from './net/ws-room-client.js';
 import { createMoveSender } from './net/move-sender.js';
 import { checkName, normalizeName, randomSaintName, NAME_REASON } from './net/names.js';
+import { createFaceEditor } from './ui/face-editor.js';
 import { history } from './storage/history.js';
 import { $, toast, fade, createBubble, initHistoryPanel } from './ui/hud.js';
 
@@ -172,6 +173,30 @@ $('#nameRandom').onclick = () => {
 $('#nameCancel').onclick = closeNamePanel;
 nameInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNamePanel(); });
 nameInput.addEventListener('input', () => { nameError.hidden = true; });
+/* ---------- my hand-drawn face (protocol v0.5) ---------- */
+player.userData.face.setCustom(rooms.myFace);
+const faceEditor = createFaceEditor({
+  getFace: () => rooms.myFace,
+  async apply(face) {
+    const r = await rooms.setFace(face);
+    if (r.ok) {
+      player.userData.face.setCustom(face);
+      toast(face ? '새 얼굴로 바꿨습니다' : '기본 얼굴로 돌아갔습니다');
+    }
+    return r;
+  },
+});
+$('#faceBtn').onclick = () => faceEditor.open();
+const SHOW_DRAWN_KEY = 'gohaeyaji-show-drawn';
+let showDrawn = true;
+try { showDrawn = localStorage.getItem(SHOW_DRAWN_KEY) !== '0'; } catch (_) { /* storage blocked */ }
+$('#faceShowOthers').checked = showDrawn;
+others.setShowDrawn(showDrawn);
+$('#faceShowOthers').addEventListener('change', (e) => {
+  others.setShowDrawn(e.target.checked);
+  try { localStorage.setItem(SHOW_DRAWN_KEY, e.target.checked ? '1' : '0'); } catch (_) { /* storage blocked */ }
+});
+
 $('#nameForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = normalizeName(nameInput.value);
@@ -190,7 +215,7 @@ let shownPeople = -1;
 
 /* ---------- input ---------- */
 const keys = createKeyboard((k) => {
-  if (!namePanel.hidden) return;   // a dialog is open: buttons inside it may hold focus
+  if (!namePanel.hidden || faceEditor.isOpen()) return;   // a dialog is open: buttons inside it may hold focus
   if (k === 'e' && state === 'hall') tryEnter();
   if (k === 'v' && state === 'hall') toggleView();
   if (k === 'escape' && state === 'room') leaveRoom();
@@ -465,7 +490,7 @@ const clock = new THREE.Clock();
 
 function updatePlayer(dt) {
   let vx = 0, vz = 0;
-  if (state === 'hall' && namePanel.hidden) {
+  if (state === 'hall' && namePanel.hidden && !faceEditor.isOpen()) {
     let f = 0, r = 0;
     if (keys.w || keys.arrowup) f += 1;
     if (keys.s || keys.arrowdown) f -= 1;

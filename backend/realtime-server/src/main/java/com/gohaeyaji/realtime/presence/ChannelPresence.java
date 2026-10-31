@@ -20,6 +20,8 @@ final class ChannelPresence {
     private final Set<Integer> left = new LinkedHashSet<>();
     private final Map<Integer, String> names = new HashMap<>();
     private final Set<Integer> renamed = new LinkedHashSet<>();
+    private final Map<Integer, String> faces = new HashMap<>();
+    private final Set<Integer> refaced = new LinkedHashSet<>();
 
     synchronized void move(int pid, double x, double z, double ry) {
         Player p = players.computeIfAbsent(pid, Player::new);
@@ -42,7 +44,19 @@ final class ChannelPresence {
         renamed.add(pid);
     }
 
+    /** face null = back to the default face; still announced so others drop the old drawing. */
+    synchronized void setFace(int pid, String face) {
+        if (face == null) {
+            faces.remove(pid);
+        } else {
+            faces.put(pid, face);
+        }
+        refaced.add(pid);
+    }
+
     synchronized void remove(int pid) {
+        faces.remove(pid);
+        refaced.remove(pid);
         dirty.remove(pid);
         renamed.remove(pid);
         names.remove(pid);
@@ -53,7 +67,7 @@ final class ChannelPresence {
 
     /** Changes since the last call, or null if nothing changed. */
     synchronized Batch drain() {
-        if (dirty.isEmpty() && left.isEmpty() && renamed.isEmpty()) {
+        if (dirty.isEmpty() && left.isEmpty() && renamed.isEmpty() && refaced.isEmpty()) {
             return null;
         }
         List<List<Number>> moved = new ArrayList<>(dirty.size());
@@ -67,10 +81,16 @@ final class ChannelPresence {
         for (int pid : renamed) {
             named.add(List.of(pid, names.get(pid)));
         }
-        Batch batch = new Batch(moved, new ArrayList<>(left), named);
+        List<List<Object>> faced = new ArrayList<>(refaced.size());
+        for (int pid : refaced) {
+            // "" tells clients to go back to the default face (a List cannot hold null)
+            faced.add(List.of(pid, faces.getOrDefault(pid, "")));
+        }
+        Batch batch = new Batch(moved, new ArrayList<>(left), named, faced);
         dirty.clear();
         left.clear();
         renamed.clear();
+        refaced.clear();
         return batch;
     }
 
@@ -90,7 +110,14 @@ final class ChannelPresence {
         return all;
     }
 
-    record Batch(List<List<Number>> moved, List<Integer> left, List<List<Object>> named) {
+    /** Every drawn face in the channel: {@code [pid, face]}. */
+    synchronized List<List<Object>> faces() {
+        List<List<Object>> all = new ArrayList<>(faces.size());
+        faces.forEach((pid, face) -> all.add(List.of(pid, face)));
+        return all;
+    }
+
+    record Batch(List<List<Number>> moved, List<Integer> left, List<List<Object>> named, List<List<Object>> faced) {
     }
 
     private static final class Player {

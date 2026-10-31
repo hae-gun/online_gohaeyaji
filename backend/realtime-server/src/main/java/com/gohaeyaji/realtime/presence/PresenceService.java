@@ -60,6 +60,16 @@ public class PresenceService {
         channel(channelNo).setName(pid, name);
     }
 
+    /** Hand-drawn face (protocol section 15); null = default face. Goes out with the next batch. */
+    public void setFace(int channelNo, int pid, String face) {
+        channel(channelNo).setFace(pid, face);
+    }
+
+    public List<List<Object>> faces(int channelNo) {
+        ChannelPresence presence = channels.get(channelNo);
+        return presence == null ? List.of() : presence.faces();
+    }
+
     public List<List<Object>> names(int channelNo) {
         ChannelPresence presence = channels.get(channelNo);
         return presence == null ? List.of() : presence.names();

@@ -40,6 +40,7 @@ gohaeyaji:
   presence-ms: 200                # position batch interval (protocol section 13)
   move-min-gap-ms: 150            # drop moves faster than ~5/s (200 ms minus jitter)
   rename-min-gap-ms: 10000        # one name change per 10 s
+  face-min-gap-ms: 5000           # one face change per 5 s
   # private blocked word list (git-ignored), same file the browser uses; relative to the working directory.
   # The default works for ./gradlew bootRun from backend/realtime-server. In Docker, mount the file and set the variable.
   blocked-words-file: ${BLOCKED_WORDS_FILE:../../frontend/public/data/blocked.json}

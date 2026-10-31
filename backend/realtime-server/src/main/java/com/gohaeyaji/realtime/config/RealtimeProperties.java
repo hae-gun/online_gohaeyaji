@@ -25,6 +25,7 @@ public record RealtimeProperties(
         long presenceMs,
         long moveMinGapMs,
         long renameMinGapMs,
+        long faceMinGapMs,
         String blockedWordsFile,
         List<String> allowedOrigins
 ) {

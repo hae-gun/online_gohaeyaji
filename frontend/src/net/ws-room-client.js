@@ -1,16 +1,19 @@
 import { DEFAULT_IDLE } from './room-client.js';
 import { storedName } from './names.js';
+import { storedFace, normalizeFace } from './faces.js';
 
 /**
- * RoomClient over WebSocket. Follows docs/realtime-protocol.md v0.4.
+ * RoomClient over WebSocket. Follows docs/realtime-protocol.md v0.5.
  *
  * Handles: hello/welcome, ping every heartbeatMs, claim/release with reqId,
  * booth events ordered by seq (resync on a gap), server-forced releases,
- * reconnect with exponential backoff and jitter, positions (move, presence) and names (rename).
+ * reconnect with exponential backoff and jitter, positions (move, presence), names (rename)
+ * and hand-drawn faces (setFace).
  */
 const PROTOCOL_VERSION = 1;
 const CLAIM_TIMEOUT_MS = 5_000;
 const RENAME_TIMEOUT_MS = 5_000;
+const FACE_TIMEOUT_MS = 5_000;
 const ACTIVITY_MIN_GAP_MS = 5_000;   // protocol: at most one activity message per 5 s
 const NO_RECONNECT = new Set([1000, 4001, 4003, 4006]);
 
@@ -35,7 +38,8 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
   let lastActivitySent = 0;
   const pendingClaims = new Map();   // reqId -> resolve
   const pendingRenames = new Map();  // reqId -> resolve
-  const client = { idle: { ...DEFAULT_IDLE }, myName: storedName.load() || '' };
+  const pendingFaces = new Map();    // reqId -> { resolve, face }
+  const client = { idle: { ...DEFAULT_IDLE }, myName: storedName.load() || '', myFace: storedFace.load() };
   const setMyName = (name) => {
     if (!name) return;
     client.myName = name;
@@ -61,6 +65,8 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
       type: 'hello', v: PROTOCOL_VERSION, client: { app: 'web', version: appVersion },
       // the server keeps it if it passes its checks, otherwise hands out a random baptismal name
       ...(client.myName ? { name: client.myName } : {}),
+      // the face drawn in this browser before (protocol section 15)
+      ...(client.myFace ? { face: client.myFace } : {}),
     });
     ws.onmessage = (e) => {
       let msg;
@@ -83,11 +89,11 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         heartbeat = setInterval(() => send({ type: 'ping', t: Date.now() }), heartbeatMs);
         setStatus({ state: 'ready', channelNo: msg.channelNo });
         setMyName(msg.you?.name);
-        emitPresence({ kind: 'reset', you: msg.you?.pid ?? null, players: msg.players || [], names: msg.names || [] });
+        emitPresence({ kind: 'reset', you: msg.you?.pid ?? null, players: msg.players || [], names: msg.names || [], faces: msg.faces || [] });
         break;
       }
       case 'presence':
-        if (ready) emitPresence({ kind: 'batch', moved: msg.moved || [], left: msg.left || [], named: msg.named || [] });
+        if (ready) emitPresence({ kind: 'batch', moved: msg.moved || [], left: msg.left || [], named: msg.named || [], faced: msg.faced || [] });
         break;
       case 'snapshot':
         applySnapshot(msg.booths, msg.seq);
@@ -117,6 +123,14 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         pendingRenames.delete(msg.reqId);
         if (msg.ok) setMyName(msg.name);
         resolve(msg.ok ? { ok: true, name: msg.name } : { ok: false, reason: msg.reason });
+        break;
+      }
+      case 'faceResult': {
+        const p = pendingFaces.get(msg.reqId);
+        if (!p) return;
+        pendingFaces.delete(msg.reqId);
+        if (msg.ok) { client.myFace = p.face; storedFace.save(p.face); }
+        p.resolve(msg.ok ? { ok: true } : { ok: false, reason: msg.reason });
         break;
       }
       case 'released':
@@ -150,6 +164,8 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
     pendingClaims.clear();
     pendingRenames.forEach((resolve) => resolve({ ok: false, reason: 'OFFLINE' }));
     pendingRenames.clear();
+    pendingFaces.forEach((p) => p.resolve({ ok: false, reason: 'OFFLINE' }));
+    pendingFaces.clear();
     // the server releases our booth when the socket drops (no resume yet)
     if (myBooth !== null) {
       const b = myBooth;
@@ -170,6 +186,21 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
     onForcedRelease(fn) { releaseListeners.push(fn); },
     onPresence(fn) { presenceListeners.push(fn); },
     onName(fn) { nameListeners.push(fn); if (client.myName) fn(client.myName); },
+
+    /** Wear a hand-drawn face (null or an empty drawing = default face). */
+    setFace(face) {
+      const f = normalizeFace(face);
+      if (!ready) return Promise.resolve({ ok: false, reason: 'OFFLINE' });
+      const reqId = nextReq();
+      return new Promise((resolve) => {
+        pendingFaces.set(reqId, { resolve, face: f });
+        send({ type: 'setFace', reqId, face: f });
+        setTimeout(() => {
+          const p = pendingFaces.get(reqId);
+          if (p) { pendingFaces.delete(reqId); resolve({ ok: false, reason: 'TIMEOUT' }); }
+        }, FACE_TIMEOUT_MS);
+      });
+    },
 
     /** Ask the server for a new display name. Resolves with the name it accepted, or why not. */
     rename(name) {

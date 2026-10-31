@@ -11,6 +11,9 @@ import { makeFigure, NAME_HEIGHT } from './figure.js';
  *
  * Names (protocol v0.4) are shown only for people close by, as plain DOM labels over the canvas:
  * sixty floating names at once would bury the corridor.
+ *
+ * Hand-drawn faces (protocol v0.5) replace the generated face when the viewer allows it
+ * (setShowDrawn: someone who does not want to see other people's drawings can turn them off).
  */
 const SHIRTS = [0x3a7bd5, 0x2fa36b, 0xe0a526, 0x8e5cc2, 0x1fb2b8, 0xd35d9c, 0x6d8a2e, 0xe0703a, 0x4a5bdc, 0x9a6b3f];
 const PANTS = [0x2e3a52, 0x3b3b3b, 0x4a3426, 0x1f3d3a];
@@ -24,8 +27,20 @@ export function createOtherPlayers(scene, tagLayer) {
   const players = new Map();       // pid -> { fig, tx, tz, try, inBooth, phase, tag }
   const boothOwner = new Map();    // boothId -> pid
   const names = new Map();         // pid -> name (may arrive before the first move)
+  const faces = new Map();         // pid -> hand-drawn face code
+  let showDrawn = true;
   const v = new THREE.Vector3();
   let me = null;
+
+  function applyFace(pid) {
+    const p = players.get(pid);
+    if (p) p.fig.userData.face.setCustom(showDrawn ? faces.get(pid) || null : null);
+  }
+
+  function setFace(pid, face) {
+    if (face) faces.set(pid, face); else faces.delete(pid);
+    applyFace(pid);
+  }
 
   function setName(pid, name) {
     names.set(pid, name);
@@ -47,6 +62,7 @@ export function createOtherPlayers(scene, tagLayer) {
       tagLayer.appendChild(tag);
       p = { fig, tx: x, tz: z, try: ry, inBooth: false, phase: Math.random() * 6, tag };
       players.set(pid, p);
+      applyFace(pid);
     }
     return p;
   }
@@ -54,6 +70,7 @@ export function createOtherPlayers(scene, tagLayer) {
   function remove(pid) {
     const p = players.get(pid);
     names.delete(pid);
+    faces.delete(pid);
     if (!p) return;
     scene.remove(p.fig);
     p.tag.remove();
@@ -76,6 +93,8 @@ export function createOtherPlayers(scene, tagLayer) {
         names.clear();
         me = e.you;
         for (const [pid, name] of e.names || []) names.set(pid, name);
+        faces.clear();
+        for (const [pid, face] of e.faces || []) faces.set(pid, face);
         for (const [pid, x, z, ry, boothId] of e.players) {
           if (pid === me) continue;
           ensure(pid, x, z, ry);
@@ -83,6 +102,7 @@ export function createOtherPlayers(scene, tagLayer) {
         }
       } else if (e.kind === 'batch') {
         for (const [pid, name] of e.named || []) setName(pid, name);
+        for (const [pid, face] of e.faced || []) setFace(pid, face);
         for (const [pid, x, z, ry] of e.moved) {
           if (pid === me) continue;
           const p = ensure(pid, x, z, ry);
@@ -102,6 +122,12 @@ export function createOtherPlayers(scene, tagLayer) {
           if (owner !== undefined) setInBooth(owner, false);
         }
       }
+    },
+
+    /** Show or hide faces other people drew (theirs fall back to the generated face). */
+    setShowDrawn(on) {
+      showDrawn = on;
+      for (const pid of players.keys()) applyFace(pid);
     },
 
     /** Visible people in the channel, not counting me. */

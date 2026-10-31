@@ -22,6 +22,7 @@ public final class ClientSession {
     private volatile int pid;
     private volatile long lastMoveAt;
     private volatile long lastRenameAt;
+    private volatile long lastFaceAt;
     private volatile String name;
     private volatile long lastPingAt;
     private volatile long lastActivityAt;
@@ -77,6 +78,15 @@ public final class ClientSession {
             return false;
         }
         lastRenameAt = now;
+        return true;
+    }
+
+    /** @return true if enough time has passed since the last accepted face change */
+    public boolean acceptFace(long now, long minGapMs) {
+        if (lastFaceAt != 0 && now - lastFaceAt < minGapMs) {
+            return false;
+        }
+        lastFaceAt = now;
         return true;
     }
 

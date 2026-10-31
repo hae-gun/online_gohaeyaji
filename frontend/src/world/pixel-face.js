@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { paintFace } from '../net/faces.js';
 
 /**
  * Faces drawn like MS Paint: a 32x32 canvas stuck flat on a round 3D head. The mismatch between
@@ -9,6 +10,9 @@ import * as THREE from 'three';
  *   brows: 'neutral' | 'up' | 'worried' | 'stern'
  *   mouth: 0 (closed) .. 3 (wide open), smile: -1 (frown) | 0 | 1
  *   blush: true for the angry red cheeks
+ *
+ * A kid can also wear a hand-drawn face (protocol section 15): setCustom(code) shows that 16x16
+ * drawing, doubled to fill the 32x32 canvas, instead of the generated one.
  */
 const K = '#151010';
 const LIP = '#5a2b22';
@@ -136,18 +140,31 @@ export function createPixelFace(look, size, variant = 'plain') {
     new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5 }),
   );
   let key = '';
+  let custom = null;
+  let last = {};
   const base = { eyes: 'open', brows: 'neutral', mouth: 0, smile: 0, blush: false };
   if (variant === 'sleepy') base.eyes = 'closed';
   if (variant === 'shock') { base.eyes = 'wide'; base.mouth = 2; }
   const face = {
     mesh,
     set(state) {
+      last = state;
       const s = { ...base, ...state };
-      const k = `${s.eyes}|${s.brows}|${s.mouth}|${s.smile}|${s.blush}`;
+      const k = custom ? `custom|${custom}` : `${s.eyes}|${s.brows}|${s.mouth}|${s.smile}|${s.blush}`;
       if (k === key) return;
       key = k;
-      draw(ctx, st, s, variant);
+      if (custom) {
+        ctx.clearRect(0, 0, 32, 32);
+        paintFace(ctx, custom, 2);
+      } else {
+        draw(ctx, st, s, variant);
+      }
       tex.needsUpdate = true;
+    },
+    /** A hand-drawn face code, or null to go back to the generated face. */
+    setCustom(code) {
+      custom = code || null;
+      face.set(last);
     },
   };
   face.set({});

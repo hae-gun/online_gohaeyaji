@@ -25,17 +25,18 @@ public final class Messages {
     /**
      * @param players visible players in the channel, each {@code [pid, x, z, ry, boothId or -1]}
      * @param names   display names in the channel, each {@code [pid, name]} (also for players not yet visible)
+     * @param faces   hand-drawn faces, each {@code [pid, face]}; only people who drew one (v0.5)
      */
     public record Welcome(String type, int v, String sessionId, String resumeToken, int channelNo,
                           int boothCount, Booths booths, int queueSize, long seq, long heartbeatMs,
                           Idle idle, You you, List<List<Number>> players, List<List<Object>> names,
-                          long presenceMs, long serverTime) {
+                          List<List<Object>> faces, long presenceMs, long serverTime) {
         public Welcome(int v, String sessionId, String resumeToken, int channelNo, int boothCount,
                        Booths booths, int queueSize, long seq, long heartbeatMs, Idle idle,
                        You you, List<List<Number>> players, List<List<Object>> names,
-                       long presenceMs, long serverTime) {
+                       List<List<Object>> faces, long presenceMs, long serverTime) {
             this("welcome", v, sessionId, resumeToken, channelNo, boothCount, booths, queueSize, seq,
-                    heartbeatMs, idle, you, players, names, presenceMs, serverTime);
+                    heartbeatMs, idle, you, players, names, faces, presenceMs, serverTime);
         }
     }
 
@@ -62,9 +63,23 @@ public final class Messages {
      *              left out when empty
      */
     public record Presence(String type, long t, List<List<Number>> moved, List<Integer> left,
-                           @JsonInclude(JsonInclude.Include.NON_EMPTY) List<List<Object>> named) {
-        public Presence(long t, List<List<Number>> moved, List<Integer> left, List<List<Object>> named) {
-            this("presence", t, moved, left, named);
+                           @JsonInclude(JsonInclude.Include.NON_EMPTY) List<List<Object>> named,
+                           @JsonInclude(JsonInclude.Include.NON_EMPTY) List<List<Object>> faced) {
+        public Presence(long t, List<List<Number>> moved, List<Integer> left,
+                        List<List<Object>> named, List<List<Object>> faced) {
+            this("presence", t, moved, left, named, faced);
+        }
+    }
+
+    /** Answer to "setFace" (v0.5). */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record FaceResult(String type, String reqId, boolean ok, String reason) {
+        public static FaceResult ok(String reqId) {
+            return new FaceResult("faceResult", reqId, true, null);
+        }
+
+        public static FaceResult fail(String reqId, String reason) {
+            return new FaceResult("faceResult", reqId, false, reason);
         }
     }
 
@@ -129,6 +144,10 @@ public final class Messages {
     public static final String NAME_BLOCKED = "BLOCKED";
     public static final String NAME_RESERVED = "RESERVED";
     public static final String NAME_TOO_SOON = "TOO_SOON";
+
+    /** faceResult reasons (v0.5). */
+    public static final String FACE_INVALID = "INVALID";
+    public static final String FACE_TOO_SOON = "TOO_SOON";
 
     /** error codes. */
     public static final String ERR_BAD_MESSAGE = "BAD_MESSAGE";

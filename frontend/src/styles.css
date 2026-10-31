@@ -108,3 +108,21 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 #roomUi.legend .sign b{color:#f3d27a;text-shadow:0 0 12px rgba(243,210,122,.6)}
 #roomUi.legend .penance{border-color:#f3d27a;box-shadow:0 0 28px rgba(243,210,122,.55),inset 0 0 18px rgba(243,210,122,.15);background:linear-gradient(180deg,rgba(243,210,122,.28),rgba(40,30,18,.94))}
 #roomUi.legend .penance small{color:#f3d27a}
+
+/* face drawing (protocol v0.5) */
+.faceCard{width:min(560px,100%);max-height:calc(100dvh - 32px);overflow:auto}
+.faceWork{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+#faceGrid{width:min(320px,100%);aspect-ratio:1;image-rendering:pixelated;touch-action:none;cursor:crosshair;border-radius:10px;border:1px solid var(--line)}
+.faceSide{display:flex;flex-direction:column;gap:8px;align-items:flex-start;flex:1 1 150px;min-width:0}
+.faceSide small,#faceGalleryWrap small{color:var(--muted);font-size:12px}
+#facePreview{width:64px;height:64px;image-rendering:pixelated;border-radius:50%}
+.swatches{display:flex;gap:6px;flex-wrap:wrap}
+.swatch{width:34px;height:34px;padding:0;border-radius:8px;background:var(--c);border:2px solid var(--line)}
+.swatch.eraser{background:repeating-conic-gradient(#3a3340 0 25%,#2a2430 0 50%) 0 0/10px 10px}
+.swatch[aria-pressed="true"]{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold)}
+.faceGallery{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.faceThumb{position:relative}
+.faceThumb button{padding:3px;border-radius:10px;line-height:0}
+.faceThumb canvas{width:48px;height:48px;image-rendering:pixelated}
+.faceThumb .del{position:absolute;top:-6px;right:-6px;width:20px;height:20px;padding:0;font-size:13px;line-height:18px;border-radius:50%}
+.card .check{display:flex;gap:8px;align-items:center;font-size:13.5px;color:var(--muted)}

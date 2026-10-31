@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gohaeyaji.realtime.booth.BoothService;
 import com.gohaeyaji.realtime.channel.ChannelService;
 import com.gohaeyaji.realtime.config.RealtimeProperties;
+import com.gohaeyaji.realtime.face.FaceRules;
 import com.gohaeyaji.realtime.name.NameService;
 import com.gohaeyaji.realtime.presence.PresenceService;
 import com.gohaeyaji.realtime.protocol.CloseCodes;
@@ -13,6 +14,7 @@ import com.gohaeyaji.realtime.protocol.Messages.BoothEvent;
 import com.gohaeyaji.realtime.protocol.Messages.Booths;
 import com.gohaeyaji.realtime.protocol.Messages.ClaimResult;
 import com.gohaeyaji.realtime.protocol.Messages.ErrorMessage;
+import com.gohaeyaji.realtime.protocol.Messages.FaceResult;
 import com.gohaeyaji.realtime.protocol.Messages.Idle;
 import com.gohaeyaji.realtime.protocol.Messages.Pong;
 import com.gohaeyaji.realtime.protocol.Messages.Released;
@@ -39,8 +41,9 @@ import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorato
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 /**
- * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.4:
- * hello/welcome, ping/pong, claim/release, activity, resync, move (positions), rename (names).
+ * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.5:
+ * hello/welcome, ping/pong, claim/release, activity, resync, move (positions), rename (names),
+ * setFace (hand-drawn faces).
  *
  * Not yet: queue (queueJoin/queueLeave), resume after reconnect, rate limits, confess.
  */
@@ -143,6 +146,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             case "release" -> onRelease(session, msg, reqId);
             case "move" -> onMove(session, msg);
             case "rename" -> onRename(session, msg, reqId);
+            case "setFace" -> onSetFace(session, msg, reqId);
             case "activity" -> session.touchActivity(now());
             case "resync" -> sendSnapshot(session);
             case "queueJoin", "queueLeave", "confess" ->
@@ -169,6 +173,11 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         session.ready("s_" + UUID.randomUUID(), channelNo, pid, now());
         session.name(name);
         presence.setName(channelNo, pid, name);
+        // the face this browser drew before; a malformed one is simply ignored (default face)
+        String face = msg.hasNonNull("face") && FaceRules.valid(msg.get("face").asText()) ? FaceRules.normalize(msg.get("face").asText()) : null;
+        if (face != null) {
+            presence.setFace(channelNo, pid, face);
+        }
         // join the broadcast set before reading the snapshot, so no event can fall between them;
         // the client drops events whose seq is not above the snapshot seq
         registry.joinChannel(session);
@@ -188,6 +197,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
                 new You(pid, name),
                 presence.snapshot(channelNo),
                 presence.names(channelNo),
+                presence.faces(channelNo),
                 props.presenceMs(),
                 now()));
     }
@@ -225,6 +235,20 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         session.name(check.name());
         presence.setName(session.channelNo(), session.pid(), check.name());
         sender.send(session, RenameResult.ok(reqId, check.name()));
+    }
+
+    private void onSetFace(ClientSession session, JsonNode msg, String reqId) {
+        String face = msg.path("face").isNull() ? null : msg.path("face").asText(null);
+        if (face != null && !FaceRules.valid(face)) {
+            sender.send(session, FaceResult.fail(reqId, Messages.FACE_INVALID));
+            return;
+        }
+        if (!session.acceptFace(now(), props.faceMinGapMs())) {
+            sender.send(session, FaceResult.fail(reqId, Messages.FACE_TOO_SOON));
+            return;
+        }
+        presence.setFace(session.channelNo(), session.pid(), FaceRules.normalize(face));
+        sender.send(session, FaceResult.ok(reqId));
     }
 
     private void onPing(ClientSession session, JsonNode msg) {

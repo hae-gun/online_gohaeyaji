@@ -346,6 +346,59 @@ class RealtimeFlowTest {
         }
     }
 
+    // ------------------------------------------------------------ hand-drawn faces (protocol v0.5)
+
+    private static final String SMILE = "0".repeat(80) + "0010000000010000" + "0".repeat(48) + "0001111111100000" + "0".repeat(96);
+
+    @Test
+    void drawnFaceReachesTheChannelAndNewcomers() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            b.hello();
+            a.send("{\"type\":\"setFace\",\"reqId\":\"f1\",\"face\":\"" + SMILE + "\"}");
+            assertThat(a.await("faceResult").path("ok").asBoolean()).isTrue();
+            b.await("presence", m -> SMILE.equals(pairValue(m.path("faced"), pidA)));
+            try (TestClient c = TestClient.connect(port)) {
+                assertThat(pairValue(c.hello().path("faces"), pidA)).isEqualTo(SMILE);
+            }
+        }
+    }
+
+    @Test
+    void helloCarriesARememberedFace() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            a.send("{\"type\":\"hello\",\"v\":1,\"face\":\"" + SMILE + "\"}");
+            int pidA = a.await("welcome").path("you").path("pid").asInt();
+            assertThat(pairValue(b.hello().path("faces"), pidA)).isEqualTo(SMILE);
+        }
+    }
+
+    @Test
+    void badFacesAreRefusedAndErasingGoesBackToDefault() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            b.hello();
+            a.send("{\"type\":\"setFace\",\"reqId\":\"f1\",\"face\":\"" + "5".repeat(256) + "\"}");   // colour 5 does not exist
+            assertThat(a.await("faceResult", m -> "f1".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("INVALID");
+            a.send("{\"type\":\"setFace\",\"reqId\":\"f2\",\"face\":\"0123\"}");                    // wrong size
+            assertThat(a.await("faceResult", m -> "f2".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("INVALID");
+            a.send("{\"type\":\"setFace\",\"reqId\":\"f3\",\"face\":null}");                           // back to default
+            assertThat(a.await("faceResult", m -> "f3".equals(m.path("reqId").asText())).path("ok").asBoolean()).isTrue();
+            b.await("presence", m -> "".equals(pairValue(m.path("faced"), pidA)));
+            a.send("{\"type\":\"setFace\",\"reqId\":\"f4\",\"face\":\"" + SMILE + "\"}");             // within 5 s
+            assertThat(a.await("faceResult", m -> "f4".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("TOO_SOON");
+        }
+    }
+
+    private static String pairValue(JsonNode pairs, int pid) {
+        for (JsonNode pair : pairs) {
+            if (pair.get(0).asInt() == pid) {
+                return pair.get(1).asText();
+            }
+        }
+        return null;
+    }
+
     private static String rename(TestClient c, String reqId, String name) throws Exception {
         c.send("{\"type\":\"rename\",\"reqId\":\"" + reqId + "\",\"name\":\"" + name + "\"}");
         JsonNode r = c.await("renameResult", m -> reqId.equals(m.path("reqId").asText()));

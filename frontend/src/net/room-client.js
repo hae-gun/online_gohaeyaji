@@ -23,12 +23,15 @@
  *   myName: string,
  *   onName(listener: (name: string) => void): void,
  *   rename(name: string): Promise<{ ok: boolean, name?: string, reason?: string }>,
+ *   myFace: string|null,
+ *   setFace(face: string|null): Promise<{ ok: boolean, reason?: string }>,
  * }} RoomClient
  *
  * Positions of other players (protocol v0.3). Rows are [pid, x, z, ry] or, in a reset,
- * [pid, x, z, ry, boothId or -1]. Names (v0.4) come as [pid, name] pairs:
- * @typedef {{ kind: 'reset', you: number|null, players: number[][], names: [number, string][] }
- *         | { kind: 'batch', moved: number[][], left: number[], named: [number, string][] }
+ * [pid, x, z, ry, boothId or -1]. Names (v0.4) come as [pid, name] pairs, hand-drawn faces (v0.5)
+ * as [pid, face] pairs ("" in a batch = back to the default face):
+ * @typedef {{ kind: 'reset', you: number|null, players: number[][], names: [number, string][], faces: [number, string][] }
+ *         | { kind: 'batch', moved: number[][], left: number[], named: [number, string][], faced: [number, string][] }
  *         | { kind: 'booth', boothId: number, pid: number|null }} PresenceEvent
  *
  * onForcedRelease fires when the server takes a booth away (IDLE safety net, LEASE_EXPIRED,
@@ -36,6 +39,7 @@
  */
 
 import { checkName, normalizeName, randomSaintName, storedName } from './names.js';
+import { storedFace, normalizeFace } from './faces.js';
 
 export const DEFAULT_IDLE = { limitMs: 90_000, warnMs: 20_000, dangerMs: 10_000 };
 const RENAME_GAP_MS = 10_000;
@@ -56,6 +60,7 @@ export function createLocalRoomClient({ count, simulate = false }) {
   storedName.save(myName);
   const nameListeners = [];
   let lastRename = 0;
+  let myFace = storedFace.load();
 
   if (simulate) {
     for (let i = 0; i < count; i++) if (Math.random() < 0.3) occupied.add(i);
@@ -90,6 +95,12 @@ export function createLocalRoomClient({ count, simulate = false }) {
     sendMove() { /* nobody to tell */ },
     sharesPresence: false,
     get myName() { return myName; },
+    get myFace() { return myFace; },
+    async setFace(face) {
+      myFace = normalizeFace(face);
+      storedFace.save(myFace);
+      return { ok: true };
+    },
     onName(fn) { nameListeners.push(fn); fn(myName); },
     /** Basic rules only; the blocked word list is checked by the real server. */
     async rename(raw) {
