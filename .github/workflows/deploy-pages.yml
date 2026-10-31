@@ -40,26 +40,37 @@ jobs:
       # The real answer copy and word lists are not in the repo.
       # If these repository secrets exist, they are written into public/data before the build.
       # Without them the site falls back to the *.sample.json files.
+      # A secret holds at most 48 KB, so each file can also be stored gzipped and base64 encoded
+      # as <NAME>_GZ (scripts/set-data-secrets.sh does this). The _GZ secret wins when both exist.
       - name: Write private data files from secrets
         env:
           ANSWERS_JSON: ${{ secrets.ANSWERS_JSON }}
+          ANSWERS_JSON_GZ: ${{ secrets.ANSWERS_JSON_GZ }}
           SAFETY_JSON: ${{ secrets.SAFETY_JSON }}
+          SAFETY_JSON_GZ: ${{ secrets.SAFETY_JSON_GZ }}
           BLOCKED_JSON: ${{ secrets.BLOCKED_JSON }}
+          BLOCKED_JSON_GZ: ${{ secrets.BLOCKED_JSON_GZ }}
         run: |
           write() {
-            name="$1"; value="$2"
-            if [ -n "$value" ]; then
-              printf '%s' "$value" > "public/data/$name"
-              node -e "JSON.parse(require('fs').readFileSync('public/data/$name','utf8'))" \
-                || { echo "::error::$name secret is not valid JSON"; exit 1; }
-              echo "$name: from secret"
+            name="$1"; plain="$2"; packed="$3"
+            if [ -n "$packed" ]; then
+              printf '%s' "$packed" | base64 -d | gunzip > "public/data/$name" \
+                || { echo "::error::$name compressed secret could not be decoded"; exit 1; }
+              src="compressed secret"
+            elif [ -n "$plain" ]; then
+              printf '%s' "$plain" > "public/data/$name"
+              src="secret"
             else
               echo "$name: no secret, sample will be used"
+              return
             fi
+            node -e "JSON.parse(require('fs').readFileSync('public/data/$name','utf8'))" \
+              || { echo "::error::$name from $src is not valid JSON"; exit 1; }
+            echo "$name: from $src"
           }
-          write answers.json "$ANSWERS_JSON"
-          write safety.json  "$SAFETY_JSON"
-          write blocked.json "$BLOCKED_JSON"
+          write answers.json "$ANSWERS_JSON" "$ANSWERS_JSON_GZ"
+          write safety.json  "$SAFETY_JSON"  "$SAFETY_JSON_GZ"
+          write blocked.json "$BLOCKED_JSON" "$BLOCKED_JSON_GZ"
 
       - run: npm run build
 
