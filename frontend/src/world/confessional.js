@@ -42,7 +42,7 @@ export function buildConfessional() {
 
   // one figure per persona; only the priest of the current booth is shown
   const crew = {};
-  for (const id of ['jin', 'eom', 'yu']) {
+  for (const id of ['jin', 'eom', 'yu', 'baek']) {
     const fig = makeFigure({ priest: true, look: id });
     fig.position.set(0, 0, -2.35);
     fig.visible = false;
@@ -50,6 +50,8 @@ export function buildConfessional() {
     const face = createFace(fig);
     crew[id] = { fig, face, cross: createSignOfCross(fig, face) };
   }
+  // a warm light that only comes on for the legendary priest
+  const glow = new THREE.PointLight(0xffe2a0, 0, 7); glow.position.set(0, 3, -1.2); scene.add(glow);
   let active = crew.jin;
   active.fig.visible = true;
   camera.position.set(0, 1.9, 2.7);
@@ -60,9 +62,10 @@ export function buildConfessional() {
   return {
     scene,
     camera,
-    /** Shows the priest of this booth: 'jin' | 'eom' | 'yu'. Call before startBlessing. */
+    /** Shows the priest of this booth: 'jin' | 'eom' | 'yu' | 'baek'. Call before startBlessing. */
     setPriest(id) {
       const next = crew[id] || crew.jin;
+      glow.intensity = id === 'baek' ? 1.6 : 0;
       if (next === active) return;
       active.face.reset(); active.cross.stop(); active.fig.userData.head.rotation.x = 0;
       active.fig.visible = false;

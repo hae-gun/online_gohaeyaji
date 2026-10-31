@@ -15,10 +15,14 @@ import { M, B } from '../core/three-utils.js';
  *   jin  serious:  round glasses, neatly combed grey hair, plain brows
  *   eom  scolding: older, long narrow face, thick black brows, white moustache, square glasses
  *   yu   humorous: young, round chubby face, curly hair, rosy cheeks, no glasses
+ *   baek hidden legend (1%): very old, white hair and brows, long white beard, gold-edged stole
  */
 const LOOKS = {
   jin: { skin: 0xe8b994, body: [0.33, 0.46], skull: [1, 1, 1], brow: [0.12, 0.025, 0x55504a, 0], glasses: 'round', side: 0xb9b4ad, combed: 0x8f8a84 },
   eom: { skin: 0xdba88a, body: [0.31, 0.44], skull: [0.92, 1.12, 0.96], brow: [0.15, 0.05, 0x1c1916, -0.01], glasses: 'square', side: 0xe8e4dc, moustache: 0xe8e4dc },
+  // baek: the hidden legendary priest. White hair, bushy white brows, a long white beard and a
+  // gold-edged stole (still purple: it is what a priest wears for confession)
+  baek: { skin: 0xf0cbae, body: [0.34, 0.5], skull: [1, 1.04, 1], brow: [0.16, 0.045, 0xf4f1ea, 0.015], glasses: null, side: 0xf4f1ea, combed: 0xf4f1ea, moustache: 0xf4f1ea, beard: 0xf4f1ea, trim: 0xe8c45a },
   yu:  { skin: 0xf2c6a0, body: [0.39, 0.52], skull: [1.13, 0.96, 1.05], brow: [0.1, 0.02, 0x4a2e1c, 0.01], glasses: null, curls: 0x3a2416, cheeks: 0xf08a8a },
 };
 
@@ -37,6 +41,11 @@ export function makeFigure(o) {
     for (const s of [-1, 1]) {
       const stole = new THREE.Mesh(new THREE.BoxGeometry(0.11, 1.15, 0.03), M(0x8a5cc0, { shininess: 70 }));
       stole.position.set(s * 0.14, 1.18, front(1.18)); stole.rotation.set(-Math.atan(slope), 0, s * 0.08); g.add(stole);
+      if (look.trim) {
+        for (const e of [-1, 1]) {
+          const edge = new THREE.Mesh(new THREE.BoxGeometry(0.018, 1.15, 0.035), B(look.trim)); edge.position.x = e * 0.052; stole.add(edge);
+        }
+      }
     }
   } else {
     for (const s of [-1, 1]) {
@@ -113,6 +122,15 @@ export function makeFigure(o) {
       // two angled blocks, drooping at the ends: makes every line sound like a reprimand
       for (const s of [-1, 1]) {
         const m = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.045, 0.05), M(look.moustache)); m.position.set(s * 0.055, 0.2, 0.3); m.rotation.z = s * -0.3; head.add(m);
+      }
+    }
+    if (look.beard) {
+      // a long blocky beard hanging below the mouth, wider at the chin, narrowing to a point
+      const bm = M(look.beard);
+      const chin = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.18, 0.2), bm); chin.position.set(0, -0.02, 0.2); head.add(chin);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 6), bm); tip.rotation.x = Math.PI; tip.position.set(0, -0.35, 0.2); head.add(tip);
+      for (const s of [-1, 1]) {
+        const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.22), bm); cheek.position.set(s * 0.26, 0.16, 0.1); head.add(cheek);
       }
     }
     if (look.curls) {

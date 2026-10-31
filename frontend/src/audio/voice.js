@@ -12,6 +12,7 @@ const TONES = {
   jin: { rate: 0.82, pitch: 0.55 },
   eom: { rate: 0.98, pitch: 0.35 },
   yu: { rate: 0.92, pitch: 0.85 },
+  baek: { rate: 0.72, pitch: 0.45 },   // the legendary priest: slow and low
 };
 
 export function createVoice() {

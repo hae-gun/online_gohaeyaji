@@ -15,7 +15,7 @@ export function createAmbient() {
     master.gain.setTargetAtTime(muted ? 0 : LEVEL[place], ac.currentTime, 0.4);
   }
 
-  function bell() {
+  function bell(out = master) {
     if (!ac) return;
     const t = ac.currentTime;
     [[220, 0.35], [440 * 1.19, 0.14], [220 * 2.76, 0.12], [220 * 5.4, 0.05]].forEach(([f, v]) => {
@@ -24,7 +24,7 @@ export function createAmbient() {
       g.gain.setValueAtTime(0.0001, t);
       g.gain.exponentialRampToValueAtTime(v, t + 0.02);
       g.gain.exponentialRampToValueAtTime(0.0001, t + 5);
-      o.connect(g); g.connect(master); o.start(t); o.stop(t + 5.1);
+      o.connect(g); g.connect(out); o.start(t); o.stop(t + 5.1);
     });
   }
 
@@ -57,6 +57,15 @@ export function createAmbient() {
       const loopBirds = () => { birds(); setTimeout(loopBirds, 2500 + Math.random() * 4500); };
       setTimeout(loopBell, 600);
       setTimeout(loopBirds, 1500);
+    },
+    /**
+     * Rings the bell n times, straight to the speakers so it is heard even inside the quiet
+     * booth. Used when the legendary priest appears.
+     */
+    peal(n = 3) {
+      if (!ac || muted) return;
+      const loud = ac.createGain(); loud.gain.value = 0.55; loud.connect(ac.destination);
+      for (let i = 0; i < n; i++) setTimeout(() => bell(loud), i * 1300);
     },
     /** @param {'yard'|'hall'|'room'} p */
     setPlace(p) { place = p; apply(); },

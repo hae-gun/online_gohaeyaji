@@ -103,3 +103,8 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 #nameInput{font:inherit;font-size:17px;color:var(--ink);background:#14101a;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .card .rule{font-size:12.5px}
 .card .error{color:#ff9b8a;font-size:13.5px}
+
+/* the legendary priest (baek): gold penance card and a warm room sign */
+#roomUi.legend .sign b{color:#f3d27a;text-shadow:0 0 12px rgba(243,210,122,.6)}
+#roomUi.legend .penance{border-color:#f3d27a;box-shadow:0 0 28px rgba(243,210,122,.55),inset 0 0 18px rgba(243,210,122,.15);background:linear-gradient(180deg,rgba(243,210,122,.28),rgba(40,30,18,.94))}
+#roomUi.legend .penance small{color:#f3d27a}

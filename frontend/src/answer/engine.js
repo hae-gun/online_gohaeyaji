@@ -110,16 +110,24 @@ export function createAnswerEngine({ answers, safety, blocked }, random = Math.r
     if (!best) {
       // not a confession: talk back like a person instead of handing out a random penance
       const chat = bestMatch(text, chatter).best;
-      if (chat) return { kind: 'chat', line: pick(listFor(chat.replies, p.id)), category: chat.id, persona: p.id };
+      if (chat) {
+        const own = p.chatter && (p.chatter[chat.id] || p.chatter.default);
+        return { kind: 'chat', line: pick(own || listFor(chat.replies, p.id)), category: chat.id, persona: p.id };
+      }
     }
 
     const c = best || generic;
     const k = keyword || c.word || '';
-    let empathy = pick(listFor(c.empathy, p.id));
-    if (!k && empathy.includes('{k')) empathy = listFor(generic.empathy, p.id)[0];
-    const penance = fillKeyword(pick(listFor(c.penance, p.id)), k);
+    // a rare priest (persona.lines) answers every confession with his own words
+    const section = (name) => (p.lines && p.lines[name]) || listFor(c[name], p.id);
+    const empathies = section('empathy');
+    let empathy = pick(empathies);
+    if (!k && empathy.includes('{k')) {
+      empathy = empathies.find((t) => !t.includes('{k')) || listFor(generic.empathy, p.id)[0];
+    }
+    const penance = fillKeyword(pick(section('penance')), k);
     const head = `${fillKeyword(empathy, k)} ${p.lead} `;
-    const line = `${head}${penance} ${pick(listFor(c.closing, p.id))}`;
+    const line = `${head}${penance} ${pick(section('closing'))}`;
     return {
       kind: 'answer', line, category: c.id, keyword: k, penance, persona: p.id,
       penanceAt: head.length - p.lead.length - 1, closingAt: head.length + penance.length,
@@ -127,7 +135,8 @@ export function createAnswerEngine({ answers, safety, blocked }, random = Math.r
   }
 
   /** The priest sitting in a booth. Booths take turns: 1 jin, 2 eom, 3 yu, 4 jin, ... */
-  const personaForBooth = (boothIndex) => personas[boothIndex % personas.length];
+  const regulars = personas.filter((p) => !p.chance);
+  const personaForBooth = (boothIndex) => regulars[boothIndex % regulars.length];
 
   return { answer, personas, personaForBooth };
 }
