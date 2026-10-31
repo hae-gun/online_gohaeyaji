@@ -19,6 +19,7 @@ import { createWsRoomClient } from './net/ws-room-client.js';
 import { createMoveSender } from './net/move-sender.js';
 import { checkName, normalizeName, randomSaintName, NAME_REASON } from './net/names.js';
 import { createFaceEditor } from './ui/face-editor.js';
+import { hiddenFaces } from './net/faces.js';
 import { history } from './storage/history.js';
 import { $, toast, fade, createBubble, initHistoryPanel } from './ui/hud.js';
 
@@ -141,7 +142,7 @@ rooms.onForcedRelease(({ boothId, reason }) => {
 });
 
 /* ---------- other players (protocol v0.3) ---------- */
-const others = createOtherPlayers(world, $('#nameTags'));
+const others = createOtherPlayers(world, $('#nameTags'), (e) => openPlayerMenu(e));
 const moveSender = createMoveSender(rooms);
 rooms.onPresence((e) => {
   others.handle(e);
@@ -192,6 +193,56 @@ let showDrawn = true;
 try { showDrawn = localStorage.getItem(SHOW_DRAWN_KEY) !== '0'; } catch (_) { /* storage blocked */ }
 $('#faceShowOthers').checked = showDrawn;
 others.setShowDrawn(showDrawn);
+
+/* ---------- hide or report someone's drawn face (protocol v0.6) ---------- */
+const playerMenu = $('#playerMenu');
+let menuTarget = null;
+function openPlayerMenu({ pid, name, face, rect }) {
+  menuTarget = { pid, face };
+  $('#playerMenuName').textContent = name || '이름 없는 교우';
+  $('#pmHide').textContent = hiddenFaces.has(face) ? '이 얼굴 다시 보기' : '이 얼굴 숨기기';
+  playerMenu.hidden = false;
+  const w = playerMenu.offsetWidth, h = playerMenu.offsetHeight;
+  playerMenu.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, rect.left + rect.width / 2 - w / 2))}px`;
+  playerMenu.style.top = `${Math.max(8, Math.min(innerHeight - h - 8, rect.bottom + 6))}px`;
+}
+function closePlayerMenu() { playerMenu.hidden = true; menuTarget = null; }
+$('#pmClose').onclick = closePlayerMenu;
+$('#pmHide').onclick = () => {
+  if (!menuTarget) return;
+  if (hiddenFaces.has(menuTarget.face)) { hiddenFaces.remove(menuTarget.face); toast('이 얼굴을 다시 보입니다'); }
+  else { hiddenFaces.add(menuTarget.face); toast('이 얼굴을 숨겼습니다. 다음에 들어와도 숨겨집니다'); }
+  others.refreshFaces();
+  updateUnhideButton();
+  closePlayerMenu();
+};
+const REPORT_REASON = {
+  ALREADY: '이미 신고한 그림입니다.',
+  TOO_MANY: '신고가 너무 잦습니다. 잠시 후 다시 해 주세요.',
+  NO_FACE: '그 사람은 지금 그린 얼굴을 쓰고 있지 않습니다.',
+  OFFLINE: '서버와 연결되지 않아 신고하지 못했습니다.',
+  TIMEOUT: '서버가 답하지 않아 신고하지 못했습니다.',
+};
+$('#pmReport').onclick = async () => {
+  if (!menuTarget) return;
+  const { pid, face } = menuTarget;
+  closePlayerMenu();
+  const r = await rooms.report(pid);
+  // whatever the server says, the reporter should not have to keep looking at it
+  hiddenFaces.add(face);
+  others.refreshFaces();
+  updateUnhideButton();
+  toast(r.ok ? '신고했습니다. 이 그림은 내 화면에서 숨깁니다' : (REPORT_REASON[r.reason] || '신고하지 못했습니다.'));
+};
+addEventListener('pointerdown', (e) => { if (!playerMenu.hidden && !playerMenu.contains(e.target) && !e.target.closest('.nameTag')) closePlayerMenu(); });
+function updateUnhideButton() { $('#faceUnhide').hidden = !hiddenFaces.list().length; }
+$('#faceUnhide').onclick = () => { hiddenFaces.clear(); others.refreshFaces(); updateUnhideButton(); toast('숨긴 그림을 모두 다시 보입니다'); };
+updateUnhideButton();
+rooms.onFaceRemoved(({ blockedMs }) => {
+  player.userData.face.setCustom(null);
+  toast(`여러 분이 신고해서 내 그림이 내려갔습니다. ${Math.round(blockedMs / 60000)}분 뒤에 다시 그릴 수 있습니다`);
+});
+
 $('#faceShowOthers').addEventListener('change', (e) => {
   others.setShowDrawn(e.target.checked);
   try { localStorage.setItem(SHOW_DRAWN_KEY, e.target.checked ? '1' : '0'); } catch (_) { /* storage blocked */ }

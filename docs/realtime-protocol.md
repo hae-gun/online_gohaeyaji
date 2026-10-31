@@ -1,4 +1,4 @@
-# 실시간 서버 메시지 규약 (v0.5)
+# 실시간 서버 메시지 규약 (v0.6)
 
 프론트엔드(`frontend/src/net/`)와 realtime-server가 주고받는 WebSocket 메시지 규약입니다. 양쪽은 이 문서만 보고 개발합니다. 메시지 형식을 바꾸면 프로토콜 버전 `v`를 올립니다.
 
@@ -120,10 +120,17 @@
 ### setFace (v0.5)
 내가 그린 얼굴 쓰기. 결과는 `faceResult`.
 ```json
-{ "type": "setFace", "reqId": "r10", "face": "0000...0110...(256자)" }
+{ "type": "setFace", "reqId": "r10", "face": "0000...0110...(1024자)" }
 ```
 - `face`: 16x16 그림, 15장 형식. `null`이면 기본 얼굴로 돌아감
 - 바뀐 얼굴은 다음 `presence` 묶음의 `faced`로 채널 전원에게 전달
+
+### report (v0.6)
+같은 채널에서 다른 사람이 쓰고 있는 그린 얼굴을 신고. 결과는 `reportResult`.
+```json
+{ "type": "report", "reqId": "r11", "pid": 21 }
+```
+- 신고 대상은 사람이 아니라 그 순간의 그림. 그림을 바꾸면 새 그림은 0부터 다시 셈
 
 ### queueJoin
 모든 고해소가 `occupied` 또는 `reserved`일 때만 가능.
@@ -167,7 +174,7 @@
   "you": { "pid": 17, "name": "베드로" },
   "players": [[3, -1.2, 14.5, 3.1, -1], [9, 1.75, -8.0, 1.57, 12]],
   "names": [[3, "마르타"], [9, "성실한 토마스"], [17, "베드로"]],
-  "faces": [[9, "0000...(256자)"]],
+  "faces": [[9, "0000...(1024자)"]],
   "presenceMs": 200,
   "serverTime": 1793380000123
 }
@@ -218,7 +225,22 @@
 { "type": "faceResult", "reqId": "r10", "ok": true }
 { "type": "faceResult", "reqId": "r10", "ok": false, "reason": "TOO_SOON" }
 ```
-- `reason`: `INVALID`(형식이 틀림) / `TOO_SOON`(5초 안에 다시 바꿈)
+- `reason`: `INVALID`(형식이 틀림) / `TOO_SOON`(5초 안에 다시 바꿈) / `BLOCKED`(v0.6: 신고로 내려간 그림이거나, 내 그림이 내려간 뒤 10분 동안)
+
+### reportResult (v0.6)
+```json
+{ "type": "reportResult", "reqId": "r11", "ok": true }
+{ "type": "reportResult", "reqId": "r11", "ok": false, "reason": "ALREADY" }
+```
+- `reason`: `NO_FACE`(그린 얼굴을 안 쓰는 사람, 없는 pid) / `SELF` / `ALREADY`(이 그림을 이미 신고함) / `TOO_MANY`(1분에 10번 초과)
+- 몇 명이 신고했는지는 알려 주지 않음
+
+### faceRemoved (v0.6)
+내 그림이 신고로 내려갔을 때 나에게만.
+```json
+{ "type": "faceRemoved", "reason": "REPORTED", "blockedMs": 600000 }
+```
+- 클라이언트는 기본 얼굴로 돌아가고 기억해 둔 그림도 지움. `blockedMs` 동안 `setFace`는 `BLOCKED`
 
 ### snapshot
 `resync` 응답 또는 서버 판단으로 전체 상태 재전송.
@@ -383,6 +405,7 @@
 | confess | 분당 6회 |
 | rename | 성공한 변경 기준 10초에 1회 (v0.4, 구현됨) |
 | setFace | 성공한 변경 기준 5초에 1회 (v0.5, 구현됨) |
+| report | 1분에 10회, 같은 그림은 한 세션이 한 번만 (v0.6, 구현됨) |
 | 반복 위반 | 1분 안에 3번 넘으면 `4006` |
 
 부하테스트 결과를 보고 조정합니다.
@@ -443,13 +466,19 @@
 
 | 항목 | 값 |
 |---|---|
-| 형식 | 16x16 칸을 왼쪽 위부터 줄 순서로 256자. 칸마다 숫자 하나: 0 빈칸(피부가 보임), 1 검정, 2 빨강, 3 흰색, 4 분홍 |
+| 형식 | 32x32 칸을 왼쪽 위부터 줄 순서로 1024자(v0.6, v0.5는 16x16). 칸마다 숫자 하나: 0 빈칸(피부가 보임), 1 검정, 2 빨강, 3 흰색, 4 분홍. 메시지 한도 2KB 안에 들어감 |
+| 예전 그림 | 브라우저에 남은 16x16 그림은 칸마다 2x2로 늘려 32x32로 바꿔 씀. 서버는 32x32만 받음 |
+| 붓 | 가는 붓(1칸), 굵은 붓(2x2, 기본) |
 | 그릴 수 있는 것 | 머리 앞면의 얼굴만. 색도 눈, 코, 입, 볼에 필요한 다섯 가지뿐. 머리카락, 피부, 몸은 못 그림 |
 | 기본 얼굴 | 다 지운 그림은 `null`로 보냄. 서버도 0만 있는 그림은 기본 얼굴로 처리 |
 | 기억 | 브라우저 localStorage: 지금 쓰는 얼굴(`gohaeyaji-face`), 예전에 그린 얼굴 최대 12개(`gohaeyaji-face-gallery`). 다시 접속하면 `hello.face`로 보냄 |
 | 보이는 곳 | 내 캐릭터와, 다른 사람 화면의 내 캐릭터. 생성된 표정 대신 그린 얼굴을 2배로 키워 붙임 |
 | 보지 않기 | "다른 사람이 그린 얼굴 보기"를 끄면 남의 그림 대신 기본 얼굴(브라우저 설정, `gohaeyaji-show-drawn`) |
-| 검사 | 서버는 형식(길이, 숫자 0~4)만 검사. 그림 내용은 자동으로 거를 수 없음 |
+| 숨기기 (v0.6) | 이름표(그린 얼굴을 쓰는 사람은 ✎ 표시)를 누르면 메뉴. "이 얼굴 숨기기"는 그 그림을 내 화면에서만 기본 얼굴로. 그림 내용의 해시로 기억해서 다음 접속에도 숨겨짐(`gohaeyaji-face-hidden`, 최대 200개). 신고한 그림도 자동으로 숨김 |
+| 신고 (v0.6) | 그림(SHA-256 앞 16바이트) 기준으로 Redis에 신고한 세션 집합(`gy:face:{hash}:reports`, 1시간). 서로 다른 3세션이 신고하면 그 그림을 24시간 금지(`gy:face:{hash}:ban`, 원자적으로 한 번만, `report_face.lua`). 그 그림을 쓰던 사람은 기본 얼굴로 돌아가고 `faceRemoved`를 받으며 10분 동안 얼굴을 못 바꿈. 금지된 그림은 `hello.face`, `setFace` 모두 거절 |
+| 검사 | 서버는 형식(길이, 숫자 0~4)과 금지 목록만 검사. 그림 내용은 자동으로 거를 수 없어서 신고와 숨기기로 대응 |
+| 지표 | `gohaeyaji_face_reports_total`, `gohaeyaji_face_bans_total` |
+| 한계 | 신고 대상 찾기는 같은 서버에 붙은 사람만(6단계에서 Redis로). 세션을 새로 열면 신고를 다시 할 수 있어서, IP당 연결 20개 제한이 사실상의 상한 |
 | 서버 여러 대 | 위치, 이름과 같음. 6단계에서 Redis Pub/Sub로 확장 |
 
 ## 결정 기록
@@ -468,7 +497,7 @@
 | D10 | IP당 연결 | 20개 |
 | D11 | 상태 전송 | 입장 시 전체, 이후 변경분 + seq |
 | P1 | 위치 동기화 | 색으로 구분(이름은 P2), 움직일 때만 초당 5회, 서버 200ms 배칭, pid로 식별, 데모용 NPC 없음 (13장) |
-| P3 | 그린 얼굴 | 16x16, 눈코입 색 다섯 가지, 다른 사람에게도 보임, 보는 사람이 끌 수 있음, 브라우저에 최대 12개 보관 (15장) |
+| P3 | 그린 얼굴 | 32x32(v0.6), 눈코입 색 다섯 가지, 다른 사람에게도 보임, 보는 사람이 끄거나 그림별로 숨길 수 있음, 3명이 신고하면 24시간 금지, 브라우저에 최대 12개 보관 (15장) |
 | P2 | 이름 | 무작위 세례명, 직접 변경 가능, 서버에서 금지어와 사칭 검사, 3m 안에서만 표시 (14장) |
 | D13 | 허용 Origin | `https://hae-gun.github.io`, `http://localhost:5173` |
 
@@ -487,6 +516,7 @@
 
 | 버전 | 내용 |
 |---|---|
+| v0.6 | 그린 얼굴 32x32, `report`, `reportResult`, `faceRemoved`, `faceResult.reason` BLOCKED |
 | v0.5 | 그린 얼굴: `hello.face`, `welcome.faces`, `presence.faced`, `setFace`, `faceResult` |
 | v0.4 | 이름: `hello.name`, `welcome.you.name`, `welcome.names`, `presence.named`, `rename`, `renameResult` |
 | v0.3 | 위치 동기화: `move`, `presence`, `welcome.you`, `welcome.players`, `booth.pid` |

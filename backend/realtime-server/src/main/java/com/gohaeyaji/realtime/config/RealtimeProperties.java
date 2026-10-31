@@ -26,6 +26,11 @@ public record RealtimeProperties(
         long moveMinGapMs,
         long renameMinGapMs,
         long faceMinGapMs,
+        int faceReportThreshold,
+        long faceReportWindowMs,
+        long faceBanMs,
+        long faceBlockMs,
+        int maxReportsPerMinute,
         String blockedWordsFile,
         List<String> allowedOrigins
 ) {

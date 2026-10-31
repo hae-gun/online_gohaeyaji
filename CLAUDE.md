@@ -30,7 +30,7 @@
 - 답변은 생성형 AI 없이 키워드 사전 + 템플릿 조합(공감, 보속, 마무리). 음성은 지금 브라우저 TTS, 최종은 문장별 사전 생성 음성 파일을 CDN 서빙
 - 다른 유저 표시: 색은 pid로, 이름은 무작위 세례명(직접 변경 가능)이 3m 안에 있을 때만 머리 위에. 데모용 NPC는 넣지 않음
 - 이름 규칙(규약 v0.4, 14장): 2~10자 한글 영문 숫자, 사칭(신부, 주교, 운영 등) 금지, 금지어는 서버가 비공개 `blocked.json`을 읽어 검사, 변경은 10초에 1회, 브라우저 localStorage `gohaeyaji-name`에 기억
-- 그린 얼굴(규약 v0.5, 15장): 상단 "얼굴 그리기"에서 16x16 칸에 점을 찍어 눈코입을 그림. 색은 지우개, 검정, 빨강, 흰색, 분홍뿐이고 머리 앞면 얼굴만 그릴 수 있음. 다른 사람에게도 보이고, 보는 사람이 "다른 사람이 그린 얼굴 보기"로 끌 수 있음. 지금 얼굴과 예전 그림 최대 12개를 브라우저 localStorage에 보관해 다시 불러옴. 서버는 형식만 검사(`FaceRules`), 변경은 5초에 1회. 코드: `net/faces.js`, `ui/face-editor.js`, `pixel-face.js`의 `setCustom`
+- 그린 얼굴(규약 v0.6, 15장): 상단 "얼굴 그리기"에서 32x32 칸에 점을 찍어 눈코입을 그림(가는 붓 1칸, 굵은 붓 2x2). 색은 지우개, 검정, 빨강, 흰색, 분홍뿐이고 머리 앞면 얼굴만 그릴 수 있음. 예전 16x16 그림은 2배로 늘려 자동 변환. 다른 사람에게도 보이고, 보는 사람이 전체를 끄거나 이름표(✎)를 눌러 그림별로 숨기거나 신고할 수 있음. 숨긴 그림은 내용 해시로 브라우저에 기억. 서로 다른 3세션이 같은 그림을 신고하면 24시간 금지, 그 그림을 쓰던 사람은 기본 얼굴로 돌아가고 10분 동안 못 바꿈(`FaceReports`, `report_face.lua`). 지금 얼굴과 예전 그림 최대 12개를 브라우저에 보관. 코드: `net/faces.js`, `ui/face-editor.js`, `pixel-face.js`의 `setCustom`
 
 ## 구조
 
@@ -50,7 +50,7 @@ backend/
   docker-compose.yml   redis + realtime-server
   realtime-server/     Spring Boot 3.3.5, Java 21, 순수 WebSocket(/ws), Redis Lua
   analyzer/            Python 형태소 분석 서비스 (미구현, README만)
-docs/realtime-protocol.md   프론트와 서버의 메시지 규약 (v0.5), 정책 결정 기록
+docs/realtime-protocol.md   프론트와 서버의 메시지 규약 (v0.6), 정책 결정 기록
 .github/workflows/deploy-pages.yml   frontend 빌드 후 Pages 배포, 시크릿으로 비공개 데이터 주입
 ```
 
@@ -69,7 +69,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 ./gradlew test                                       # Testcontainers로 Redis 띄움 (Docker 필요)
 ```
 
-## 규약 핵심 (docs/realtime-protocol.md v0.5)
+## 규약 핵심 (docs/realtime-protocol.md v0.6)
 
 - 메시지: hello/welcome, ping/pong(10초), claim/claimResult, release/released, activity, booth(변경분, seq), snapshot, resync, error. 줄서기 메시지(queueJoin, queueCall 등)는 정의만 됨
 - 채널: 고해소 20칸, 정원 60명, 48명(80%) 차면 다음 채널 생성, 앞 채널부터 채움, 남은 12자리는 재접속용
@@ -109,7 +109,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 
 ## 다음 할 일
 
-1. 맥에서 `./gradlew test`(테스트 23개) 후 `bootRun` + `npm run dev:server` 창 두 개로 서로 보이는지, 이름표가 뜨는지 확인
+1. 맥에서 `./gradlew test`(테스트 25개) 후 `bootRun` + `npm run dev:server` 창 두 개로 서로 보이는지, 이름표가 뜨는지 확인
 2. 줄서기, 재접속 복구, 레이트리밋
 3. 호스팅 결정 후 배포, 부하테스트
 
@@ -117,7 +117,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 
 - 신부님은 고해소에 들어갈 때 무작위로 정해짐(문 앞에서는 모름): 진(진지), 엄(꾸짖음), 유(유머) 각 33%. `answers.json` personas에 `"chance": 0.01`처럼 확률을 적은 신부님(이스터에그)은 그 확률로 나오고, 나머지 세 분이 남은 확률을 똑같이 나눔. `answer/pick-persona.js`. 답변 엔진을 서버로 옮길 때 이 추첨도 서버로 옮김 (`engine.personaForBooth`는 더 이상 안 씀)
 - `answers.json`의 `personas`에 이름, 보속 도입부(`lead`), 짧은 입력 안내(`tooShort`). empathy와 closing은 `{ jin, eom, yu }`로 나뉘고, penance는 고해의 결과라서 세 분이 같음. 배열 하나만 두면 공용
-- `chatter`: 고해가 아닌 말(인사, 칭찬, 재미없다, 외모, 디자인, 교회/성당, AI냐, 사용법, 웃음, 울음 등 18가지). 고해 카테고리에 하나도 안 걸릴 때만 사용. 보속 카드 없음, 기록에 안 남김(`kind: 'chat'`)
+- `chatter`: 고해가 아닌 말(인사, 칭찬, 재미없다, 외모, 디자인, 교회/성당, AI냐, 사용법, 웃음, 울음, 안부, 식사(아침/점심/저녁), 누구세요, 나이, 취미, 날씨, 생일, 명절, 농담 등 52가지. 구체적인 것을 앞에 두어 동점이면 앞의 것이 이김. 예: "안녕하세요 점심 드셨어요"는 점심으로). 고해 카테고리에 하나도 안 걸릴 때만 사용. 보속 카드 없음, 기록에 안 남김(`kind: 'chat'`)
 - 캐릭터는 밤티 스타일(2026-10-31): 머리가 큰 짧은 비율, 각진 낮은 폴리곤 몸, 둥근 머리에 32x32 도트 얼굴을 평평하게 붙임(`world/pixel-face.js`, 표정이 바뀔 때만 다시 그림). 진 신부님은 계란 머리에 안테나 머리카락 한 가닥과 큰 동그란 안경, 엄 신부님은 두부 머리에 송충이 일자 눈썹과 팔자 콧수염과 머리 위 김(제일 작음, 엄할 때 볼이 빨개짐), 유 신부님은 찐빵 몸에 브로콜리 곱슬머리와 진한 볼터치와 D자 입(웃을 때 ^^), 백 신부님은 흰 상투와 처진 흰 눈썹과 긴 흰 수염과 금테 영대. 유저는 pid로 표정(멍한 눈, 졸림, 깜짝, 기본)과 머리색이 정해짐. 수단, 로만 칼라, 보라색 영대는 그대로 정확하게 유지(우스운 건 체형과 얼굴뿐). 성호경 목표점은 각 몸에서 계산(`userData.pose`), 짧은 팔이 늘어나며 닿음. 고해소 창살은 얼굴을 가리지 않게 테두리만
 - 엔진은 `penanceAt`, `closingAt` 오프셋을 돌려주고 main.js의 `faceFor`가 신부님별 표정 순서에 씀. 음성 톤은 `voice.setTone(id)`
 - 샘플 파일(`answers.sample.json`)은 예전 배열 형식 그대로여도 동작함(세 분이 같은 문구를 쓰고 도입부만 다름)

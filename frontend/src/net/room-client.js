@@ -25,6 +25,8 @@
  *   rename(name: string): Promise<{ ok: boolean, name?: string, reason?: string }>,
  *   myFace: string|null,
  *   setFace(face: string|null): Promise<{ ok: boolean, reason?: string }>,
+ *   report(pid: number): Promise<{ ok: boolean, reason?: string }>,
+ *   onFaceRemoved(listener: (e: { reason: string, blockedMs: number }) => void): void,
  * }} RoomClient
  *
  * Positions of other players (protocol v0.3). Rows are [pid, x, z, ry] or, in a reset,
@@ -96,6 +98,8 @@ export function createLocalRoomClient({ count, simulate = false }) {
     sharesPresence: false,
     get myName() { return myName; },
     get myFace() { return myFace; },
+    async report() { return { ok: false, reason: 'NO_FACE' }; },   // nobody else exists here
+    onFaceRemoved() { /* never happens without a server */ },
     async setFace(face) {
       myFace = normalizeFace(face);
       storedFace.save(myFace);

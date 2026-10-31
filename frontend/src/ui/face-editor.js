@@ -5,8 +5,9 @@ import {
 } from '../net/faces.js';
 
 /**
- * "얼굴 그리기": a 16x16 dot grid over a blank skin-coloured head. Click or drag to place dots,
- * pick one of five colours (eraser, black, red, white, pink). Only the face is drawable.
+ * "얼굴 그리기": a 32x32 dot grid over a blank skin-coloured head. Click or drag to place dots,
+ * pick one of five colours (eraser, black, red, white, pink) and a 1x1 or 2x2 brush.
+ * Only the face is drawable.
  *
  * Earlier drawings stay in this browser (storedFace.gallery) and can be loaded again.
  *
@@ -26,6 +27,19 @@ export function createFaceEditor({ getFace, apply }) {
   let cells = EMPTY_FACE.split('');
   let colour = 1;
   let painting = false;
+  let brush = 2;   // 2x2 by default: 1024 cells are a lot to fill one by one
+
+  const brushes = $('#faceBrush');
+  [[1, '가는 붓'], [2, '굵은 붓']].forEach(([size, label]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.onclick = () => { brush = size; markBrush(); };
+    brushes.appendChild(b);
+  });
+  function markBrush() {
+    [...brushes.children].forEach((b, i) => b.setAttribute('aria-pressed', String(i + 1 === brush)));
+  }
 
   // colour buttons
   const swatches = $('#faceSwatches');
@@ -53,9 +67,10 @@ export function createFaceEditor({ getFace, apply }) {
     ctx.arc(grid.width / 2, grid.height / 2, grid.width / 2 - 2, 0, Math.PI * 2);
     ctx.fill();
     paintFace(ctx, code, CELL);
-    ctx.strokeStyle = 'rgba(0,0,0,.12)';
     ctx.lineWidth = 1;
     for (let i = 1; i < FACE_SIZE; i++) {
+      // a stronger line every 4 cells helps keep both eyes level
+      ctx.strokeStyle = i % 4 === 0 ? 'rgba(0,0,0,.2)' : 'rgba(0,0,0,.07)';
       ctx.beginPath(); ctx.moveTo(i * CELL + 0.5, 0); ctx.lineTo(i * CELL + 0.5, grid.height); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, i * CELL + 0.5); ctx.lineTo(grid.width, i * CELL + 0.5); ctx.stroke();
     }
@@ -84,8 +99,14 @@ export function createFaceEditor({ getFace, apply }) {
     const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
     let err = dx + dy, changed = false;
     for (;;) {
-      const k = y0 * FACE_SIZE + x0;
-      if (cells[k] !== String(colour)) { cells[k] = String(colour); changed = true; }
+      for (let by = 0; by < brush; by++) {
+        for (let bx = 0; bx < brush; bx++) {
+          const x = x0 + bx, y = y0 + by;
+          if (x >= FACE_SIZE || y >= FACE_SIZE) continue;
+          const k = y * FACE_SIZE + x;
+          if (cells[k] !== String(colour)) { cells[k] = String(colour); changed = true; }
+        }
+      }
       if (x0 === x1 && y0 === y1) break;
       const e2 = 2 * err;
       if (e2 >= dy) { err += dy; x0 += sx; }
@@ -123,10 +144,10 @@ export function createFaceEditor({ getFace, apply }) {
       pick.type = 'button';
       pick.title = `${new Date(t).toLocaleDateString('ko-KR')}에 그린 얼굴 불러오기`;
       const cv = document.createElement('canvas');
-      cv.width = cv.height = 48;
+      cv.width = cv.height = 64;
       const c = cv.getContext('2d');
-      c.fillStyle = SKIN; c.beginPath(); c.arc(24, 24, 23, 0, Math.PI * 2); c.fill();
-      paintFace(c, face, 3);
+      c.fillStyle = SKIN; c.beginPath(); c.arc(32, 32, 31, 0, Math.PI * 2); c.fill();
+      paintFace(c, face, 2);
       pick.appendChild(cv);
       pick.onclick = () => load(face);
       const del = document.createElement('button');
@@ -142,6 +163,7 @@ export function createFaceEditor({ getFace, apply }) {
 
   const REASON = {
     INVALID: '그림을 읽을 수 없습니다. 다시 그려 주세요.',
+    BLOCKED: '신고가 쌓여 내려간 그림이거나, 잠시 얼굴을 바꿀 수 없는 상태입니다.',
     TOO_SOON: '얼굴은 5초에 한 번만 바꿀 수 있습니다. 잠시 후 다시 눌러 주세요.',
     TIMEOUT: '서버가 답하지 않아 바꾸지 못했습니다. 다시 시도해 주세요.',
     OFFLINE: '서버와 연결되지 않아 바꾸지 못했습니다.',
@@ -166,6 +188,7 @@ export function createFaceEditor({ getFace, apply }) {
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') panel.hidden = true; });
 
   markSwatch();
+  markBrush();
   return {
     open() {
       load(getFace() || EMPTY_FACE);

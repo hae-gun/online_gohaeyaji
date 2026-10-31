@@ -3,17 +3,18 @@ import { storedName } from './names.js';
 import { storedFace, normalizeFace } from './faces.js';
 
 /**
- * RoomClient over WebSocket. Follows docs/realtime-protocol.md v0.5.
+ * RoomClient over WebSocket. Follows docs/realtime-protocol.md v0.6.
  *
  * Handles: hello/welcome, ping every heartbeatMs, claim/release with reqId,
  * booth events ordered by seq (resync on a gap), server-forced releases,
  * reconnect with exponential backoff and jitter, positions (move, presence), names (rename)
- * and hand-drawn faces (setFace).
+ * and hand-drawn faces (setFace, report, faceRemoved).
  */
 const PROTOCOL_VERSION = 1;
 const CLAIM_TIMEOUT_MS = 5_000;
 const RENAME_TIMEOUT_MS = 5_000;
 const FACE_TIMEOUT_MS = 5_000;
+const REPORT_TIMEOUT_MS = 5_000;
 const ACTIVITY_MIN_GAP_MS = 5_000;   // protocol: at most one activity message per 5 s
 const NO_RECONNECT = new Set([1000, 4001, 4003, 4006]);
 
@@ -39,6 +40,8 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
   const pendingClaims = new Map();   // reqId -> resolve
   const pendingRenames = new Map();  // reqId -> resolve
   const pendingFaces = new Map();    // reqId -> { resolve, face }
+  const pendingReports = new Map();  // reqId -> resolve
+  const faceRemovedListeners = [];
   const client = { idle: { ...DEFAULT_IDLE }, myName: storedName.load() || '', myFace: storedFace.load() };
   const setMyName = (name) => {
     if (!name) return;
@@ -133,6 +136,19 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         p.resolve(msg.ok ? { ok: true } : { ok: false, reason: msg.reason });
         break;
       }
+      case 'reportResult': {
+        const resolve = pendingReports.get(msg.reqId);
+        if (!resolve) return;
+        pendingReports.delete(msg.reqId);
+        resolve(msg.ok ? { ok: true } : { ok: false, reason: msg.reason });
+        break;
+      }
+      case 'faceRemoved':
+        // our drawing was reported by several people and taken down
+        client.myFace = null;
+        storedFace.save(null);
+        faceRemovedListeners.forEach((fn) => fn({ reason: msg.reason, blockedMs: msg.blockedMs }));
+        break;
       case 'released':
         if (msg.boothId === myBooth) myBooth = null;
         // USER is the echo of our own release; only server-side releases are news to the UI
@@ -166,6 +182,8 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
     pendingRenames.clear();
     pendingFaces.forEach((p) => p.resolve({ ok: false, reason: 'OFFLINE' }));
     pendingFaces.clear();
+    pendingReports.forEach((resolve) => resolve({ ok: false, reason: 'OFFLINE' }));
+    pendingReports.clear();
     // the server releases our booth when the socket drops (no resume yet)
     if (myBooth !== null) {
       const b = myBooth;
@@ -201,6 +219,20 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         }, FACE_TIMEOUT_MS);
       });
     },
+
+    /** Report the drawing another player (pid) wears. */
+    report(pid) {
+      if (!ready) return Promise.resolve({ ok: false, reason: 'OFFLINE' });
+      const reqId = nextReq();
+      return new Promise((resolve) => {
+        pendingReports.set(reqId, resolve);
+        send({ type: 'report', reqId, pid });
+        setTimeout(() => {
+          if (pendingReports.delete(reqId)) resolve({ ok: false, reason: 'TIMEOUT' });
+        }, REPORT_TIMEOUT_MS);
+      });
+    },
+    onFaceRemoved(fn) { faceRemovedListeners.push(fn); },
 
     /** Ask the server for a new display name. Resolves with the name it accepted, or why not. */
     rename(name) {

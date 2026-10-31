@@ -348,7 +348,10 @@ class RealtimeFlowTest {
 
     // ------------------------------------------------------------ hand-drawn faces (protocol v0.5)
 
-    private static final String SMILE = "0".repeat(80) + "0010000000010000" + "0".repeat(48) + "0001111111100000" + "0".repeat(96);
+    // 32x32: two eyes on row 10, a mouth on row 20
+    private static final String SMILE = "0".repeat(32 * 10) + "00000000110000000000110000000000" + "0".repeat(32 * 9)
+            + "00000000002222222222220000000000" + "0".repeat(32 * 11);
+    private static final String FROWN = SMILE.replace('2', '1');
 
     @Test
     void drawnFaceReachesTheChannelAndNewcomers() throws Exception {
@@ -378,7 +381,7 @@ class RealtimeFlowTest {
         try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
             int pidA = a.hello().path("you").path("pid").asInt();
             b.hello();
-            a.send("{\"type\":\"setFace\",\"reqId\":\"f1\",\"face\":\"" + "5".repeat(256) + "\"}");   // colour 5 does not exist
+            a.send("{\"type\":\"setFace\",\"reqId\":\"f1\",\"face\":\"" + "5".repeat(1024) + "\"}");   // colour 5 does not exist
             assertThat(a.await("faceResult", m -> "f1".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("INVALID");
             a.send("{\"type\":\"setFace\",\"reqId\":\"f2\",\"face\":\"0123\"}");                    // wrong size
             assertThat(a.await("faceResult", m -> "f2".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("INVALID");
@@ -387,6 +390,54 @@ class RealtimeFlowTest {
             b.await("presence", m -> "".equals(pairValue(m.path("faced"), pidA)));
             a.send("{\"type\":\"setFace\",\"reqId\":\"f4\",\"face\":\"" + SMILE + "\"}");             // within 5 s
             assertThat(a.await("faceResult", m -> "f4".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("TOO_SOON");
+        }
+    }
+
+    @Test
+    void threeReportsTakeADrawingDown() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient r1 = TestClient.connect(port);
+             TestClient r2 = TestClient.connect(port); TestClient r3 = TestClient.connect(port)) {
+            a.send("{\"type\":\"hello\",\"v\":1,\"face\":\"" + SMILE + "\"}");
+            int pidA = a.await("welcome").path("you").path("pid").asInt();
+            r1.hello();
+            r2.hello();
+            r3.hello();
+            String report = "{\"type\":\"report\",\"reqId\":\"x\",\"pid\":" + pidA + "}";
+
+            r1.send(report);
+            assertThat(r1.await("reportResult").path("ok").asBoolean()).isTrue();
+            r1.send(report.replace("\"x\"", "\"y\""));                 // the same person twice counts once
+            assertThat(r1.await("reportResult", m -> "y".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("ALREADY");
+            r2.send(report);
+            assertThat(r2.await("reportResult").path("ok").asBoolean()).isTrue();
+            assertThat(a.all("faceRemoved")).isEmpty();                     // two is not enough
+            r3.send(report);
+            assertThat(r3.await("reportResult").path("ok").asBoolean()).isTrue();
+
+            assertThat(a.await("faceRemoved").path("reason").asText()).isEqualTo("REPORTED");
+            r1.await("presence", m -> "".equals(pairValue(m.path("faced"), pidA)));
+            // the banned drawing cannot come back, and its owner cannot draw anything for a while
+            try (TestClient again = TestClient.connect(port)) {
+                again.send("{\"type\":\"hello\",\"v\":1,\"face\":\"" + SMILE + "\"}");
+                int pidAgain = again.await("welcome").path("you").path("pid").asInt();
+                try (TestClient watcher = TestClient.connect(port)) {
+                    assertThat(pairValue(watcher.hello().path("faces"), pidAgain)).isNull();
+                }
+            }
+            a.send("{\"type\":\"setFace\",\"reqId\":\"f9\",\"face\":\"" + FROWN + "\"}");
+            assertThat(a.await("faceResult").path("reason").asText()).isEqualTo("BLOCKED");
+        }
+    }
+
+    @Test
+    void reportsNeedSomeoneElseWearingADrawing() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            int pidB = b.hello().path("you").path("pid").asInt();
+            a.send("{\"type\":\"report\",\"reqId\":\"s\",\"pid\":" + pidA + "}");
+            assertThat(a.await("reportResult").path("reason").asText()).isEqualTo("SELF");
+            a.send("{\"type\":\"report\",\"reqId\":\"n\",\"pid\":" + pidB + "}");   // b has the default face
+            assertThat(a.await("reportResult", m -> "n".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("NO_FACE");
         }
     }
 

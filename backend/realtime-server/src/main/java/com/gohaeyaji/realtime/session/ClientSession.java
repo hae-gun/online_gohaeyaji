@@ -23,6 +23,10 @@ public final class ClientSession {
     private volatile long lastMoveAt;
     private volatile long lastRenameAt;
     private volatile long lastFaceAt;
+    private volatile String face;
+    private volatile long faceBlockedUntil;
+    private final java.util.Set<String> reported = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.ArrayDeque<Long> reportTimes = new java.util.ArrayDeque<>();
     private volatile String name;
     private volatile long lastPingAt;
     private volatile long lastActivityAt;
@@ -87,6 +91,40 @@ public final class ClientSession {
             return false;
         }
         lastFaceAt = now;
+        return true;
+    }
+
+    public void face(String face) {
+        this.face = face;
+    }
+
+    /** The drawing this session wears, or null for the default face. */
+    public String face() {
+        return face;
+    }
+
+    public void blockFace(long until) {
+        this.faceBlockedUntil = until;
+    }
+
+    public boolean faceBlocked(long now) {
+        return now < faceBlockedUntil;
+    }
+
+    /** @return false if this session already reported this drawing */
+    public boolean firstReportOf(String faceHash) {
+        return reported.add(faceHash);
+    }
+
+    /** Sliding one-minute window. @return true if another report is allowed now */
+    public synchronized boolean acceptReport(long now, int perMinute) {
+        while (!reportTimes.isEmpty() && now - reportTimes.peekFirst() > 60_000) {
+            reportTimes.pollFirst();
+        }
+        if (reportTimes.size() >= perMinute) {
+            return false;
+        }
+        reportTimes.addLast(now);
         return true;
     }
 

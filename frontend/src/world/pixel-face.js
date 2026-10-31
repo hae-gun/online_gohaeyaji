@@ -11,8 +11,8 @@ import { paintFace } from '../net/faces.js';
  *   mouth: 0 (closed) .. 3 (wide open), smile: -1 (frown) | 0 | 1
  *   blush: true for the angry red cheeks
  *
- * A kid can also wear a hand-drawn face (protocol section 15): setCustom(code) shows that 16x16
- * drawing, doubled to fill the 32x32 canvas, instead of the generated one.
+ * A kid can also wear a hand-drawn face (protocol section 15): setCustom(code) shows that 32x32
+ * drawing, cell for pixel, instead of the generated one.
  */
 const K = '#151010';
 const LIP = '#5a2b22';
@@ -155,7 +155,7 @@ export function createPixelFace(look, size, variant = 'plain') {
       key = k;
       if (custom) {
         ctx.clearRect(0, 0, 32, 32);
-        paintFace(ctx, custom, 2);
+        paintFace(ctx, custom, 1);
       } else {
         draw(ctx, st, s, variant);
       }

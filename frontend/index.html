@@ -102,9 +102,10 @@
       <h2 id="faceTitle">얼굴 그리기</h2>
       <p>점을 찍어 눈, 코, 입을 그려 주세요. 다른 사람이 가까이 오면 이 얼굴이 보입니다. 그린 얼굴은 이 브라우저에 남아서 다음에 다시 불러올 수 있습니다.</p>
       <div class="faceWork">
-        <canvas id="faceGrid" width="320" height="320" aria-label="16 곱하기 16 점 그리기 판"></canvas>
+        <canvas id="faceGrid" width="384" height="384" aria-label="32 곱하기 32 점 그리기 판"></canvas>
         <div class="faceSide">
           <div class="swatches" id="faceSwatches" role="group" aria-label="색"></div>
+          <div class="brushes" id="faceBrush" role="group" aria-label="붓 크기"></div>
           <small>게임 속 크기</small>
           <canvas id="facePreview" width="64" height="64"></canvas>
           <button id="faceStarter" type="button">기본 얼굴부터</button>
@@ -116,12 +117,21 @@
         <div class="faceGallery" id="faceGallery"></div>
       </div>
       <label class="check"><input type="checkbox" id="faceShowOthers" checked> 다른 사람이 그린 얼굴 보기</label>
+      <p class="rule">다른 사람 이름표를 누르면 그 사람이 그린 얼굴을 숨기거나 신고할 수 있습니다. 여러 사람에게 신고된 그림은 내려가고 하루 동안 다시 쓸 수 없습니다.</p>
+      <button id="faceUnhide" type="button" hidden>숨긴 그림 모두 다시 보기</button>
       <p class="error" id="faceError" role="alert" hidden></p>
       <div class="row">
         <button id="faceCancel" type="button">취소</button>
         <button class="primary" id="faceSave" type="button">이 얼굴 쓰기</button>
       </div>
     </div>
+  </div>
+
+  <div class="playerMenu" id="playerMenu" role="menu" hidden>
+    <b id="playerMenuName"></b>
+    <button id="pmHide" type="button" role="menuitem">이 얼굴 숨기기</button>
+    <button id="pmReport" type="button" role="menuitem">얼굴 신고하기</button>
+    <button id="pmClose" type="button" role="menuitem">닫기</button>
   </div>
 
   <div id="toast" hidden></div>

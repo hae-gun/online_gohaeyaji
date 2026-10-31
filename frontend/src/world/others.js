@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { makeFigure, NAME_HEIGHT } from './figure.js';
+import { hiddenFaces } from '../net/faces.js';
 
 /**
  * Other players in my channel (protocol v0.3). No names, only a shirt color picked from the pid,
@@ -14,6 +15,8 @@ import { makeFigure, NAME_HEIGHT } from './figure.js';
  *
  * Hand-drawn faces (protocol v0.5) replace the generated face when the viewer allows it
  * (setShowDrawn: someone who does not want to see other people's drawings can turn them off).
+ * A name tag of someone wearing a drawing can be clicked: onTagClick opens the hide/report menu.
+ * Drawings hidden by this viewer stay hidden by content (hiddenFaces), even on the next visit.
  */
 const SHIRTS = [0x3a7bd5, 0x2fa36b, 0xe0a526, 0x8e5cc2, 0x1fb2b8, 0xd35d9c, 0x6d8a2e, 0xe0703a, 0x4a5bdc, 0x9a6b3f];
 const PANTS = [0x2e3a52, 0x3b3b3b, 0x4a3426, 0x1f3d3a];
@@ -23,7 +26,7 @@ const CATCH_UP = 1.35;             // a bit faster so they never lag a whole bat
 const SNAP_DISTANCE = 3;
 const NAME_DISTANCE = 3;           // metres; farther than this the name is hidden
 
-export function createOtherPlayers(scene, tagLayer) {
+export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
   const players = new Map();       // pid -> { fig, tx, tz, try, inBooth, phase, tag }
   const boothOwner = new Map();    // boothId -> pid
   const names = new Map();         // pid -> name (may arrive before the first move)
@@ -34,7 +37,10 @@ export function createOtherPlayers(scene, tagLayer) {
 
   function applyFace(pid) {
     const p = players.get(pid);
-    if (p) p.fig.userData.face.setCustom(showDrawn ? faces.get(pid) || null : null);
+    if (!p) return;
+    const face = faces.get(pid) || null;
+    p.fig.userData.face.setCustom(showDrawn && face && !hiddenFaces.has(face) ? face : null);
+    p.tag.classList.toggle('withFace', !!face);
   }
 
   function setFace(pid, face) {
@@ -59,6 +65,11 @@ export function createOtherPlayers(scene, tagLayer) {
       tag.className = 'nameTag';
       tag.hidden = true;
       tag.textContent = names.get(pid) || '';
+      tag.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const face = faces.get(pid);
+        if (face) onTagClick({ pid, name: names.get(pid) || '', face, rect: tag.getBoundingClientRect() });
+      });
       tagLayer.appendChild(tag);
       p = { fig, tx: x, tz: z, try: ry, inBooth: false, phase: Math.random() * 6, tag };
       players.set(pid, p);
@@ -127,6 +138,11 @@ export function createOtherPlayers(scene, tagLayer) {
     /** Show or hide faces other people drew (theirs fall back to the generated face). */
     setShowDrawn(on) {
       showDrawn = on;
+      for (const pid of players.keys()) applyFace(pid);
+    },
+
+    /** Re-check every face after the hidden list changed. */
+    refreshFaces() {
       for (const pid of players.keys()) applyFace(pid);
     },
 

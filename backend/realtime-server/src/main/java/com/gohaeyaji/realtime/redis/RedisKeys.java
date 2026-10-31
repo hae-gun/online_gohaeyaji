@@ -21,6 +21,16 @@ public final class RedisKeys {
         return CHANNEL_PREFIX + channelNo + ":pid";
     }
 
+    /** Sessions that reported this drawing (protocol section 15). */
+    public static String faceReports(String faceHash) {
+        return "gy:face:" + faceHash + ":reports";
+    }
+
+    /** Present while this drawing is banned. */
+    public static String faceBan(String faceHash) {
+        return "gy:face:" + faceHash + ":ban";
+    }
+
     public static String booth(int channelNo, int boothId) {
         return CHANNEL_PREFIX + channelNo + ":booth:" + boothId;
     }

@@ -71,6 +71,25 @@ public final class Messages {
         }
     }
 
+    /** Answer to "report" (v0.6). Never says how many reports a drawing has. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record ReportResult(String type, String reqId, boolean ok, String reason) {
+        public static ReportResult ok(String reqId) {
+            return new ReportResult("reportResult", reqId, true, null);
+        }
+
+        public static ReportResult fail(String reqId, String reason) {
+            return new ReportResult("reportResult", reqId, false, reason);
+        }
+    }
+
+    /** Sent to someone whose drawing was taken off after reports (v0.6). */
+    public record FaceRemoved(String type, String reason, long blockedMs) {
+        public FaceRemoved(String reason, long blockedMs) {
+            this("faceRemoved", reason, blockedMs);
+        }
+    }
+
     /** Answer to "setFace" (v0.5). */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record FaceResult(String type, String reqId, boolean ok, String reason) {
@@ -148,6 +167,14 @@ public final class Messages {
     /** faceResult reasons (v0.5). */
     public static final String FACE_INVALID = "INVALID";
     public static final String FACE_TOO_SOON = "TOO_SOON";
+    public static final String FACE_BLOCKED = "BLOCKED";
+
+    /** reportResult reasons and faceRemoved reasons (v0.6). */
+    public static final String REPORT_NO_FACE = "NO_FACE";
+    public static final String REPORT_SELF = "SELF";
+    public static final String REPORT_ALREADY = "ALREADY";
+    public static final String REPORT_TOO_MANY = "TOO_MANY";
+    public static final String REMOVED_REPORTED = "REPORTED";
 
     /** error codes. */
     public static final String ERR_BAD_MESSAGE = "BAD_MESSAGE";

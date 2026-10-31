@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gohaeyaji.realtime.booth.BoothService;
 import com.gohaeyaji.realtime.channel.ChannelService;
 import com.gohaeyaji.realtime.config.RealtimeProperties;
+import com.gohaeyaji.realtime.face.FaceReports;
 import com.gohaeyaji.realtime.face.FaceRules;
 import com.gohaeyaji.realtime.name.NameService;
 import com.gohaeyaji.realtime.presence.PresenceService;
@@ -14,7 +15,9 @@ import com.gohaeyaji.realtime.protocol.Messages.BoothEvent;
 import com.gohaeyaji.realtime.protocol.Messages.Booths;
 import com.gohaeyaji.realtime.protocol.Messages.ClaimResult;
 import com.gohaeyaji.realtime.protocol.Messages.ErrorMessage;
+import com.gohaeyaji.realtime.protocol.Messages.FaceRemoved;
 import com.gohaeyaji.realtime.protocol.Messages.FaceResult;
+import com.gohaeyaji.realtime.protocol.Messages.ReportResult;
 import com.gohaeyaji.realtime.protocol.Messages.Idle;
 import com.gohaeyaji.realtime.protocol.Messages.Pong;
 import com.gohaeyaji.realtime.protocol.Messages.Released;
@@ -41,9 +44,9 @@ import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorato
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 /**
- * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.5:
+ * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.6:
  * hello/welcome, ping/pong, claim/release, activity, resync, move (positions), rename (names),
- * setFace (hand-drawn faces).
+ * setFace and report (hand-drawn faces).
  *
  * Not yet: queue (queueJoin/queueLeave), resume after reconnect, rate limits, confess.
  */
@@ -60,6 +63,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     private final BoothService booths;
     private final PresenceService presence;
     private final NameService names;
+    private final FaceReports faceReports;
     private final MessageSender sender;
     private final ObjectMapper mapper;
     private final SecureRandom random = new SecureRandom();
@@ -70,13 +74,15 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
 
     public RealtimeWebSocketHandler(RealtimeProperties props, SessionRegistry registry, ChannelService channels,
                                     BoothService booths, PresenceService presence, NameService names,
-                                    MessageSender sender, ObjectMapper mapper, MeterRegistry meters) {
+                                    FaceReports faceReports, MessageSender sender, ObjectMapper mapper,
+                                    MeterRegistry meters) {
         this.props = props;
         this.registry = registry;
         this.channels = channels;
         this.booths = booths;
         this.presence = presence;
         this.names = names;
+        this.faceReports = faceReports;
         this.sender = sender;
         this.mapper = mapper;
         Gauge.builder("gohaeyaji.sessions", registry, SessionRegistry::size)
@@ -147,6 +153,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             case "move" -> onMove(session, msg);
             case "rename" -> onRename(session, msg, reqId);
             case "setFace" -> onSetFace(session, msg, reqId);
+            case "report" -> onReport(session, msg, reqId);
             case "activity" -> session.touchActivity(now());
             case "resync" -> sendSnapshot(session);
             case "queueJoin", "queueLeave", "confess" ->
@@ -173,9 +180,10 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         session.ready("s_" + UUID.randomUUID(), channelNo, pid, now());
         session.name(name);
         presence.setName(channelNo, pid, name);
-        // the face this browser drew before; a malformed one is simply ignored (default face)
+        // the face this browser drew before; a malformed or banned one is simply ignored (default face)
         String face = msg.hasNonNull("face") && FaceRules.valid(msg.get("face").asText()) ? FaceRules.normalize(msg.get("face").asText()) : null;
-        if (face != null) {
+        if (face != null && !faceReports.banned(face)) {
+            session.face(face);
             presence.setFace(channelNo, pid, face);
         }
         // join the broadcast set before reading the snapshot, so no event can fall between them;
@@ -243,12 +251,71 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             sender.send(session, FaceResult.fail(reqId, Messages.FACE_INVALID));
             return;
         }
+        String normalized = FaceRules.normalize(face);
+        if (normalized != null && (session.faceBlocked(now()) || faceReports.banned(normalized))) {
+            sender.send(session, FaceResult.fail(reqId, Messages.FACE_BLOCKED));
+            return;
+        }
         if (!session.acceptFace(now(), props.faceMinGapMs())) {
             sender.send(session, FaceResult.fail(reqId, Messages.FACE_TOO_SOON));
             return;
         }
-        presence.setFace(session.channelNo(), session.pid(), FaceRules.normalize(face));
+        session.face(normalized);
+        presence.setFace(session.channelNo(), session.pid(), normalized);
         sender.send(session, FaceResult.ok(reqId));
+    }
+
+    /**
+     * Someone reports the drawing another person in the channel wears (protocol section 15).
+     * The report is about the picture as it is now; changing it afterwards starts from zero.
+     */
+    private void onReport(ClientSession session, JsonNode msg, String reqId) {
+        int pid = msg.path("pid").asInt(-1);
+        if (pid == session.pid()) {
+            sender.send(session, ReportResult.fail(reqId, Messages.REPORT_SELF));
+            return;
+        }
+        ClientSession target = null;
+        for (ClientSession s : registry.channelMembers(session.channelNo())) {
+            if (s.pid() == pid) {
+                target = s;
+                break;
+            }
+        }
+        // TODO step 6: the person may be connected to another server; look the face up in Redis
+        String face = target == null ? null : target.face();
+        if (face == null) {
+            sender.send(session, ReportResult.fail(reqId, Messages.REPORT_NO_FACE));
+            return;
+        }
+        if (!session.acceptReport(now(), props.maxReportsPerMinute())) {
+            sender.send(session, ReportResult.fail(reqId, Messages.REPORT_TOO_MANY));
+            return;
+        }
+        if (!session.firstReportOf(FaceRules.hash(face))) {
+            sender.send(session, ReportResult.fail(reqId, Messages.REPORT_ALREADY));
+            return;
+        }
+        FaceReports.Result result = faceReports.report(face, session.sessionId());
+        sender.send(session, result == FaceReports.Result.ALREADY
+                ? ReportResult.fail(reqId, Messages.REPORT_ALREADY)
+                : ReportResult.ok(reqId));
+        if (result == FaceReports.Result.BANNED) {
+            takeDown(face);
+        }
+    }
+
+    /** Everyone on this server wearing a banned drawing goes back to the default face. */
+    private void takeDown(String face) {
+        long until = now() + props.faceBlockMs();
+        for (ClientSession s : registry.all()) {
+            if (s.isReady() && face.equals(s.face())) {
+                s.face(null);
+                s.blockFace(until);
+                presence.setFace(s.channelNo(), s.pid(), null);
+                sender.send(s, new FaceRemoved(Messages.REMOVED_REPORTED, props.faceBlockMs()));
+            }
+        }
     }
 
     private void onPing(ClientSession session, JsonNode msg) {
