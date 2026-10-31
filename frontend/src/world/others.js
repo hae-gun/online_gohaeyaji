@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeFigure } from './figure.js';
+import { makeFigure, NAME_HEIGHT } from './figure.js';
 
 /**
  * Other players in my channel (protocol v0.3). No names, only a shirt color picked from the pid,
@@ -14,11 +14,11 @@ import { makeFigure } from './figure.js';
  */
 const SHIRTS = [0x3a7bd5, 0x2fa36b, 0xe0a526, 0x8e5cc2, 0x1fb2b8, 0xd35d9c, 0x6d8a2e, 0xe0703a, 0x4a5bdc, 0x9a6b3f];
 const PANTS = [0x2e3a52, 0x3b3b3b, 0x4a3426, 0x1f3d3a];
+const HAIR = [0x2b1d14, 0x1d1d1d, 0x7a4a20, 0x4a2e1c, 0xc9a050];
 const WALK_SPEED = 3.4;            // same as the local player
 const CATCH_UP = 1.35;             // a bit faster so they never lag a whole batch behind
 const SNAP_DISTANCE = 3;
 const NAME_DISTANCE = 3;           // metres; farther than this the name is hidden
-const NAME_HEIGHT = 2.45;          // just above the head
 
 export function createOtherPlayers(scene, tagLayer) {
   const players = new Map();       // pid -> { fig, tx, tz, try, inBooth, phase, tag }
@@ -36,7 +36,7 @@ export function createOtherPlayers(scene, tagLayer) {
   function ensure(pid, x, z, ry) {
     let p = players.get(pid);
     if (!p) {
-      const fig = makeFigure({ shirt: SHIRTS[pid % SHIRTS.length], pants: PANTS[pid % PANTS.length], hair: 0x2b1d14 });
+      const fig = makeFigure({ shirt: SHIRTS[pid % SHIRTS.length], pants: PANTS[pid % PANTS.length], hair: HAIR[pid % HAIR.length], seed: pid });
       fig.position.set(x, 0, z);
       fig.rotation.y = ry;
       scene.add(fig);

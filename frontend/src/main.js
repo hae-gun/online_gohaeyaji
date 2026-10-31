@@ -55,7 +55,7 @@ const booths = buildBooths(world, colliders);
 const nav = createNavigation(outside.obstacles);
 const confessional = buildConfessional();
 
-const player = makeFigure({ shirt: 0xe5533d, pants: 0x2e3a52, hair: 0x3b2618 });
+const player = makeFigure({ shirt: 0xe5533d, pants: 0x2e3a52, hair: 0x3b2618, face: 'derpy' });
 player.position.set(0, 0, 30);
 player.rotation.y = Math.PI;
 world.add(player);

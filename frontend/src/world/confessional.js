@@ -14,6 +14,8 @@ export function buildConfessional() {
   scene.add(new THREE.HemisphereLight(0xffe7c8, 0x1a120c, 0.55));
   const candleL = new THREE.PointLight(0xffb45a, 1.4, 9); candleL.position.set(0.9, 2.4, -1.8); scene.add(candleL);
   const fillL = new THREE.DirectionalLight(0xffe0bb, 0.35); fillL.position.set(0, 3, 3); scene.add(fillL);
+  // the curtain glow is behind the priest; a soft light from the penitent's side keeps his head from going dark
+  const faceL = new THREE.PointLight(0xffe6c8, 0.7, 4); faceL.position.set(0, 2.3, -0.6); scene.add(faceL);
 
   const wood = M(0x4e3220);
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(6, 8), M(0x2c1c12)); floor.rotation.x = -Math.PI / 2; scene.add(floor);
@@ -28,11 +30,12 @@ export function buildConfessional() {
   [[-1.55, 1.25, 1.3, 2.5], [1.55, 1.25, 1.3, 2.5], [0, 0.7, 1.8, 1.4], [0, 3.55, 1.8, 1.7]].forEach(([x, y, w, h]) => {
     const p = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.12), wood); p.position.set(x, y, pz); scene.add(p);
   });
+  // the lattice only frames the window: bars across the middle would cut the priest's face in half
   const lat = M(0x2e1d12);
-  for (let x = -0.6; x <= 0.61; x += 0.4) {
+  for (const x of [-0.62, 0.62]) {
     const b = new THREE.Mesh(new THREE.BoxGeometry(0.016, 1.3, 0.02), lat); b.position.set(x, 2.05, pz); scene.add(b);
   }
-  for (let y = 1.62; y <= 2.7; y += 0.42) {
+  for (const y of [1.6, 2.66]) {
     const b = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.016, 0.02), lat); b.position.set(0, y, pz); scene.add(b);
   }
   const sill = new THREE.Mesh(new THREE.BoxGeometry(2, 0.08, 0.4), M(0x6a4428)); sill.position.set(0, 1.42, pz + 0.1); scene.add(sill);
@@ -44,18 +47,20 @@ export function buildConfessional() {
   const crew = {};
   for (const id of ['jin', 'eom', 'yu', 'baek']) {
     const fig = makeFigure({ priest: true, look: id });
-    fig.position.set(0, 0, -2.35);
+    // chibi priests are short: seat them so the window shows him from the chest up
+    // (chest just above the sill at 1.42, so the sign of the cross stays visible)
+    fig.position.set(0, 1.56 - fig.userData.pose.chest.y, -2.0);
     fig.visible = false;
     scene.add(fig);
-    const face = createFace(fig);
+    const face = createFace(fig, id);
     crew[id] = { fig, face, cross: createSignOfCross(fig, face) };
   }
   // a warm light that only comes on for the legendary priest
   const glow = new THREE.PointLight(0xffe2a0, 0, 7); glow.position.set(0, 3, -1.2); scene.add(glow);
   let active = crew.jin;
   active.fig.visible = true;
-  camera.position.set(0, 1.9, 2.7);
-  camera.lookAt(0, 1.86, -2.35);
+  camera.position.set(0, 2.0, 2.2);
+  camera.lookAt(0, 1.95, -2.0);
 
   let nodT = -1;
 
@@ -108,29 +113,34 @@ export function buildConfessional() {
 }
 
 /**
- * The priest's face. Expressions snap from one to the next (no easing) to keep the cheap 90s look.
- * Brow numbers: browRot > 0 raises the inner ends (worried), < 0 lowers them (stern).
+ * The priest's face: a pixel face (pixel-face.js) redrawn when the expression changes.
+ * Expressions snap from one to the next, no easing, to keep the cheap 90s look.
  */
 const MOODS = {
-  neutral: { browY: 0.45, browRot: 0.12, eye: 1, smile: 0 },
-  pray:    { browY: 0.44, browRot: 0.08, eye: 0.12, smile: 0 },
-  listen:  { browY: 0.49, browRot: 0.03, eye: 1, smile: 0 },
-  concern: { browY: 0.465, browRot: 0.34, eye: 0.85, smile: -0.8 },
-  stern:   { browY: 0.43, browRot: -0.22, eye: 0.8, smile: -0.3 },
-  smile:   { browY: 0.46, browRot: 0.1, eye: 0.55, smile: 1 },
+  neutral: { eyes: 'open', brows: 'neutral', smile: 0 },
+  pray:    { eyes: 'closed', brows: 'neutral', smile: 0 },
+  listen:  { eyes: 'open', brows: 'up', smile: 0 },
+  concern: { eyes: 'open', brows: 'worried', smile: -1 },
+  stern:   { eyes: 'squint', brows: 'stern', smile: -1 },
+  smile:   { eyes: 'squint', brows: 'neutral', smile: 1 },
+};
+// per priest tweaks: the scolding one goes red when stern, the funny one laughs with ^^ eyes
+const LOOK_MOODS = {
+  eom: { stern: { blush: true } },
+  yu: { smile: { eyes: 'happy' } },
 };
 const MOUTH_STEP = 1 / 9;          // a new mouth shape about 9 times a second
-const MOUTH_SHAPES = [0, 0.35, 0.7, 1, 0.5];
+const MOUTH_SHAPES = [0, 1, 2, 3, 1];
 
-function createFace(priest) {
-  const { opening, lowerLip, corners, brows } = priest.userData.face;
-  const eyes = priest.userData.eyes;
-  let mood = MOODS.neutral;
+function createFace(priest, look) {
+  const face = priest.userData.face;
+  const tweaks = LOOK_MOODS[look] || {};
+  let mood = 'neutral';
   let talkT = 0, talkLen = 0, script = [], after = 'neutral', hold = 0, holdT = 0;
   let stepT = 0, open = 0, lastShape = -1;
   let blinkT = 3;
 
-  function setMood(name) { mood = MOODS[name] || MOODS.neutral; }
+  function setMood(name) { mood = MOODS[name] ? name : 'neutral'; }
 
   function nextShape() {
     // never the same shape twice in a row, and close fully now and then so words look separate
@@ -141,23 +151,9 @@ function createFace(priest) {
   }
 
   function draw(blink) {
-    brows.forEach((b) => {
-      const s = b.userData.side;
-      b.position.y = mood.browY + (b.userData.dy || 0);
-      b.rotation.z = -s * mood.browRot;
-    });
-    const eye = blink ? Math.min(mood.eye, 0.12) : mood.eye;
-    eyes.forEach((e) => { e.scale.y = eye; });
-    opening.visible = open > 0.01;
-    opening.scale.y = Math.max(0.01, open);
-    opening.position.y = -0.0125 - 0.05 * open;
-    lowerLip.visible = open > 0.01;
-    lowerLip.position.y = -0.0125 - 0.1 * open;
-    corners.forEach((c, i) => {
-      const s = i === 0 ? -1 : 1;
-      c.position.y = mood.smile * 0.014 - open * 0.05;
-      c.rotation.z = s * mood.smile * 0.45;
-    });
+    const s = { ...MOODS[mood], ...(tweaks[mood] || {}), mouth: open };
+    if (blink && s.eyes !== 'closed' && s.eyes !== 'happy') s.eyes = 'closed';
+    face.set(s);
   }
 
   return {
@@ -176,7 +172,8 @@ function createFace(priest) {
         if (stepT <= 0) { stepT = MOUTH_STEP; open = nextShape(); }
         if (talkT >= talkLen) {
           talkLen = 0; open = 0;
-          if (hold > 0) { setMood(after); holdT = hold; } else setMood(after);
+          setMood(after);
+          if (hold > 0) holdT = hold;
         }
       } else if (holdT > 0) {
         holdT -= dt;
@@ -200,16 +197,19 @@ function createFace(priest) {
  */
 function createSignOfCross(priest, face) {
   const DOWN = new THREE.Vector3(0, -1, 0);
-  const SHOULDER = { R: new THREE.Vector3(-0.38, 1.7, 0), L: new THREE.Vector3(0.38, 1.7, 0) };
+  // targets come from the figure itself (figure.js userData.pose), so every body shape works.
+  // The short arms stretch to reach the forehead: that is part of the joke.
+  const P = priest.userData.pose;
+  const SHOULDER = P.shoulder;
   const TARGETS = {
-    restR: ['R', new THREE.Vector3(-0.46, 0.92, 0.04)],
-    restL: ['L', new THREE.Vector3(0.46, 0.92, 0.04)],
-    forehead: ['R', new THREE.Vector3(0, 2.3, 0.34)],
-    chest: ['R', new THREE.Vector3(0, 1.48, 0.3)],
-    lShoulder: ['R', new THREE.Vector3(0.36, 1.74, 0.27)],
-    rShoulder: ['R', new THREE.Vector3(-0.36, 1.74, 0.3)],
-    prayR: ['R', new THREE.Vector3(-0.03, 1.42, 0.4)],
-    prayL: ['L', new THREE.Vector3(0.03, 1.42, 0.4)],
+    restR: ['R', P.rest.R],
+    restL: ['L', P.rest.L],
+    forehead: ['R', P.forehead],
+    chest: ['R', P.chest],
+    lShoulder: ['R', P.lShoulder],
+    rShoulder: ['R', P.rShoulder],
+    prayR: ['R', P.pray.R],
+    prayL: ['L', P.pray.L],
   };
   // [time in seconds, right hand pose, left hand pose]
   const KEYS = [

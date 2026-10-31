@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { EYE_HEIGHT } from '../world/figure.js';
 
 /**
  * Third person orbit camera with wall collision, plus a first person mode.
@@ -72,12 +73,12 @@ export function createCameraRig({ canvas, camera, isActive, onTap }) {
 
   /** Places the camera for this frame. Returns whether the player mesh should be drawn. */
   rig.update = (player, dt, colliders, portrait) => {
-    const head = new THREE.Vector3(player.position.x, 1.6, player.position.z);
+    const head = new THREE.Vector3(player.position.x, 1.3, player.position.z);
     if (rig.firstPerson) {
       player.rotation.y = rig.yaw + Math.PI;
       const cp = Math.cos(rig.fpPitch);
-      camera.position.set(player.position.x, 1.95, player.position.z);
-      camera.lookAt(player.position.x - Math.sin(rig.yaw) * cp, 1.95 + Math.sin(rig.fpPitch), player.position.z - Math.cos(rig.yaw) * cp);
+      camera.position.set(player.position.x, EYE_HEIGHT, player.position.z);
+      camera.lookAt(player.position.x - Math.sin(rig.yaw) * cp, EYE_HEIGHT + Math.sin(rig.fpPitch), player.position.z - Math.cos(rig.yaw) * cp);
       return false;
     }
     const cp = Math.cos(rig.pitch);
