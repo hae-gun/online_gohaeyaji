@@ -11,6 +11,7 @@ import { createKeyboard } from './controls/keyboard.js';
 import { createNavigation } from './controls/navigation.js';
 import { createCameraRig } from './controls/camera-rig.js';
 import { loadAnswerData, createAnswerEngine } from './answer/engine.js';
+import { pickPersona, testPersona } from './answer/pick-persona.js';
 import { createAmbient } from './audio/ambient.js';
 import { createVoice } from './audio/voice.js';
 import { createLocalRoomClient } from './net/room-client.js';
@@ -267,7 +268,12 @@ function enterRoom() {
   ambient.setPlace('room');
   $('#hallUi').hidden = true;
   $('#roomUi').hidden = false;
-  priest = engine ? engine.personaForBooth(current.id) : null;
+  // drawn on entry, not tied to the door: 1/3 each, or a rare priest's own chance (pick-persona.js)
+  // dev builds only: booth 20 always has the rare priest, for testing (testPersona)
+  priest = engine ? testPersona(engine.personas, current.id) || pickPersona(engine.personas) : null;
+  const legend = !!(priest && priest.chance);
+  if (legend) ambient.peal(3);
+  $('#roomUi').classList.toggle('legend', legend);
   voice.setTone(priest && priest.id);
   confessional.setPriest(priest ? priest.id : 'jin');
   $('#roomName').textContent = `${current.id + 1}번 고해소, ${priest ? priest.name : '신부님'}`;
@@ -284,6 +290,11 @@ function enterRoom() {
 
 function readyForConfession() {
   if (state !== 'room') return;
+  // a rare priest greets after the blessing
+  if (priest && priest.greeting && priest.greeting.length) {
+    const hello = priest.greeting[Math.floor(Math.random() * priest.greeting.length)];
+    confessional.talk(bubble.say(hello), { script: [[0, 'smile']], after: 'smile', hold: 2 });
+  }
   $('#guide').textContent = '고해하실 내용을 작성하세요';
   setInputEnabled(true);
   idle.start();
@@ -357,6 +368,7 @@ $('#chatForm').addEventListener('submit', (e) => {
     confessional.talk(sec, faceFor(r));
     if (r.kind === 'answer') {
       $('#penanceText').textContent = r.penance;
+      $('#penance small').textContent = r.persona === 'baek' ? '전설의 보속' : '오늘의 보속';
       $('#penance').hidden = false;
       history.add({ t: Date.now(), q: text, c: r.category, p: r.penance, pr: r.persona });
     } else {
@@ -376,7 +388,7 @@ function faceFor(r) {
   if (r.kind === 'safety') return { script: [[0, 'concern']], after: 'concern', hold: 4 };
   if (r.kind === 'blocked') return { script: [[0, 'stern']], after: 'stern', hold: 1.5 };
   if (r.kind === 'chat') {
-    const mood = { jin: 'neutral', eom: 'stern', yu: 'smile' }[r.persona] || 'neutral';
+    const mood = { jin: 'neutral', eom: 'stern', yu: 'smile', baek: 'smile' }[r.persona] || 'neutral';
     return { script: [[0, mood]], after: r.persona === 'eom' ? 'neutral' : 'smile', hold: 1.2 };
   }
   if (r.kind !== 'answer') return { script: [[0, r.persona === 'eom' ? 'stern' : 'neutral']] };
@@ -387,6 +399,8 @@ function faceFor(r) {
     jin: [[0, 'concern'], [pen, 'stern'], [close, 'smile']],
     eom: [[0, 'stern'], [close, 'neutral']],
     yu: [[0, 'smile'], [pen, 'neutral'], [close, 'smile']],
+    // baek: a calm smile the whole time, eyes softening for the penance
+    baek: [[0, 'smile'], [pen, 'listen'], [close, 'smile']],
   };
   return { script: faces[r.persona] || faces.jin, after: r.persona === 'eom' ? 'neutral' : 'smile', hold: 1.5 };
 }
@@ -397,6 +411,10 @@ function faceFor(r) {
  */
 function leaveRoom({ reason = 'USER', notifyServer = true, message = '' } = {}) {
   if (state !== 'room') return;
+  // the legendary priest says goodbye when you walk out on your own
+  if (reason === 'USER' && !message && priest && priest.farewell && priest.farewell.length) {
+    message = `${priest.name}: ${priest.farewell[Math.floor(Math.random() * priest.farewell.length)]}`;
+  }
   idle.pause();
   bubble.stop();
   confessional.reset();
@@ -525,7 +543,7 @@ function updateSurroundings(dt) {
       prompt.textContent = `${nb.id + 1}번 고해소: 고해성사가 진행중입니다`;
       act.hidden = true;
     } else {
-      prompt.innerHTML = `<kbd>E</kbd>${nb.id + 1}번 고해소${engine ? ', ' + engine.personaForBooth(nb.id).name : ''} 문 열기`;
+      prompt.innerHTML = `<kbd>E</kbd>${nb.id + 1}번 고해소 문 열기`;
       act.hidden = false;
     }
   } else {

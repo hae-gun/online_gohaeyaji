@@ -114,10 +114,13 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 
 ## 신부님 세 분과 일상 대화 (answers.json v3, 2026-10-31)
 
-- 고해소 번호로 신부님이 정해짐: 1, 4, 7번은 진 신부님(진지), 2, 5, 8번은 엄 신부님(꾸짖음), 3, 6, 9번은 유 신부님(유머). `engine.personaForBooth(index)`
+- 신부님은 고해소에 들어갈 때 무작위로 정해짐(문 앞에서는 모름): 진(진지), 엄(꾸짖음), 유(유머) 각 33%. `answers.json` personas에 `"chance": 0.01`처럼 확률을 적은 신부님(이스터에그)은 그 확률로 나오고, 나머지 세 분이 남은 확률을 똑같이 나눔. `answer/pick-persona.js`. 답변 엔진을 서버로 옮길 때 이 추첨도 서버로 옮김 (`engine.personaForBooth`는 더 이상 안 씀)
 - `answers.json`의 `personas`에 이름, 보속 도입부(`lead`), 짧은 입력 안내(`tooShort`). empathy와 closing은 `{ jin, eom, yu }`로 나뉘고, penance는 고해의 결과라서 세 분이 같음. 배열 하나만 두면 공용
 - `chatter`: 고해가 아닌 말(인사, 칭찬, 재미없다, 외모, 디자인, 교회/성당, AI냐, 사용법, 웃음, 울음 등 18가지). 고해 카테고리에 하나도 안 걸릴 때만 사용. 보속 카드 없음, 기록에 안 남김(`kind: 'chat'`)
 - 외모도 성격별로 다름(`figure.js`의 `LOOKS`, `makeFigure({ priest: true, look })`): 진 신부님은 동그란 안경에 단정한 회색 가르마 머리, 엄 신부님은 나이 들고 긴 얼굴에 굵은 검은 눈썹, 흰 콧수염, 각진 안경, 유 신부님은 젊고 통통한 둥근 얼굴에 곱슬머리, 발그레한 볼, 안경 없음. 수단, 로만 칼라, 보라색 영대(고해성사 때 실제로 매는 색)는 세 분 모두 같음. 고해소 장면에 세 분을 미리 만들어 두고 `confessional.setPriest(id)`로 보이는 분만 바꿈
 - 엔진은 `penanceAt`, `closingAt` 오프셋을 돌려주고 main.js의 `faceFor`가 신부님별 표정 순서에 씀. 음성 톤은 `voice.setTone(id)`
 - 샘플 파일(`answers.sample.json`)은 예전 배열 형식 그대로여도 동작함(세 분이 같은 문구를 쓰고 도입부만 다름)
 - 이전 데이터 백업: `public/data/answers.v1.backup.json`(10개 카테고리), `answers.v2.backup.json`(22개 카테고리, 신부님 구분 전)
+- 히든 신부님 **백 신부님**(`baek`): personas에 `"chance": 0.01`(1%), 확정 등장 없음(오직 1% 확률). 개발 실행(`npm run dev`, `dev:server`)에서만 20번 고해소에 항상 등장(`testPersona`, `import.meta.env.DEV`라 배포 빌드에서는 빠짐). `lines`가 있어서 카테고리와 상관없이 자기 공감, 보속, 마무리만 쓰고 `chatter`도 자기 것(없는 의도는 `default`). 성호경 뒤 `greeting`, 직접 나갈 때 `farewell`을 토스트로. 보속은 세 분이 같다는 원칙의 유일한 예외(만난 보상)
+- 백 신부님 연출: 입장 시 종 세 번(`ambient.peal`, 고해소 안에서도 들림), 고해소 안 따뜻한 빛(`confessional.js`의 glow), 흰 머리와 흰 눈썹, 긴 흰 수염, 금색 테두리 보라 영대(`LOOKS.baek`), 금색 "전설의 보속" 카드(`#roomUi.legend`), 느리고 낮은 목소리
+- 톤 원칙: 장엄하고 자비로운 노신부님일 뿐 하느님의 말씀을 전하거나 죄를 용서하는 말은 쓰지 않음. 장엄함으로 쇼츠와 늦잠을 다루는 게 웃음 포인트
