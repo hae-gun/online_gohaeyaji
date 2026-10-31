@@ -65,6 +65,11 @@ public class PresenceService {
         channel(channelNo).setFace(pid, face);
     }
 
+    /** An emote (protocol section 16); goes out with the next batch, then is forgotten. */
+    public void emote(int channelNo, int pid, String id) {
+        channel(channelNo).emote(pid, id);
+    }
+
     public List<List<Object>> faces(int channelNo) {
         ChannelPresence presence = channels.get(channelNo);
         return presence == null ? List.of() : presence.faces();

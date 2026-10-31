@@ -26,6 +26,7 @@
  *   myFace: string|null,
  *   setFace(face: string|null): Promise<{ ok: boolean, reason?: string }>,
  *   report(pid: number): Promise<{ ok: boolean, reason?: string }>,
+ *   sendEmote(id: string): void,
  *   onFaceRemoved(listener: (e: { reason: string, blockedMs: number }) => void): void,
  * }} RoomClient
  *
@@ -33,7 +34,8 @@
  * [pid, x, z, ry, boothId or -1]. Names (v0.4) come as [pid, name] pairs, hand-drawn faces (v0.5)
  * as [pid, face] pairs ("" in a batch = back to the default face):
  * @typedef {{ kind: 'reset', you: number|null, players: number[][], names: [number, string][], faces: [number, string][] }
- *         | { kind: 'batch', moved: number[][], left: number[], named: [number, string][], faced: [number, string][] }
+ *         | { kind: 'batch', moved: number[][], left: number[], named: [number, string][], faced: [number, string][],
+ *             emoted: [number, string][] }
  *         | { kind: 'booth', boothId: number, pid: number|null }} PresenceEvent
  *
  * onForcedRelease fires when the server takes a booth away (IDLE safety net, LEASE_EXPIRED,
@@ -99,6 +101,7 @@ export function createLocalRoomClient({ count, simulate = false }) {
     get myName() { return myName; },
     get myFace() { return myFace; },
     async report() { return { ok: false, reason: 'NO_FACE' }; },   // nobody else exists here
+    sendEmote() { /* nobody to show it to */ },
     onFaceRemoved() { /* never happens without a server */ },
     async setFace(face) {
       myFace = normalizeFace(face);

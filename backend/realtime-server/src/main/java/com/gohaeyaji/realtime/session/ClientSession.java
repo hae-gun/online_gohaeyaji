@@ -23,6 +23,7 @@ public final class ClientSession {
     private volatile long lastMoveAt;
     private volatile long lastRenameAt;
     private volatile long lastFaceAt;
+    private volatile long emoteUntil;
     private volatile String face;
     private volatile long faceBlockedUntil;
     private final java.util.Set<String> reported = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -91,6 +92,15 @@ public final class ClientSession {
             return false;
         }
         lastFaceAt = now;
+        return true;
+    }
+
+    /** @return true if no emote is playing now; then this one runs until now + durationMs */
+    public boolean acceptEmote(long now, long durationMs, long slackMs) {
+        if (now < emoteUntil - slackMs) {
+            return false;
+        }
+        emoteUntil = now + durationMs;
         return true;
     }
 

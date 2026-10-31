@@ -20,6 +20,7 @@ import { createMoveSender } from './net/move-sender.js';
 import { checkName, normalizeName, randomSaintName, NAME_REASON } from './net/names.js';
 import { createFaceEditor } from './ui/face-editor.js';
 import { hiddenFaces } from './net/faces.js';
+import { EMOTES, createEmotePlayer } from './world/emotes.js';
 import { history } from './storage/history.js';
 import { $, toast, fade, createBubble, initHistoryPanel } from './ui/hud.js';
 
@@ -194,6 +195,45 @@ try { showDrawn = localStorage.getItem(SHOW_DRAWN_KEY) !== '0'; } catch (_) { /*
 $('#faceShowOthers').checked = showDrawn;
 others.setShowDrawn(showDrawn);
 
+/* ---------- emotes (protocol v0.7) ---------- */
+// one at a time: every button is locked until the current emote ends; walking and the camera stay free
+const myEmote = createEmotePlayer(player);
+const emoteButtons = EMOTES.map((e, i) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.innerHTML = `<kbd>${i + 1}</kbd>`;
+  b.append(e.label);
+  const fill = document.createElement('span');
+  fill.className = 'fill';
+  b.appendChild(fill);
+  b.onclick = () => playEmote(e.id);
+  $('#emoteBar').appendChild(b);
+  return { id: e.id, b, fill };
+});
+function playEmote(id) {
+  if (state !== 'hall' || myEmote.playing) return;
+  if (!myEmote.start(id)) return;
+  rooms.sendEmote(id);
+  // someone who has not moved yet is invisible to others; show up first so the emote is seen
+  moveSender.now(player.position, player.rotation.y);
+}
+let shownEmote = null;
+function updateEmoteBar() {
+  const playing = myEmote.playing;
+  if (playing !== shownEmote) {
+    shownEmote = playing;
+    for (const { id, b, fill } of emoteButtons) {
+      b.disabled = !!playing;
+      b.classList.toggle('active', id === playing);
+      if (!playing) fill.style.width = '0';
+    }
+  }
+  if (playing) {
+    const cur = emoteButtons.find((x) => x.id === playing);
+    cur.fill.style.width = `${Math.round(myEmote.progress * 100)}%`;
+  }
+}
+
 /* ---------- hide or report someone's drawn face (protocol v0.6) ---------- */
 const playerMenu = $('#playerMenu');
 let menuTarget = null;
@@ -268,6 +308,7 @@ let shownPeople = -1;
 const keys = createKeyboard((k) => {
   if (!namePanel.hidden || faceEditor.isOpen()) return;   // a dialog is open: buttons inside it may hold focus
   if (k === 'e' && state === 'hall') tryEnter();
+  if (state === 'hall' && ['1', '2', '3', '4'].includes(k)) playEmote(EMOTES[Number(k) - 1].id);
   if (k === 'v' && state === 'hall') toggleView();
   if (k === 'escape' && state === 'room') leaveRoom();
 });
@@ -341,6 +382,7 @@ function abortEntering(message) {
 
 function enterRoom() {
   state = 'room';
+  myEmote.stop();   // nobody sees me inside; the gesture ends at the door
   ambient.setPlace('room');
   $('#hallUi').hidden = true;
   $('#roomUi').hidden = false;
@@ -587,6 +629,7 @@ function updatePlayer(dt) {
   u.arms.R.rotation.x = -swing * 0.8; u.arms.L.rotation.x = swing * 0.8;
   player.position.y = moving ? Math.abs(Math.sin(tq)) * 0.06 : 0;
   player.rotation.z = moving ? Math.sin(tq) * 0.05 : 0;
+  myEmote.update(dt, moving);
   return moving;
 }
 
@@ -643,6 +686,7 @@ function animate() {
   if (state === 'hall' || state === 'intro') {
     const moving = updatePlayer(dt);
     if (state === 'hall') moveSender.update(player.position, player.rotation.y, moving);
+    updateEmoteBar();
     updateSurroundings(dt);
     const people = others.count() + 1;
     if (people !== shownPeople) { shownPeople = people; $('#people').textContent = people; }

@@ -3,12 +3,12 @@ import { storedName } from './names.js';
 import { storedFace, normalizeFace } from './faces.js';
 
 /**
- * RoomClient over WebSocket. Follows docs/realtime-protocol.md v0.6.
+ * RoomClient over WebSocket. Follows docs/realtime-protocol.md v0.7.
  *
  * Handles: hello/welcome, ping every heartbeatMs, claim/release with reqId,
  * booth events ordered by seq (resync on a gap), server-forced releases,
  * reconnect with exponential backoff and jitter, positions (move, presence), names (rename)
- * and hand-drawn faces (setFace, report, faceRemoved).
+ * hand-drawn faces (setFace, report, faceRemoved) and emotes (emote).
  */
 const PROTOCOL_VERSION = 1;
 const CLAIM_TIMEOUT_MS = 5_000;
@@ -96,7 +96,7 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         break;
       }
       case 'presence':
-        if (ready) emitPresence({ kind: 'batch', moved: msg.moved || [], left: msg.left || [], named: msg.named || [], faced: msg.faced || [] });
+        if (ready) emitPresence({ kind: 'batch', moved: msg.moved || [], left: msg.left || [], named: msg.named || [], faced: msg.faced || [], emoted: msg.emoted || [] });
         break;
       case 'snapshot':
         applySnapshot(msg.booths, msg.seq);
@@ -218,6 +218,11 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
           if (p) { pendingFaces.delete(reqId); resolve({ ok: false, reason: 'TIMEOUT' }); }
         }, FACE_TIMEOUT_MS);
       });
+    },
+
+    /** Tell the channel I started an emote (protocol section 16). No answer comes back. */
+    sendEmote(id) {
+      if (ready) send({ type: 'emote', id });
     },
 
     /** Report the drawing another player (pid) wears. */

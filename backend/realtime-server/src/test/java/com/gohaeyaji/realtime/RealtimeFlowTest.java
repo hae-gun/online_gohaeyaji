@@ -441,6 +441,35 @@ class RealtimeFlowTest {
         }
     }
 
+    // ------------------------------------------------------------ emotes (protocol v0.7)
+
+    @Test
+    void emotesReachTheChannelOneAtATime() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            b.hello();
+            a.send("{\"type\":\"emote\",\"id\":\"hooray\"}");
+            b.await("presence", m -> "hooray".equals(pairValue(m.path("emoted"), pidA)));
+            a.send("{\"type\":\"emote\",\"id\":\"pray\"}");      // hooray is still playing: dropped
+            a.send("{\"type\":\"emote\",\"id\":\"dance\"}");     // not an emote: dropped
+            Thread.sleep(600);
+            assertThat(b.all("presence").stream().filter(m -> pairValue(m.path("emoted"), pidA) != null).count()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void noEmotesFromInsideABooth() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            b.hello();
+            a.send("{\"type\":\"claim\",\"reqId\":\"r1\",\"boothId\":2}");
+            a.await("claimResult");
+            a.send("{\"type\":\"emote\",\"id\":\"pray\"}");
+            Thread.sleep(500);
+            assertThat(b.all("presence").stream().filter(m -> pairValue(m.path("emoted"), pidA) != null).count()).isZero();
+        }
+    }
+
     private static String pairValue(JsonNode pairs, int pid) {
         for (JsonNode pair : pairs) {
             if (pair.get(0).asInt() == pid) {

@@ -136,3 +136,11 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .playerMenu{position:fixed;z-index:25;display:flex;flex-direction:column;gap:6px;min-width:170px;padding:12px;background:#1d1823;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
 .playerMenu b{font-size:14px;color:var(--gold)}
 .playerMenu button{text-align:left}
+
+/* emotes (protocol v0.7): a translucent row above the movement hint */
+.emoteBar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.emoteBar button{position:relative;overflow:hidden;min-width:74px;padding:8px 14px;background:rgba(29,24,35,.55);border-color:rgba(212,173,85,.35);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.emoteBar button kbd{font-family:var(--font-body);font-size:10.5px;color:var(--muted);margin-right:6px}
+.emoteBar button .fill{position:absolute;left:0;bottom:0;height:3px;width:0;background:var(--gold)}
+.emoteBar button:disabled{opacity:.45;cursor:default}
+.emoteBar button.active{opacity:1;border-color:var(--gold);color:var(--gold)}

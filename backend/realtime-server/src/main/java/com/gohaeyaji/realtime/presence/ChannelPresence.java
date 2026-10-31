@@ -22,6 +22,7 @@ final class ChannelPresence {
     private final Set<Integer> renamed = new LinkedHashSet<>();
     private final Map<Integer, String> faces = new HashMap<>();
     private final Set<Integer> refaced = new LinkedHashSet<>();
+    private final List<List<Object>> emoted = new ArrayList<>();
 
     synchronized void move(int pid, double x, double z, double ry) {
         Player p = players.computeIfAbsent(pid, Player::new);
@@ -54,6 +55,10 @@ final class ChannelPresence {
         refaced.add(pid);
     }
 
+    synchronized void emote(int pid, String id) {
+        emoted.add(List.of(pid, id));
+    }
+
     synchronized void remove(int pid) {
         faces.remove(pid);
         refaced.remove(pid);
@@ -67,7 +72,7 @@ final class ChannelPresence {
 
     /** Changes since the last call, or null if nothing changed. */
     synchronized Batch drain() {
-        if (dirty.isEmpty() && left.isEmpty() && renamed.isEmpty() && refaced.isEmpty()) {
+        if (dirty.isEmpty() && left.isEmpty() && renamed.isEmpty() && refaced.isEmpty() && emoted.isEmpty()) {
             return null;
         }
         List<List<Number>> moved = new ArrayList<>(dirty.size());
@@ -86,7 +91,8 @@ final class ChannelPresence {
             // "" tells clients to go back to the default face (a List cannot hold null)
             faced.add(List.of(pid, faces.getOrDefault(pid, "")));
         }
-        Batch batch = new Batch(moved, new ArrayList<>(left), named, faced);
+        Batch batch = new Batch(moved, new ArrayList<>(left), named, faced, new ArrayList<>(emoted));
+        emoted.clear();
         dirty.clear();
         left.clear();
         renamed.clear();
@@ -117,7 +123,8 @@ final class ChannelPresence {
         return all;
     }
 
-    record Batch(List<List<Number>> moved, List<Integer> left, List<List<Object>> named, List<List<Object>> faced) {
+    record Batch(List<List<Number>> moved, List<Integer> left, List<List<Object>> named, List<List<Object>> faced,
+                 List<List<Object>> emoted) {
     }
 
     private static final class Player {

@@ -61,13 +61,16 @@ public final class Messages {
      * @param left  pids that left the channel
      * @param named {@code [pid, name]} for everyone who joined or changed name since the last batch;
      *              left out when empty
+     * @param faced  {@code [pid, face]} drawn faces put on or taken off (v0.5)
+     * @param emoted {@code [pid, emote id]} gestures started since the last batch (v0.7)
      */
     public record Presence(String type, long t, List<List<Number>> moved, List<Integer> left,
                            @JsonInclude(JsonInclude.Include.NON_EMPTY) List<List<Object>> named,
-                           @JsonInclude(JsonInclude.Include.NON_EMPTY) List<List<Object>> faced) {
+                           @JsonInclude(JsonInclude.Include.NON_EMPTY) List<List<Object>> faced,
+                           @JsonInclude(JsonInclude.Include.NON_EMPTY) List<List<Object>> emoted) {
         public Presence(long t, List<List<Number>> moved, List<Integer> left,
-                        List<List<Object>> named, List<List<Object>> faced) {
-            this("presence", t, moved, left, named, faced);
+                        List<List<Object>> named, List<List<Object>> faced, List<List<Object>> emoted) {
+            this("presence", t, moved, left, named, faced, emoted);
         }
     }
 

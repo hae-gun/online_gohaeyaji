@@ -203,7 +203,22 @@ function makeKid(o) {
   face.mesh.position.set(0, -0.02, front);
   head.add(face.mesh);
 
-  g.userData = { legs, arms, head, ARM: 0.3, face };
+  // points the emotes reach for (emotes.js), in the kid's own space
+  const v = (x, y, z) => new THREE.Vector3(x, y, z);
+  const pose = {
+    shoulder: { R: v(-0.3, 0.74, 0), L: v(0.3, 0.74, 0) },
+    headTop: 1.16 + r,
+    forehead: v(0, 1.32, front + 0.06),
+    chest: v(0, 0.6, 0.4),
+    lShoulder: v(0.2, 0.8, 0.36),
+    rShoulder: v(-0.2, 0.8, 0.36),
+    pray: { R: v(-0.035, 0.66, 0.44), L: v(0.035, 0.66, 0.44) },
+    // above the big head, not beside it, or the hands vanish behind the hair
+    up: { R: v(-0.5, 1.9, 0.1), L: v(0.5, 1.9, 0.1) },
+    halfUp: { R: v(-0.62, 1.45, 0.12), L: v(0.62, 1.45, 0.12) },
+    limp: { R: v(-0.26, 0.42, 0.22), L: v(0.26, 0.42, 0.22) },
+  };
+  g.userData = { legs, arms, head, ARM: 0.3, face, pose };
   return g;
 }
 

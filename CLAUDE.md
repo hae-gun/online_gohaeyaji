@@ -31,6 +31,7 @@
 - 다른 유저 표시: 색은 pid로, 이름은 무작위 세례명(직접 변경 가능)이 3m 안에 있을 때만 머리 위에. 데모용 NPC는 넣지 않음
 - 이름 규칙(규약 v0.4, 14장): 2~10자 한글 영문 숫자, 사칭(신부, 주교, 운영 등) 금지, 금지어는 서버가 비공개 `blocked.json`을 읽어 검사, 변경은 10초에 1회, 브라우저 localStorage `gohaeyaji-name`에 기억
 - 그린 얼굴(규약 v0.6, 15장): 상단 "얼굴 그리기"에서 32x32 칸에 점을 찍어 눈코입을 그림(가는 붓 1칸, 굵은 붓 2x2). 색은 지우개, 검정, 빨강, 흰색, 분홍뿐이고 머리 앞면 얼굴만 그릴 수 있음. 예전 16x16 그림은 2배로 늘려 자동 변환. 다른 사람에게도 보이고, 보는 사람이 전체를 끄거나 이름표(✎)를 눌러 그림별로 숨기거나 신고할 수 있음. 숨긴 그림은 내용 해시로 브라우저에 기억. 서로 다른 3세션이 같은 그림을 신고하면 24시간 금지, 그 그림을 쓰던 사람은 기본 얼굴로 돌아가고 10분 동안 못 바꿈(`FaceReports`, `report_face.lua`). 지금 얼굴과 예전 그림 최대 12개를 브라우저에 보관. 코드: `net/faces.js`, `ui/face-editor.js`, `pixel-face.js`의 `setCustom`
+- 동작(규약 v0.7, 16장): 이동 안내 위 반투명 버튼 네 개 또는 숫자키 1~4로 두 손 모아 기도, 성호경, 무릎 꿇고 만세, 꾸벅꾸벅 졸기(Claude 추천, 미사 중 조는 모습). 한 번에 하나만(끝날 때까지 버튼 잠김, 서버도 같은 규칙), 동작 중 걷기와 시점 변경 가능(팔과 머리는 동작, 다리는 걷기). 다른 사람에게는 presence.emoted로 보임. 코드: `world/emotes.js`(목표점은 `figure.js` 유저 `pose`), 서버 `presence/Emotes.java`(시간은 프론트와 같게 유지)
 
 ## 구조
 
@@ -50,7 +51,7 @@ backend/
   docker-compose.yml   redis + realtime-server
   realtime-server/     Spring Boot 3.3.5, Java 21, 순수 WebSocket(/ws), Redis Lua
   analyzer/            Python 형태소 분석 서비스 (미구현, README만)
-docs/realtime-protocol.md   프론트와 서버의 메시지 규약 (v0.6), 정책 결정 기록
+docs/realtime-protocol.md   프론트와 서버의 메시지 규약 (v0.7), 정책 결정 기록
 .github/workflows/deploy-pages.yml   frontend 빌드 후 Pages 배포, 시크릿으로 비공개 데이터 주입
 ```
 
@@ -69,7 +70,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 ./gradlew test                                       # Testcontainers로 Redis 띄움 (Docker 필요)
 ```
 
-## 규약 핵심 (docs/realtime-protocol.md v0.6)
+## 규약 핵심 (docs/realtime-protocol.md v0.7)
 
 - 메시지: hello/welcome, ping/pong(10초), claim/claimResult, release/released, activity, booth(변경분, seq), snapshot, resync, error. 줄서기 메시지(queueJoin, queueCall 등)는 정의만 됨
 - 채널: 고해소 20칸, 정원 60명, 48명(80%) 차면 다음 채널 생성, 앞 채널부터 채움, 남은 12자리는 재접속용
@@ -109,7 +110,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 
 ## 다음 할 일
 
-1. 맥에서 `./gradlew test`(테스트 25개) 후 `bootRun` + `npm run dev:server` 창 두 개로 서로 보이는지, 이름표가 뜨는지 확인
+1. 맥에서 `./gradlew test`(테스트 27개) 후 `bootRun` + `npm run dev:server` 창 두 개로 서로 보이는지, 이름표가 뜨는지 확인
 2. 줄서기, 재접속 복구, 레이트리밋
 3. 호스팅 결정 후 배포, 부하테스트
 

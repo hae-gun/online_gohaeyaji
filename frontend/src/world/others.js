@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeFigure, NAME_HEIGHT } from './figure.js';
 import { hiddenFaces } from '../net/faces.js';
+import { createEmotePlayer } from './emotes.js';
 
 /**
  * Other players in my channel (protocol v0.3). No names, only a shirt color picked from the pid,
@@ -71,7 +72,7 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
         if (face) onTagClick({ pid, name: names.get(pid) || '', face, rect: tag.getBoundingClientRect() });
       });
       tagLayer.appendChild(tag);
-      p = { fig, tx: x, tz: z, try: ry, inBooth: false, phase: Math.random() * 6, tag };
+      p = { fig, tx: x, tz: z, try: ry, inBooth: false, phase: Math.random() * 6, tag, emote: createEmotePlayer(fig) };
       players.set(pid, p);
       applyFace(pid);
     }
@@ -93,6 +94,7 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
     if (!p) return;
     p.inBooth = inBooth;
     p.fig.visible = !inBooth;
+    if (inBooth) p.emote.stop();
   }
 
   return {
@@ -114,6 +116,10 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
       } else if (e.kind === 'batch') {
         for (const [pid, name] of e.named || []) setName(pid, name);
         for (const [pid, face] of e.faced || []) setFace(pid, face);
+        for (const [pid, id] of e.emoted || []) {
+          const p = players.get(pid);
+          if (p && pid !== me) { p.emote.stop(); p.emote.start(id); }
+        }
         for (const [pid, x, z, ry] of e.moved) {
           if (pid === me) continue;
           const p = ensure(pid, x, z, ry);
@@ -200,6 +206,7 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
         u.legs[0].rotation.x = swing; u.legs[1].rotation.x = -swing;
         u.arms.R.rotation.x = -swing * 0.8; u.arms.L.rotation.x = swing * 0.8;
         f.position.y = moving ? Math.abs(Math.sin(tq)) * 0.06 : 0;
+        p.emote.update(dt, moving);
       }
     },
   };

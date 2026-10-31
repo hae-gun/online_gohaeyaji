@@ -7,6 +7,7 @@ const CODE = {
   KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', KeyE: 'e', KeyV: 'v',
   ArrowUp: 'arrowup', ArrowDown: 'arrowdown', ArrowLeft: 'arrowleft', ArrowRight: 'arrowright',
   Space: ' ', Escape: 'escape',
+  Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4',
 };
 const keyOf = (e) => CODE[e.code] || (e.key || '').toLowerCase();
 const SCROLL_KEYS = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '];

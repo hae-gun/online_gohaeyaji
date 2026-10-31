@@ -8,6 +8,7 @@ import com.gohaeyaji.realtime.config.RealtimeProperties;
 import com.gohaeyaji.realtime.face.FaceReports;
 import com.gohaeyaji.realtime.face.FaceRules;
 import com.gohaeyaji.realtime.name.NameService;
+import com.gohaeyaji.realtime.presence.Emotes;
 import com.gohaeyaji.realtime.presence.PresenceService;
 import com.gohaeyaji.realtime.protocol.CloseCodes;
 import com.gohaeyaji.realtime.protocol.Messages;
@@ -44,9 +45,9 @@ import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorato
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 /**
- * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.6:
+ * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.7:
  * hello/welcome, ping/pong, claim/release, activity, resync, move (positions), rename (names),
- * setFace and report (hand-drawn faces).
+ * setFace and report (hand-drawn faces), emote (gestures).
  *
  * Not yet: queue (queueJoin/queueLeave), resume after reconnect, rate limits, confess.
  */
@@ -71,6 +72,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     private final Counter claimOk;
     private final Counter claimTaken;
     private final Counter movesDropped;
+    private final Counter emotesDropped;
 
     public RealtimeWebSocketHandler(RealtimeProperties props, SessionRegistry registry, ChannelService channels,
                                     BoothService booths, PresenceService presence, NameService names,
@@ -92,6 +94,9 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         this.claimTaken = Counter.builder("gohaeyaji.claims").tag("result", "occupied").register(meters);
         this.movesDropped = Counter.builder("gohaeyaji.moves.dropped")
                 .description("move messages dropped for arriving faster than the allowed rate")
+                .register(meters);
+        this.emotesDropped = Counter.builder("gohaeyaji.emotes.dropped")
+                .description("emotes dropped: unknown, inside a booth, or while another was still playing")
                 .register(meters);
     }
 
@@ -154,6 +159,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             case "rename" -> onRename(session, msg, reqId);
             case "setFace" -> onSetFace(session, msg, reqId);
             case "report" -> onReport(session, msg, reqId);
+            case "emote" -> onEmote(session, msg);
             case "activity" -> session.touchActivity(now());
             case "resync" -> sendSnapshot(session);
             case "queueJoin", "queueLeave", "confess" ->
@@ -316,6 +322,18 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
                 sender.send(s, new FaceRemoved(Messages.REMOVED_REPORTED, props.faceBlockMs()));
             }
         }
+    }
+
+    /** No answer: the sender already plays it; anything not allowed is dropped and counted. */
+    private void onEmote(ClientSession session, JsonNode msg) {
+        String id = msg.path("id").asText("");
+        Long duration = Emotes.DURATION_MS.get(id);
+        if (duration == null || session.boothId() != null
+                || !session.acceptEmote(now(), duration, Emotes.SLACK_MS)) {
+            emotesDropped.increment();
+            return;
+        }
+        presence.emote(session.channelNo(), session.pid(), id);
     }
 
     private void onPing(ClientSession session, JsonNode msg) {
