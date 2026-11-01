@@ -97,7 +97,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 | 6 | 서버 여러 대, Redis Pub/Sub | |
 | 7 | 답변 엔진 서버 이전 | 출시 전 필수 (지금은 배포 사이트에서 /data/*.json 열람 가능) |
 
-서버 미구현: 줄서기, 재접속 복구(resumeToken), 레이트리밋, 빈 채널 정리, 서버 비정상 종료 시 인원 수 보정, analyzer 연동.
+서버 미구현: 줄서기, 재접속 복구(resumeToken), 레이트리밋, 빈 채널 정리, analyzer 연동. (인원 수는 서버별로 세고 5초 하트비트로 실제 접속 수에 맞추며, 15초 넘게 소식 없는 서버 몫은 빠짐. 2026-11-01)
 
 ## 알아둘 함정
 
@@ -112,7 +112,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 
 ## 다음 할 일
 
-1. 맥에서 `./gradlew test`(테스트 29개) 후 `bootRun` + `npm run dev:server` 창 두 개로 서로 보이는지, 이름표가 뜨는지 확인
+1. 맥에서 `./gradlew test`(테스트 30개) 후 `bootRun` + `npm run dev:server` 창 두 개로 서로 보이는지, 이름표가 뜨는지 확인
 2. 줄서기, 재접속 복구, 레이트리밋
 3. 호스팅 결정 후 배포, 부하테스트
 

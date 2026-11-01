@@ -430,11 +430,13 @@
 | `gy:ch:{no}:qseq` | 정수 | 줄 순번 발급 |
 | `gy:ch:{no}:seq` | 정수 | 채널 이벤트 순번 |
 | `gy:ch:{no}:pid` | 정수 | 채널 안 pid 발급 (서버 여러 대에서도 겹치지 않게) |
-| `gy:ch:{no}:members` | 접속자 수 | 채널 배정 |
+| `gy:ch:{no}:members` | HASH: 서버 ID -> 그 서버의 접속자 수 | 채널 배정, 관리자 페이지 인원 |
+| `gy:servers` | ZSET (score = 마지막 하트비트 시각) | 살아 있는 서버 목록 |
 | `gy:channels` | ZSET (score = 채널 번호) | 살아 있는 채널 목록 |
 | `gy:session:{sessionId}` | 채널, 방, 순번, resumeToken, TTL 15초 | 재접속 복구 |
 | Pub/Sub `gy:ch:{no}:events` | booth, queue 이벤트 | 서버 여러 대일 때 전파 (6단계) |
 
+- 인원 수는 서버별로 셈. 서버는 시작할 때 무작위 ID를 받고 5초마다 하트비트(`server_heartbeat.lua`)로 자기 몫을 실제 접속 수로 덮어씀. 15초 넘게 하트비트가 없는 서버의 몫은 합계에서 빠지고 다음 하트비트 때 지워짐. 재시작한 서버는 새 ID라 예전 몫을 이어받지 않음. 정상 종료 때는 바로 자기 몫을 지움
 - 잠금 연장, 해제, "해제 후 다음 사람 예약"은 모두 값이 내 것일 때만 수행하는 Lua 스크립트로 처리
 - 고해 원문은 Redis, DB, 로그 어디에도 남기지 않음
 

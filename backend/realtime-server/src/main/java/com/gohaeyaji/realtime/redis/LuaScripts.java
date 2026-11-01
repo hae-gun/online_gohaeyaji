@@ -18,6 +18,7 @@ public class LuaScripts {
     public final RedisScript<Long> releaseBooth = load("release_booth");
     public final RedisScript<Long> notifyIfFree = load("notify_if_free");
     public final RedisScript<Long> reportFace = load("report_face");
+    public final RedisScript<Long> serverHeartbeat = load("server_heartbeat");
 
     private static RedisScript<Long> load(String name) {
         return RedisScript.of(new ClassPathResource("redis/" + name + ".lua"), Long.class);

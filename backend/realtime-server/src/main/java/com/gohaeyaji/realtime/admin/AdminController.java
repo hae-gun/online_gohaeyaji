@@ -1,6 +1,7 @@
 package com.gohaeyaji.realtime.admin;
 
 import com.gohaeyaji.realtime.booth.BoothService;
+import com.gohaeyaji.realtime.channel.ChannelService;
 import com.gohaeyaji.realtime.face.FaceModeration;
 import com.gohaeyaji.realtime.face.FaceReports;
 import com.gohaeyaji.realtime.redis.RedisKeys;
@@ -34,15 +35,17 @@ public class AdminController {
     private static final Pattern HASH = Pattern.compile("^[0-9a-f]{32}$");
 
     private final SessionRegistry registry;
+    private final ChannelService channelService;
     private final BoothService booths;
     private final FaceReports reports;
     private final FaceModeration moderation;
     private final StringRedisTemplate redis;
     private final MeterRegistry meters;
 
-    public AdminController(SessionRegistry registry, BoothService booths, FaceReports reports,
+    public AdminController(SessionRegistry registry, ChannelService channelService, BoothService booths, FaceReports reports,
                            FaceModeration moderation, StringRedisTemplate redis, MeterRegistry meters) {
         this.registry = registry;
+        this.channelService = channelService;
         this.booths = booths;
         this.reports = reports;
         this.moderation = moderation;
@@ -65,17 +68,18 @@ public class AdminController {
         out.put("heapUsedMb", (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024));
         out.put("heapMaxMb", rt.maxMemory() / (1024 * 1024));
         out.put("sessionsHere", registry.size());
+        out.put("serverId", channelService.serverId());
+        out.put("serversAlive", channelService.aliveServers().size());
 
         List<Map<String, Object>> channels = new ArrayList<>();
         Set<String> nos = redis.opsForZSet().range(RedisKeys.CHANNELS, 0, -1);
         if (nos != null) {
             for (String no : nos) {
                 int n = Integer.parseInt(no);
-                String members = redis.opsForValue().get(RedisKeys.members(n));
                 BoothService.Snapshot snap = booths.snapshot(n);
                 Map<String, Object> ch = new LinkedHashMap<>();
                 ch.put("channelNo", n);
-                ch.put("members", members == null ? 0 : Long.parseLong(members));
+                ch.put("members", channelService.members(n));
                 ch.put("connectedHere", registry.channelMembers(n).size());
                 ch.put("boothsOccupied", snap.occupied().size());
                 channels.add(ch);

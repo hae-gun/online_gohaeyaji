@@ -538,6 +538,20 @@ class RealtimeFlowTest {
         }
     }
 
+    @Test
+    void countsOfADeadServerDoNotFillChannels() throws Exception {
+        // a server that crashed with 48 people in channel 1 and never came back
+        redisTemplate.opsForZSet().add("gy:channels", "1", 1);
+        redisTemplate.opsForHash().put("gy:ch:1:members", "srv-dead", "48");
+        redisTemplate.opsForZSet().add("gy:servers", "srv-dead", System.currentTimeMillis() - 60_000);
+        try (TestClient c = TestClient.connect(port)) {
+            assertThat(c.hello().path("channelNo").asInt()).isEqualTo(1);   // not pushed to channel 2
+            JsonNode overview = new com.fasterxml.jackson.databind.ObjectMapper().readTree(
+                    admin("GET", "/admin/api/overview", "test-secret", false).body());
+            assertThat(overview.path("channels").get(0).path("members").asLong()).isEqualTo(1);
+        }
+    }
+
     private static String pairValue(JsonNode pairs, int pid) {
         for (JsonNode pair : pairs) {
             if (pair.get(0).asInt() == pid) {

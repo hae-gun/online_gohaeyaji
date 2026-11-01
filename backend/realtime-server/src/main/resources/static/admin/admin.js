@@ -50,8 +50,9 @@
     const o = await api('/overview');
     const stats = [
       [o.sessionsHere, '이 서버 접속'],
-      [o.channels.reduce((s, c) => s + c.members, 0), '전체 인원(채널 합계)'],
+      [o.channels.reduce((s, c) => s + c.members, 0), '전체 인원(살아 있는 서버 합계)'],
       [o.channels.length, '열린 채널'],
+      [o.serversAlive, '살아 있는 서버'],
       [o.channels.reduce((s, c) => s + c.boothsOccupied, 0), '사용 중 고해소'],
       [Math.round(o.faceReportsTotal), '신고(서버 시작 후)'],
       [Math.round(o.faceBansTotal), '금지(서버 시작 후)'],

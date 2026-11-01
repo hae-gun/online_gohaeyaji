@@ -22,6 +22,8 @@ public record RealtimeProperties(
         long idleDangerMs,
         int maxMessageBytes,
         int maxConnectionsPerIp,
+        long serverHeartbeatMs,
+        long serverDeadMs,
         long presenceMs,
         long moveMinGapMs,
         long renameMinGapMs,

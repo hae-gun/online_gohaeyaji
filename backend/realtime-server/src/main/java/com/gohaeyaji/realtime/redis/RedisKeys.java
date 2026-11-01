@@ -5,10 +5,13 @@ public final class RedisKeys {
 
     public static final String CHANNEL_PREFIX = "gy:ch:";
     public static final String CHANNELS = "gy:channels";
+    /** Live servers: member = server id, score = last heartbeat (ms). */
+    public static final String SERVERS = "gy:servers";
 
     private RedisKeys() {
     }
 
+    /** HASH: server id -> sessions that server holds in this channel. */
     public static String members(int channelNo) {
         return CHANNEL_PREFIX + channelNo + ":members";
     }

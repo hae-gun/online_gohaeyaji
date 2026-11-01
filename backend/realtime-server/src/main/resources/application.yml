@@ -37,6 +37,8 @@ gohaeyaji:
   idle-danger-ms: 10000
   max-message-bytes: 2048         # a 32x32 face (1024 digits) still fits
   max-connections-per-ip: 20
+  server-heartbeat-ms: 5000       # each server refreshes its member counts in Redis
+  server-dead-ms: 15000           # counts of a server silent this long are dropped
   presence-ms: 200                # position batch interval (protocol section 13)
   move-min-gap-ms: 150            # drop moves faster than ~5/s (200 ms minus jitter)
   rename-min-gap-ms: 10000        # one name change per 10 s
