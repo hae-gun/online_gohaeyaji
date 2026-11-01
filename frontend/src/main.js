@@ -119,7 +119,6 @@ let walkPhase = 0;
 let walkAmp = 0;               // 0..1, eases the gait in and out
 let nearBench = null;          // plaza bench close enough to sit on
 let muted = false;
-let voiceNoticeShown = false;   // "no male voice on this device" told once
 
 /* ---------- connection status and server-side releases ---------- */
 let channelNo = 1;
@@ -586,11 +585,6 @@ function enterRoom() {
   if (legend) ambient.peal(3);
   $('#roomUi').classList.toggle('legend', legend);
   voice.setTone(priest && priest.id);
-  // once per visit: say why the priest is silent (only male voices are used, see voice.js)
-  if (!voice.available && !muted && !voiceNoticeShown) {
-    voiceNoticeShown = true;
-    setTimeout(() => toast('이 브라우저에는 남성 한국어 음성이 없어 신부님 말씀은 글로만 나옵니다. Windows의 Edge에서는 목소리로 들을 수 있습니다'), 1200);
-  }
   confessional.setPriest(priest ? priest.id : 'jin');
   $('#roomName').textContent = `${current.id + 1}번 고해소, ${priest ? priest.name : '신부님'}`;
   $('#bubble').hidden = true;

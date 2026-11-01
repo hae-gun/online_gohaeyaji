@@ -1,27 +1,31 @@
 /**
- * Priest's voice: the browser's speech synthesis, male Korean voices only.
+ * Priest's voice: the browser's speech synthesis.
  *
- * The priests are men, so a female voice is never used. Browsers do not say which voice is
- * male, so only voices known to be male are picked, by name (MALE_VOICES). Where none is
- * installed (Chrome and Safari on most Macs and phones only have female Korean voices), the
- * priest does not speak and his words appear as text only.
+ * Browsers do not say which voice is male or female, so male Korean voices known by name
+ * (MALE_VOICES, Microsoft voices in Edge on Windows) are used when there is one. Chrome and
+ * Safari only have female Korean voices ("Google 한국의", Yuna, Heami); there the priests speak
+ * with that voice, pitched down. Chrome is the main target, so its Google voice comes first
+ * among the others.
  *
  * Each priest has his own voice: a different male voice when the device has several, and
  * always his own speed and pitch (jin calm, eom low and quick, yu bright, baek slow and deep).
  *
  * TODO: pre-generated audio files (one per sentence and priest, male voices from a cloud TTS),
- * so everyone hears the priests, not only people whose device has a male Korean voice.
+ * so everyone hears the same male priests.
  */
 
 /** Known male Korean voices, by name. Microsoft (Edge on Windows): InJoon, Hyunsu, BongJin, GookMin. */
 const MALE_VOICES = ['InJoon', 'Hyunsu', 'BongJin', 'GookMin'];
 
-/** Per priest: which male voice he prefers when several exist, and his own speed and pitch. */
+/**
+ * Per priest: which male voice he prefers when several exist, his speed, and his pitch with a
+ * male voice (pitch) or with a female voice (lowPitch, pulled down to sound older and lower).
+ */
 const PRIESTS = {
-  jin: { prefer: ['InJoon', 'Hyunsu', 'GookMin', 'BongJin'], rate: 0.9, pitch: 0.95 },
-  eom: { prefer: ['BongJin', 'GookMin', 'InJoon', 'Hyunsu'], rate: 1.05, pitch: 0.78 },
-  yu: { prefer: ['Hyunsu', 'InJoon', 'BongJin', 'GookMin'], rate: 1.0, pitch: 1.15 },
-  baek: { prefer: ['GookMin', 'BongJin', 'InJoon', 'Hyunsu'], rate: 0.8, pitch: 0.7 },   // the legendary priest
+  jin: { prefer: ['InJoon', 'Hyunsu', 'GookMin', 'BongJin'], rate: 0.9, pitch: 0.95, lowPitch: 0.6 },
+  eom: { prefer: ['BongJin', 'GookMin', 'InJoon', 'Hyunsu'], rate: 1.05, pitch: 0.78, lowPitch: 0.4 },
+  yu: { prefer: ['Hyunsu', 'InJoon', 'BongJin', 'GookMin'], rate: 1.0, pitch: 1.15, lowPitch: 0.85 },
+  baek: { prefer: ['GookMin', 'BongJin', 'InJoon', 'Hyunsu'], rate: 0.8, pitch: 0.7, lowPitch: 0.35 },   // the legendary priest
 };
 
 const isKorean = (v) => v && v.lang && v.lang.replace('_', '-').toLowerCase().startsWith('ko');
@@ -33,43 +37,43 @@ export function createVoice() {
   const supported = typeof window !== 'undefined' && 'speechSynthesis' in window;
   // the voice list often arrives late (Chrome fills it after the first call)
   let males = [];   // [{ name: 'InJoon', voice }]
+  let other = null; // the best non-male Korean voice: Chrome's Google voice first
   const refresh = () => {
     try {
-      males = speechSynthesis.getVoices().filter(isKorean)
-        .map((voice) => ({ name: maleName(voice), voice }))
-        .filter((m) => m.name);
+      const ko = speechSynthesis.getVoices().filter(isKorean);
+      males = ko.map((voice) => ({ name: maleName(voice), voice })).filter((m) => m.name);
+      other = ko.find((v) => /google/i.test(v.name)) || ko.find((v) => !maleName(v)) || null;
     } catch (_) { /* ignore */ }
   };
   if (supported) {
     refresh();
     try { speechSynthesis.addEventListener('voiceschanged', refresh); } catch (_) { /* old browsers */ }
   }
-  /** The male voice for the current priest, or null if the device has none. */
+  /** { voice, male }: the current priest's male voice, else the best other Korean voice. */
   const pick = () => {
-    if (!males.length) refresh();
+    if (!males.length && !other) refresh();
     for (const n of priest.prefer) {
       const m = males.find((x) => x.name === n);
-      if (m) return m.voice;
+      if (m) return { voice: m.voice, male: true };
     }
-    return null;
+    return { voice: other, male: false };
   };
 
   return {
     /** queue=true lets the previous phrase finish instead of cutting it off (used for the blessing words). */
     speak(text, { queue = false } = {}) {
       if (muted || !supported) return;
-      const voice = pick();
-      if (!voice) return;   // no male Korean voice here: text only, never a female voice
+      const { voice, male } = pick();
       try {
         if (!queue) speechSynthesis.cancel();
         // Chrome can leave speech paused after the tab was in the background; nothing is heard
         // until resume() is called
         speechSynthesis.resume();
         const u = new SpeechSynthesisUtterance(text);
-        u.voice = voice;
-        u.lang = voice.lang;
+        u.lang = 'ko-KR';
+        if (voice) { u.voice = voice; u.lang = voice.lang; }
         u.rate = priest.rate;
-        u.pitch = priest.pitch;
+        u.pitch = male ? priest.pitch : priest.lowPitch;
         speechSynthesis.speak(u);
       } catch (_) { /* speech is optional */ }
     },
@@ -85,9 +89,6 @@ export function createVoice() {
     /** Which priest is speaking ('jin' | 'eom' | 'yu' | 'baek'). */
     setTone(id) { priest = PRIESTS[id] || PRIESTS.jin; },
     setMuted(m) { muted = m; if (m) this.stop(); },
-    /** Whether the priest is heard now: not muted, and a male Korean voice exists here. */
-    get speaking() { return !muted && supported && !!pick(); },
-    /** Whether this device has any male Korean voice at all. */
-    get available() { return supported && !!pick(); },
+    get speaking() { return !muted && supported; },
   };
 }
