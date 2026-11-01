@@ -105,7 +105,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 - 답변 개선함(v0.11): 답 아래 "답이 엉뚱해요" -> 동의 창 -> `feedback` -> Redis 30일(이름, IP 없음, 연락처 가림) -> 관리자 페이지에서 분류하고 "AI에 넘길 내용 만들기". 고해는 그 외에는 저장하지 않음
 - 답변 데이터 하루 한 번 반영(방식 A, GitHub Secrets): 관리자 페이지 "AI에 넘길 내용 만들기" -> AI 답을 patch.json으로 저장 -> `node scripts/apply-answer-patch.mjs patch.json --dry`로 확인 -> 같은 명령에서 `--dry`를 빼고 적용(이전 파일은 answers.vN.backup.json, version 1 증가) -> `scripts/set-data-secrets.sh answers --deploy`. Secret은 48KB 한도라 gzip+base64를 45,000자씩 `ANSWERS_JSON_GZ`, `_2` ~ `_6`으로 나눠 넣고 워크플로가 이어 붙임(지금 약 28,000자, 여유 약 10배). 반영까지 배포 몇 분 + Pages 캐시 최대 10분
 - 채널(v0.10): 자동 배정은 낮은 번호부터 80%까지, 모두 차면 새 채널. 빈 채널(1채널 제외)은 5분 뒤 닫고 번호 재사용. 사람이 직접 열린 채널로 옮길 수 있음(정원 60까지). 채널은 논리적인 방이고 서버 대수와는 별개
-- 얼굴 그리기에 직접 고르는 색 한 칸(숫자 5, 코드 뒤 `:rrggbb`)
+- 얼굴 그리기에 직접 고르는 색 최대 8가지(격자 글자 5~9, a~c, 코드 뒤 `:rrggbb,...`). 안 쓴 색은 빼고 번호를 다시 매겨 한 그림은 한 코드(브라우저 joinFace와 서버 FaceRules.normalize가 같은 규칙)
 - 신부님 목소리(`audio/voice.js`): 브라우저 TTS. 남성 한국어 음성(InJoon, Hyunsu, BongJin, GookMin, 사실상 Windows Edge)이 있으면 그것, 없으면 크롬의 "Google 한국의"를 우선으로 한 여성 음성을 높이를 낮춰 씀. 신부님마다 속도와 높이가 다름. 모두에게 같은 남성 목소리를 들려주려면 클라우드 TTS로 미리 만든 음성 파일이 필요
 
 ## 알아둘 함정

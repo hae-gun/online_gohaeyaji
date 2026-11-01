@@ -2,7 +2,7 @@
 'use strict';
 (() => {
   const $ = (s) => document.querySelector(s);
-  // same colours as frontend/src/net/faces.js: 0 empty, 1 black, 2 red, 3 white, 4 pink, 5 picked (":rrggbb" after the grid)
+  // same colours as frontend/src/net/faces.js: 0 empty, 1 black, 2 red, 3 white, 4 pink, 5-9 a-c picked
   const PALETTE = [null, '#151010', '#a3231b', '#ffffff', '#f07a8a'];
   const SKIN = '#efc39b';
   const FILTERS = [
@@ -93,10 +93,11 @@
     cv.width = cv.height = 128;
     const c = cv.getContext('2d');
     c.fillStyle = SKIN; c.beginPath(); c.arc(64, 64, 63, 0, Math.PI * 2); c.fill();
-    const picked = face.length === 1031 ? `#${face.slice(1025)}` : null;
+    // picked colours: 5 6 7 8 9 a b c, listed after the grid as ":rrggbb,rrggbb,..."
+    const picked = face.length > 1024 ? face.slice(1025).split(',').map((c) => `#${c}`) : [];
     for (let i = 0; i < 1024; i++) {
-      const d = face.charCodeAt(i) - 48;
-      const col = d === 5 ? picked : PALETTE[d];
+      const slot = '56789abc'.indexOf(face[i]);
+      const col = slot >= 0 ? picked[slot] : PALETTE[face.charCodeAt(i) - 48];
       if (!col) continue;
       c.fillStyle = col;
       c.fillRect((i % 32) * 4, Math.floor(i / 32) * 4, 4, 4);

@@ -480,6 +480,13 @@ class RealtimeFlowTest {
             a.send("{\"type\":\"setFace\",\"reqId\":\"c2\",\"face\":\"" + picked + ":3A7BFF\"}");
             assertThat(a.await("faceResult", m -> "c2".equals(m.path("reqId").asText())).path("ok").asBoolean()).isTrue();
             b.await("presence", m -> (picked + ":3a7bff").equals(pairValue(m.path("faced"), pidA)));   // stored in lower case
+            // several picked colours (v0.12): slots the drawing does not use are dropped, the rest renumbered
+            Thread.sleep(5_100);                                                     // one face change per 5 s
+            String many = SMILE.replace('2', '7').replace('1', 'a');
+            a.send("{\"type\":\"setFace\",\"reqId\":\"c3\",\"face\":\"" + many + ":111111,222222,333333,444444,555555,666666\"}");
+            assertThat(a.await("faceResult", m -> "c3".equals(m.path("reqId").asText())).path("ok").asBoolean()).isTrue();
+            String canonical = SMILE.replace('2', '5').replace('1', '6') + ":333333,666666";
+            b.await("presence", m -> canonical.equals(pairValue(m.path("faced"), pidA)));
         }
     }
 

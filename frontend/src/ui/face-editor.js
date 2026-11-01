@@ -1,13 +1,13 @@
 import { $ } from './hud.js';
 import {
-  FACE_SIZE, PALETTE, PALETTE_NAMES, EMPTY_FACE, STARTER_FACE, PICKED, DEFAULT_PICKED,
+  FACE_SIZE, PALETTE, PALETTE_NAMES, EMPTY_FACE, STARTER_FACE, PICKED_CHARS, MAX_PICKED, DEFAULT_PICKED,
   paintFace, normalizeFace, storedFace, splitFace, joinFace,
 } from '../net/faces.js';
 
 /**
  * "얼굴 그리기": a 32x32 dot grid over a blank skin-coloured head. Click or drag to place dots,
- * pick one of five colours (eraser, black, red, white, pink) or one colour of your own (any RGB,
- * one per drawing: changing it recolours every dot drawn with it), and a 1x1 or 2x2 brush.
+ * pick one of five colours (eraser, black, red, white, pink) or up to eight colours of your own
+ * (any RGB; changing one recolours every dot drawn with it), and a 1x1 or 2x2 brush.
  * Only the face is drawable.
  *
  * Earlier drawings stay in this browser (storedFace.gallery) and can be loaded again.
@@ -26,9 +26,9 @@ export function createFaceEditor({ getFace, apply }) {
   const SKIN = '#efc39b';
 
   let cells = EMPTY_FACE.split('');
-  let picked = DEFAULT_PICKED;
+  let picked = [DEFAULT_PICKED[0]];   // my colours, slot 1 first
   const code = () => joinFace(cells.join(''), picked);
-  let colour = 1;
+  let colour = '1';                   // the grid character being painted: '0'..'4' or a picked slot
   let painting = false;
   let brush = 2;   // 2x2 by default: 1024 cells are a lot to fill one by one
 
@@ -44,7 +44,7 @@ export function createFaceEditor({ getFace, apply }) {
     [...brushes.children].forEach((b, i) => b.setAttribute('aria-pressed', String(i + 1 === brush)));
   }
 
-  // colour buttons
+  // colour buttons: the five fixed ones, then my own colours
   const swatches = $('#faceSwatches');
   PALETTE.forEach((c, i) => {
     const b = document.createElement('button');
@@ -53,34 +53,72 @@ export function createFaceEditor({ getFace, apply }) {
     b.style.setProperty('--c', c || 'transparent');
     b.title = PALETTE_NAMES[i];
     b.setAttribute('aria-label', PALETTE_NAMES[i]);
-    b.onclick = () => { colour = i; markSwatch(); };
+    b.dataset.ch = String(i);
+    b.onclick = () => { colour = String(i); markSwatch(); };
     swatches.appendChild(b);
   });
-  // the sixth colour: whatever the person picks
-  const own = document.createElement('button');
-  own.type = 'button';
-  own.className = 'swatch own';
-  own.title = '내 색 (아래에서 고르기)';
-  own.setAttribute('aria-label', '내가 고른 색');
-  own.onclick = () => { colour = PICKED; markSwatch(); };
-  swatches.appendChild(own);
+  const ownRow = document.createElement('div');
+  ownRow.className = 'ownRow';
+  ownRow.setAttribute('role', 'group');
+  ownRow.setAttribute('aria-label', '내 색');
+  swatches.appendChild(ownRow);
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'swatch addOwn';
+  add.textContent = '+';
+  add.title = '내 색 추가';
+  add.setAttribute('aria-label', '내 색 추가');
   const pickerLabel = document.createElement('label');
   pickerLabel.className = 'ownPick';
   const picker = document.createElement('input');
   picker.type = 'color';
-  picker.value = picked;
-  picker.setAttribute('aria-label', '내 색 고르기');
-  pickerLabel.append(picker, document.createTextNode('내 색 고르기'));
+  picker.setAttribute('aria-label', '고른 내 색 바꾸기');
+  pickerLabel.append(picker, document.createTextNode('고른 색 바꾸기'));
   swatches.appendChild(pickerLabel);
+
+  const selectedSlot = () => PICKED_CHARS.indexOf(colour);
+  function renderOwn() {
+    ownRow.textContent = '';
+    picked.forEach((c, slot) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'swatch own';
+      b.style.setProperty('--c', c);
+      b.title = `내 색 ${slot + 1}`;
+      b.setAttribute('aria-label', `내 색 ${slot + 1}`);
+      b.dataset.ch = PICKED_CHARS[slot];
+      b.onclick = () => { colour = PICKED_CHARS[slot]; markSwatch(); };
+      ownRow.appendChild(b);
+    });
+    add.hidden = picked.length >= MAX_PICKED;
+    ownRow.appendChild(add);
+  }
+  add.onclick = () => {
+    if (picked.length >= MAX_PICKED) return;
+    picked.push(DEFAULT_PICKED[picked.length]);
+    colour = PICKED_CHARS[picked.length - 1];
+    renderOwn();
+    markSwatch();
+    try { picker.click(); } catch (_) { /* some browsers need a direct click on the input */ }
+  };
   picker.addEventListener('input', () => {
-    picked = picker.value;
-    colour = PICKED;
+    let slot = selectedSlot();
+    if (slot < 0) {
+      // a fixed colour is selected: picking a colour makes a new one of my own
+      if (picked.length >= MAX_PICKED) return;
+      picked.push(picker.value);
+      slot = picked.length - 1;
+      colour = PICKED_CHARS[slot];
+    }
+    picked[slot] = picker.value;
+    renderOwn();
     markSwatch();
     render();
   });
   function markSwatch() {
-    [...swatches.querySelectorAll('.swatch')].forEach((b, i) => b.setAttribute('aria-pressed', String(i === colour)));
-    own.style.setProperty('--c', picked);
+    swatches.querySelectorAll('.swatch[data-ch]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.ch === colour)));
+    const slot = selectedSlot();
+    picker.value = slot >= 0 ? picked[slot] : (picked[picked.length - 1] || DEFAULT_PICKED[0]);
   }
 
   function render() {
@@ -157,7 +195,9 @@ export function createFaceEditor({ getFace, apply }) {
     const f = normalizeFace(face) || EMPTY_FACE;
     const parts = splitFace(f);
     cells = parts.grid.split('');
-    if (parts.picked) { picked = parts.picked; picker.value = picked; }
+    picked = parts.picked.length ? parts.picked.slice() : [DEFAULT_PICKED[0]];
+    if (selectedSlot() >= picked.length) colour = '1';
+    renderOwn();
     markSwatch();
     errorEl.hidden = true;
     render();
@@ -217,6 +257,7 @@ export function createFaceEditor({ getFace, apply }) {
   };
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') panel.hidden = true; });
 
+  renderOwn();
   markSwatch();
   markBrush();
   return {

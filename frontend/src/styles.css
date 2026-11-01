@@ -122,6 +122,8 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .swatch[aria-pressed="true"]{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold)}
 .swatch.own{background:var(--c);position:relative}
 .swatch.own::after{content:"내";position:absolute;inset:auto 2px 1px auto;font-size:10px;color:#fff;text-shadow:0 0 2px #000}
+.ownRow{display:flex;gap:6px;flex-wrap:wrap;flex-basis:100%}
+.swatch.addOwn{background:transparent;color:var(--muted);font-size:18px;line-height:1;border-style:dashed}
 .ownPick{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;padding-left:4px}
 .ownPick input{width:34px;height:34px;padding:0;border:2px solid var(--line);border-radius:8px;background:none;cursor:pointer}
 .faceGallery{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
