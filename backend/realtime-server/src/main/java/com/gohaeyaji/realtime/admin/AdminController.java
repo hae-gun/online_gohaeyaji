@@ -127,6 +127,19 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("ok", true, "entry", reports.entry(hash)));
     }
 
+    /** Deletes the drawing and its history (IPs included). A ban stays in force; see FaceReports.delete. */
+    @PostMapping("/admin/api/faces/{hash}/delete")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> delete(@PathVariable String hash) {
+        if (!HASH.matcher(hash).matches()) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (!reports.delete(hash)) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(Map.of("ok", true));
+    }
+
     private double count(String name) {
         Counter c = meters.find(name).counter();
         return c == null ? 0 : c.count();

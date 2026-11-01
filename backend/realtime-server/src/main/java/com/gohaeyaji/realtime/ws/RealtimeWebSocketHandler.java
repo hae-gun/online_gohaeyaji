@@ -304,7 +304,9 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             sender.send(session, ReportResult.fail(reqId, Messages.REPORT_ALREADY));
             return;
         }
-        FaceReports.Result result = faceReports.report(face, session.sessionId());
+        FaceReports.Result result = faceReports.report(face, session.sessionId(),
+                new FaceReports.Report(now(), session.channelNo(), session.name(), session.remoteIp(),
+                        target.name(), target.remoteIp()));
         sender.send(session, result == FaceReports.Result.ALREADY
                 ? ReportResult.fail(reqId, Messages.REPORT_ALREADY)
                 : ReportResult.ok(reqId));

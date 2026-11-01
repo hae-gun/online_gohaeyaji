@@ -44,6 +44,11 @@ public final class RedisKeys {
         return "gy:face:" + faceHash + ":record";
     }
 
+    /** Report log of a drawing: newest first, at most 50, JSON per report (time, names, IPs). */
+    public static String faceLog(String faceHash) {
+        return "gy:face:" + faceHash + ":log";
+    }
+
     /** Admin index of reported drawings: member = data key, score = last report time. */
     public static final String ADMIN_FACES = "gy:admin:faces";
 

@@ -515,6 +515,11 @@ class RealtimeFlowTest {
             assertThat(entry.path("face").asText()).isEqualTo(SMILE);
             assertThat(entry.path("reports").asLong()).isEqualTo(3);
             assertThat(entry.path("bannedBy").asText()).isEqualTo("reports");
+            // every report is logged with who reported whom, and from where
+            assertThat(entry.path("log")).hasSize(3);
+            assertThat(entry.path("log").get(0).path("targetIp").asText()).isNotBlank();
+            assertThat(entry.path("log").get(0).path("reporterIp").asText()).isNotBlank();
+            assertThat(entry.path("log").get(0).path("targetName").asText()).isNotBlank();
             String hash = entry.path("hash").asText();
 
             // changes need the X-Admin header (CSRF)
@@ -534,6 +539,16 @@ class RealtimeFlowTest {
                 JsonNode after = new com.fasterxml.jackson.databind.ObjectMapper().readTree(res.body()).path("entry");
                 assertThat(after.path("banTtlMs").asLong()).isEqualTo(-1);
                 assertThat(after.path("bannedBy").asText()).isEqualTo("admin-permanent");
+            }
+
+            // deleting removes the drawing and its log from the admin page, the ban stays
+            assertThat(admin("POST", "/admin/api/faces/" + hash + "/delete", "test-secret", true).statusCode()).isEqualTo(200);
+            assertThat(admin("GET", "/admin/api/faces", "test-secret", false).body()).isEqualTo("[]");
+            assertThat(redisTemplate.hasKey("gy:face:" + hash + ":log")).isFalse();
+            try (TestClient later = TestClient.connect(port)) {
+                later.hello();
+                later.send("{\"type\":\"setFace\",\"reqId\":\"g\",\"face\":\"" + SMILE + "\"}");
+                assertThat(later.await("faceResult").path("reason").asText()).isEqualTo("BLOCKED");
             }
         }
     }

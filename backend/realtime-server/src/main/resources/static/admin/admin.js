@@ -102,12 +102,19 @@
     return cv;
   }
 
-  async function act(hash, action, body) {
-    const label = { ban: '24시간 금지', permanent: '영구 금지', restore: '돌려주기' }[action];
-    if (action !== 'restore' && !confirm(`이 그림을 ${label}할까요? 지금 쓰고 있는 사람은 바로 기본 얼굴로 돌아갑니다.`)) return;
+  async function act(hash, action, body, st) {
+    const label = { ban: '24시간 금지', permanent: '영구 금지', restore: '돌려주기', delete: '삭제' }[action];
+    if (action === 'delete') {
+      const banNote = st === 'permanent' ? ' 영구 금지는 그대로 유지되지만, 목록에서 사라지므로 나중에 돌려줄 수 없게 됩니다.'
+        : st === 'banned' ? ' 24시간 금지는 남은 시간 동안 그대로 유지됩니다.' : '';
+      if (!confirm(`이 그림과 신고 내역(IP 포함)을 완전히 지울까요? 되돌릴 수 없습니다.${banNote}`)) return;
+    } else if (action !== 'restore' && !confirm(`이 그림을 ${label}할까요? 지금 쓰고 있는 사람은 바로 기본 얼굴로 돌아갑니다.`)) return;
+    const path = { restore: 'restore', delete: 'delete' }[action] || 'ban';
     try {
-      const r = await api(`/faces/${hash}/${action === 'restore' ? 'restore' : 'ban'}`, { method: 'POST', body: JSON.stringify(body || {}) });
-      toast(action === 'restore' ? '돌려줬습니다. 다시 쓸 수 있습니다' : `${label}했습니다${r.takenOffFrom ? `. ${r.takenOffFrom}명에게서 내렸습니다` : ''}`);
+      const r = await api(`/faces/${hash}/${path}`, { method: 'POST', body: JSON.stringify(body || {}) });
+      toast(action === 'restore' ? '돌려줬습니다. 다시 쓸 수 있습니다'
+        : action === 'delete' ? '그림과 신고 내역을 지웠습니다'
+        : `${label}했습니다${r.takenOffFrom ? `. ${r.takenOffFrom}명에게서 내렸습니다` : ''}`);
       await loadFaces();
     } catch (e) {
       toast(`처리하지 못했습니다 (${e.message})`);
@@ -149,9 +156,39 @@
       btn('24시간 금지', 'danger', () => act(e.hash, 'ban', { permanent: false }), st === 'banned' || st === 'permanent');
       btn('영구 금지', 'danger', () => act(e.hash, 'permanent', { permanent: true }), st === 'permanent');
       btn('돌려주기', 'ok', () => act(e.hash, 'restore'), st === 'reported' || st === 'restored');
-      card.append(drawFace(e.face), badge, dl, actions);
+      btn('삭제', '', () => act(e.hash, 'delete', null, st));
+      card.append(drawFace(e.face), badge, dl, reportLog(e.log || []), actions);
       box.appendChild(card);
     }
+  }
+
+  /** Who reported whom, from where. Folded by default: IPs are personal data, show them only when needed. */
+  function reportLog(log) {
+    const d = document.createElement('details');
+    const sum = document.createElement('summary');
+    sum.textContent = `신고 내역 ${log.length}건 (IP 포함)`;
+    d.appendChild(sum);
+    if (!log.length) return d;
+    const t = document.createElement('table');
+    t.className = 'log';
+    const head = document.createElement('tr');
+    for (const h of ['시각', '신고한 사람', '신고된 사람']) { const th = document.createElement('th'); th.textContent = h; head.appendChild(th); }
+    t.appendChild(head);
+    for (const r of log) {
+      const tr = document.createElement('tr');
+      const who = (name, ip) => {
+        const td = document.createElement('td');
+        const n = document.createElement('div'); n.textContent = name || '(이름 없음)';
+        const i = document.createElement('div'); i.className = 'ip'; i.textContent = ip || '-';
+        td.append(n, i);
+        return td;
+      };
+      const time = document.createElement('td'); time.textContent = fmtTime(r.at);
+      tr.append(time, who(r.reporterName, r.reporterIp), who(r.targetName, r.targetIp));
+      t.appendChild(tr);
+    }
+    d.appendChild(t);
+    return d;
   }
 
   async function loadFaces() {
