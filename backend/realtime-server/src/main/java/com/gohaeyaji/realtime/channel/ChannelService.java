@@ -31,7 +31,11 @@ import org.springframework.stereotype.Service;
  * server removes its numbers. A restarted server comes back with a new id, so it never inherits
  * the stale count of its previous life.
  *
- * TODO: remove channels that stayed empty for 5 minutes (protocol C1).
+ * Channels never grow without bound: a new one opens only when every open channel is at the
+ * soft limit, new people always go to the lowest channel with room, and a channel (other than 1)
+ * that stays empty for channelEmptyRemoveMs is closed by the heartbeat; its number is reused.
+ *
+ * People can also move to another open channel themselves (switchTo, protocol section 18).
  */
 @Service
 public class ChannelService {
@@ -69,6 +73,37 @@ public class ChannelService {
         return no.intValue();
     }
 
+    public enum SwitchResult { MOVED, FULL, NO_CHANNEL }
+
+    /** Moves one member count from one channel to another, if the target has room. */
+    public SwitchResult switchTo(int from, int to) {
+        Long r = redis.execute(scripts.switchChannel,
+                List.of(RedisKeys.CHANNELS, RedisKeys.SERVERS, RedisKeys.members(from), RedisKeys.members(to)),
+                serverId, String.valueOf(System.currentTimeMillis()), String.valueOf(props.serverDeadMs()),
+                String.valueOf(to), String.valueOf(props.channelCapacity()));
+        if (r == null || r < 0) {
+            return SwitchResult.NO_CHANNEL;
+        }
+        return r == 0 ? SwitchResult.FULL : SwitchResult.MOVED;
+    }
+
+    /** One open channel and how many people are in it. */
+    public record Info(int no, long members) {
+    }
+
+    /** Open channels, lowest number first. */
+    public List<Info> list() {
+        List<Info> out = new ArrayList<>();
+        Set<String> nos = redis.opsForZSet().range(RedisKeys.CHANNELS, 0, -1);
+        if (nos != null) {
+            for (String no : nos) {
+                int n = Integer.parseInt(no);
+                out.add(new Info(n, members(n)));
+            }
+        }
+        return out;
+    }
+
     public void leave(int channelNo) {
         redis.execute(scripts.leaveChannel, List.of(RedisKeys.members(channelNo)), serverId);
     }
@@ -82,7 +117,7 @@ public class ChannelService {
             }
         }
         List<String> args = new ArrayList<>(List.of(serverId, String.valueOf(System.currentTimeMillis()),
-                String.valueOf(props.serverDeadMs()), RedisKeys.CHANNEL_PREFIX));
+                String.valueOf(props.serverDeadMs()), RedisKeys.CHANNEL_PREFIX, String.valueOf(props.channelEmptyRemoveMs())));
         mine.forEach((no, n) -> {
             args.add(String.valueOf(no));
             args.add(String.valueOf(n));

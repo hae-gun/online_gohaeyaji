@@ -61,9 +61,9 @@ public final class RedisKeys {
         return "gy:inquiry:" + id;
     }
 
-    /** Messages sent from this IP in the last hour. */
-    public static String inquiryIp(String ip) {
-        return "gy:inquiry:ip:" + ip;
+    /** Messages sent from one IP in the last hour; the key holds a hash of the IP, not the IP. */
+    public static String inquiryIp(String ipHash) {
+        return "gy:inquiry:ip:" + ipHash;
     }
 
     public static String booth(int channelNo, int boothId) {

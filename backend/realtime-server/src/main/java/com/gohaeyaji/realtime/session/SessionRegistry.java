@@ -44,6 +44,14 @@ public class SessionRegistry {
         byChannel.computeIfAbsent(session.channelNo(), no -> ConcurrentHashMap.newKeySet()).add(session);
     }
 
+    /** Takes the session out of its channel's broadcast set (before it switches channel). */
+    public void leaveChannel(ClientSession session) {
+        Set<ClientSession> members = byChannel.get(session.channelNo());
+        if (members != null) {
+            members.remove(session);
+        }
+    }
+
     public ClientSession get(String id) {
         return byId.get(id);
     }

@@ -29,6 +29,9 @@
  *   sendEmote(id: string, at?: { x: number, z: number, ry: number }): void,
  *   onFaceRemoved(listener: (e: { reason: string, blockedMs: number }) => void): void,
  *   sendInquiry(kind: string, text: string): Promise<{ ok: boolean, reason?: string }>,
+ *   canSwitchChannel?: boolean,
+ *   listChannels?(): Promise<{ ok: boolean, current?: number, capacity?: number, channels?: { no: number, members: number }[], reason?: string }>,
+ *   switchChannel?(channelNo: number): Promise<{ ok: boolean, channelNo?: number, reason?: string }>,
  * }} RoomClient
  *
  * Positions of other players (protocol v0.3). Rows are [pid, x, z, ry] or, in a reset,

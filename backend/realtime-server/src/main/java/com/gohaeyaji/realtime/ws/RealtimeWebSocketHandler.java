@@ -47,9 +47,10 @@ import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorato
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 /**
- * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.8:
+ * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.10:
  * hello/welcome, ping/pong, claim/release, activity, resync, move (positions), rename (names),
- * setFace and report (hand-drawn faces), emote (gestures), inquiry (the box in the confession hall).
+ * setFace and report (hand-drawn faces), emote (gestures), inquiry (the box in the confession hall),
+ * channels and switchChannel (moving to another channel).
  *
  * Not yet: queue (queueJoin/queueLeave), resume after reconnect, rate limits, confess.
  */
@@ -167,6 +168,8 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             case "report" -> onReport(session, msg, reqId);
             case "emote" -> onEmote(session, msg);
             case "inquiry" -> onInquiry(session, msg, reqId);
+            case "channels" -> onChannels(session, reqId);
+            case "switchChannel" -> onSwitchChannel(session, msg, reqId);
             case "activity" -> session.touchActivity(now());
             case "resync" -> sendSnapshot(session);
             case "queueJoin", "queueLeave", "confess" ->
@@ -202,12 +205,17 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         // join the broadcast set before reading the snapshot, so no event can fall between them;
         // the client drops events whose seq is not above the snapshot seq
         registry.joinChannel(session);
+        sendWelcome(session, "rt_" + token());
+    }
 
+    /** The full state of the session's channel: on hello, and again after switching channel. */
+    private void sendWelcome(ClientSession session, String resumeToken) {
+        int channelNo = session.channelNo();
         BoothService.Snapshot snap = booths.snapshot(channelNo);
         sender.send(session, new Welcome(
                 props.protocolVersion(),
                 session.sessionId(),
-                "rt_" + token(),
+                resumeToken,
                 channelNo,
                 props.boothCount(),
                 new Booths(snap.occupied(), snap.reserved()),
@@ -215,13 +223,66 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
                 snap.seq(),
                 props.heartbeatMs(),
                 new Idle(props.idleLimitMs(), props.idleWarnMs(), props.idleDangerMs()),
-                new You(pid, name),
+                new You(session.pid(), session.name()),
                 presence.snapshot(channelNo),
                 presence.names(channelNo),
                 presence.faces(channelNo),
                 presence.sitting(channelNo),
                 props.presenceMs(),
                 now()));
+    }
+
+    /** Open channels with their member counts (protocol section 18). */
+    private void onChannels(ClientSession session, String reqId) {
+        if (!session.acceptChannelList(now())) {
+            return;   // the panel asks again when opened; nothing to answer for a burst
+        }
+        java.util.List<Messages.ChannelRow> rows = new java.util.ArrayList<>();
+        for (ChannelService.Info c : channels.list()) {
+            rows.add(new Messages.ChannelRow(c.no(), c.members()));
+        }
+        sender.send(session, new Messages.ChannelList(reqId, session.channelNo(), props.channelCapacity(), rows));
+    }
+
+    /**
+     * Moves the person to another open channel (protocol section 18): out of the old channel's
+     * presence (others see them leave), a new pid in the new one with the same name and face,
+     * then a fresh welcome. Not from inside a booth.
+     */
+    private void onSwitchChannel(ClientSession session, JsonNode msg, String reqId) {
+        int to = msg.path("channelNo").asInt(-1);
+        int from = session.channelNo();
+        if (to == from) {
+            sender.send(session, Messages.SwitchResult.fail(reqId, Messages.SWITCH_SAME));
+            return;
+        }
+        if (session.boothId() != null) {
+            sender.send(session, Messages.SwitchResult.fail(reqId, Messages.SWITCH_IN_BOOTH));
+            return;
+        }
+        if (!session.acceptSwitch(now(), props.channelSwitchMinGapMs())) {
+            sender.send(session, Messages.SwitchResult.fail(reqId, Messages.SWITCH_TOO_SOON));
+            return;
+        }
+        ChannelService.SwitchResult r = to > 0 ? channels.switchTo(from, to) : ChannelService.SwitchResult.NO_CHANNEL;
+        if (r != ChannelService.SwitchResult.MOVED) {
+            sender.send(session, Messages.SwitchResult.fail(reqId,
+                    r == ChannelService.SwitchResult.FULL ? Messages.SWITCH_FULL : Messages.SWITCH_NO_CHANNEL));
+            return;
+        }
+        synchronized (session) {
+            registry.leaveChannel(session);
+            presence.remove(from, session.pid());
+            int pid = presence.allocatePid(to);
+            session.switchChannel(to, pid);
+            presence.setName(to, pid, session.name());
+            if (session.face() != null) {
+                presence.setFace(to, pid, session.face());
+            }
+            registry.joinChannel(session);
+        }
+        sender.send(session, Messages.SwitchResult.ok(reqId, to));
+        sendWelcome(session, null);
     }
 
     private void onMove(ClientSession session, JsonNode msg) {
@@ -401,7 +462,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         }
         claimOk.increment();
         sender.send(session, ClaimResult.ok(reqId, boothId, props.leaseMs()));
-        sender.broadcast(session.channelNo(), new BoothEvent(boothId, Messages.OCCUPIED, seq, session.pid()));
+        sender.broadcast(session.channelNo(), new BoothEvent(session.channelNo(), boothId, Messages.OCCUPIED, seq, session.pid()));
     }
 
     private void onRelease(ClientSession session, JsonNode msg, String reqId) {
@@ -446,7 +507,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             sender.send(session, new Released(boothId, reason));
         }
         if (seq > 0) {
-            sender.broadcast(channelNo, new BoothEvent(boothId, Messages.FREE, seq, null));
+            sender.broadcast(channelNo, new BoothEvent(channelNo, boothId, Messages.FREE, seq, null));
         }
     }
 

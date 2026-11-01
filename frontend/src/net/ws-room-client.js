@@ -31,6 +31,8 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
   let status = { state: 'connecting', channelNo: 0 };
   let occupied = new Set();
   let lastSeq = 0;
+  let channel = 0;                    // the channel the last welcome was for
+  const pendingChannels = new Map();   // reqId -> resolve (list or switch)
   let heartbeat = null;
   let heartbeatMs = 10_000;
   let attempt = 0;
@@ -61,6 +63,18 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   };
   const nextReq = () => `r${++reqCounter}`;
+  /** Sends a request and resolves with its answer, or OFFLINE / TIMEOUT. */
+  function ask(msg) {
+    if (!ready) return Promise.resolve({ ok: false, reason: 'OFFLINE' });
+    const reqId = nextReq();
+    return new Promise((resolve) => {
+      pendingChannels.set(reqId, resolve);
+      send({ ...msg, reqId });
+      setTimeout(() => {
+        if (pendingChannels.delete(reqId)) resolve({ ok: false, reason: 'TIMEOUT' });
+      }, 5000);
+    });
+  }
 
   function connect() {
     ready = false;
@@ -85,6 +99,7 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
     switch (msg.type) {
       case 'welcome': {
         ready = true;
+        channel = msg.channelNo;
         attempt = 0;
         heartbeatMs = msg.heartbeatMs || heartbeatMs;
         if (msg.idle) Object.assign(client.idle, msg.idle);
@@ -97,12 +112,15 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         break;
       }
       case 'presence':
+        // a late batch of the channel I just left (v0.10)
+        if (msg.ch && msg.ch !== channel) return;
         if (ready) emitPresence({ kind: 'batch', moved: msg.moved || [], left: msg.left || [], named: msg.named || [], faced: msg.faced || [], emoted: msg.emoted || [] });
         break;
       case 'snapshot':
         applySnapshot(msg.booths, msg.seq);
         break;
       case 'booth': {
+        if (msg.ch && msg.ch !== channel) return;
         if (!ready || msg.seq <= lastSeq) return;          // older than what we already have
         const gap = msg.seq > lastSeq + 1;
         lastSeq = msg.seq;
@@ -135,6 +153,16 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         pendingFaces.delete(msg.reqId);
         if (msg.ok) { client.myFace = p.face; storedFace.save(p.face); }
         p.resolve(msg.ok ? { ok: true } : { ok: false, reason: msg.reason });
+        break;
+      }
+      case 'channelList':
+      case 'switchResult': {
+        const resolve = pendingChannels.get(msg.reqId);
+        if (!resolve) return;
+        pendingChannels.delete(msg.reqId);
+        resolve(msg.type === 'channelList'
+          ? { ok: true, current: msg.current, capacity: msg.capacity, channels: msg.channels || [] }
+          : (msg.ok ? { ok: true, channelNo: msg.channelNo } : { ok: false, reason: msg.reason }));
         break;
       }
       case 'inquiryResult': {
@@ -194,6 +222,8 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
     pendingReports.clear();
     pendingInquiries.forEach((resolve) => resolve({ ok: false, reason: 'OFFLINE' }));
     pendingInquiries.clear();
+    pendingChannels.forEach((resolve) => resolve({ ok: false, reason: 'OFFLINE' }));
+    pendingChannels.clear();
     // the server releases our booth when the socket drops (no resume yet)
     if (myBooth !== null) {
       const b = myBooth;
@@ -249,6 +279,16 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
       });
     },
     onFaceRemoved(fn) { faceRemovedListeners.push(fn); },
+
+    /** Open channels and how many people are in each (protocol section 18). */
+    listChannels() {
+      return ask({ type: 'channels' });
+    },
+    /** Move to another open channel. A fresh welcome (reset) follows on success. */
+    switchChannel(channelNo) {
+      return ask({ type: 'switchChannel', channelNo });
+    },
+    canSwitchChannel: true,
 
     /** A message for the site's admins from the box in the confession hall (protocol section 17). */
     sendInquiry(kind, text) {

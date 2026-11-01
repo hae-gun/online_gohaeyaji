@@ -47,11 +47,14 @@ public final class Messages {
         }
     }
 
-    /** pid: who entered (occupied). Null for "free". */
+    /**
+     * pid: who entered (occupied). Null for "free".
+     * ch: the channel (v0.10), so a client that just switched channel drops a late event of the old one.
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record BoothEvent(String type, int boothId, String state, long seq, Integer pid) {
-        public BoothEvent(int boothId, String state, long seq, Integer pid) {
-            this("booth", boothId, state, seq, pid);
+    public record BoothEvent(String type, int ch, int boothId, String state, long seq, Integer pid) {
+        public BoothEvent(int ch, int boothId, String state, long seq, Integer pid) {
+            this("booth", ch, boothId, state, seq, pid);
         }
     }
 
@@ -64,14 +67,15 @@ public final class Messages {
      *              left out when empty
      * @param faced  {@code [pid, face]} drawn faces put on or taken off (v0.5)
      * @param emoted {@code [pid, emote id]} gestures started since the last batch (v0.7)
+     * @param ch     the channel (v0.10); see BoothEvent
      */
-    public record Presence(String type, long t, List<List<Number>> moved, List<Integer> left,
+    public record Presence(String type, int ch, long t, List<List<Number>> moved, List<Integer> left,
                            @JsonInclude(JsonInclude.Include.NON_EMPTY) List<List<Object>> named,
                            @JsonInclude(JsonInclude.Include.NON_EMPTY) List<List<Object>> faced,
                            @JsonInclude(JsonInclude.Include.NON_EMPTY) List<List<Object>> emoted) {
-        public Presence(long t, List<List<Number>> moved, List<Integer> left,
+        public Presence(int ch, long t, List<List<Number>> moved, List<Integer> left,
                         List<List<Object>> named, List<List<Object>> faced, List<List<Object>> emoted) {
-            this("presence", t, moved, left, named, faced, emoted);
+            this("presence", ch, t, moved, left, named, faced, emoted);
         }
     }
 
@@ -108,6 +112,28 @@ public final class Messages {
 
     /** Answer to "rename". On failure name is what the server read, reason says why. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    /** Answer to "channels" (protocol section 18): open channels and how many people are in each. */
+    public record ChannelList(String type, String reqId, int current, int capacity, List<ChannelRow> channels) {
+        public ChannelList(String reqId, int current, int capacity, List<ChannelRow> channels) {
+            this("channelList", reqId, current, capacity, channels);
+        }
+    }
+
+    public record ChannelRow(int no, long members) {
+    }
+
+    /** Answer to "switchChannel" (section 18). On success a fresh welcome for the new channel follows. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record SwitchResult(String type, String reqId, boolean ok, Integer channelNo, String reason) {
+        public static SwitchResult ok(String reqId, int channelNo) {
+            return new SwitchResult("switchResult", reqId, true, channelNo, null);
+        }
+
+        public static SwitchResult fail(String reqId, String reason) {
+            return new SwitchResult("switchResult", reqId, false, null, reason);
+        }
+    }
+
     /** Answer to "inquiry" (protocol section 17). */
     public record InquiryResult(String type, String reqId, boolean ok, String reason) {
         public static InquiryResult ok(String reqId) {
@@ -192,6 +218,12 @@ public final class Messages {
     public static final String REMOVED_REPORTED = "REPORTED";
 
     /** error codes. */
+    public static final String SWITCH_SAME = "SAME";
+    public static final String SWITCH_FULL = "FULL";
+    public static final String SWITCH_NO_CHANNEL = "NO_CHANNEL";
+    public static final String SWITCH_IN_BOOTH = "IN_BOOTH";
+    public static final String SWITCH_TOO_SOON = "TOO_SOON";
+
     public static final String INQUIRY_INVALID = "INVALID";
     public static final String INQUIRY_TOO_SOON = "TOO_SOON";
     public static final String INQUIRY_TOO_MANY = "TOO_MANY";

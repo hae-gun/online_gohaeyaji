@@ -48,6 +48,33 @@ public final class ClientSession {
         this.ready = true;
     }
 
+    /** The person moved to another channel (protocol section 18): new channel, new pid there. */
+    public synchronized void switchChannel(int channelNo, int pid) {
+        this.channelNo = channelNo;
+        this.pid = pid;
+    }
+
+    private long lastSwitchAt;
+    private long lastChannelListAt;
+
+    /** One channel switch per gapMs. */
+    public synchronized boolean acceptSwitch(long now, long gapMs) {
+        if (lastSwitchAt != 0 && now - lastSwitchAt < gapMs) {
+            return false;
+        }
+        lastSwitchAt = now;
+        return true;
+    }
+
+    /** The channel list at most once a second; it costs a few Redis reads per channel. */
+    public synchronized boolean acceptChannelList(long now) {
+        if (lastChannelListAt != 0 && now - lastChannelListAt < 1_000) {
+            return false;
+        }
+        lastChannelListAt = now;
+        return true;
+    }
+
     public void enterBooth(int boothId, long now) {
         this.boothId = boothId;
         this.lastActivityAt = now;

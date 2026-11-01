@@ -205,7 +205,7 @@
   }
 
   async function inquiryAct(id, action) {
-    if (action === 'delete' && !confirm('이 문의를 지울까요? 함께 저장된 이름과 IP도 지워지고 되돌릴 수 없습니다.')) return;
+    if (action === 'delete' && !confirm('이 문의를 지울까요? 되돌릴 수 없습니다.')) return;
     try {
       await api(`/inquiries/${id}/${action}`, { method: 'POST', body: '{}' });
       toast({ done: '처리함으로 표시했습니다', reopen: '안 읽음으로 되돌렸습니다', delete: '지웠습니다' }[action]);
@@ -231,10 +231,7 @@
       const meta = document.createElement('span');
       meta.className = 'muted';
       meta.textContent = `${fmtTime(e.at)}  ${e.channelNo}채널  ${e.name || '(이름 없음)'}`;
-      const ip = document.createElement('span');
-      ip.className = 'ip';
-      ip.textContent = e.ip;
-      head.append(kind, meta, ip);
+      head.append(kind, meta);
       // plain text only: whatever people typed is never read as HTML
       const text = document.createElement('p');
       text.className = 'itext';

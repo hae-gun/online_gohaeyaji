@@ -12,6 +12,8 @@ public record RealtimeProperties(
         int boothCount,
         int channelCapacity,
         int channelSoftLimit,
+        long channelEmptyRemoveMs,
+        long channelSwitchMinGapMs,
         long heartbeatMs,
         long heartbeatTimeoutMs,
         long helloTimeoutMs,

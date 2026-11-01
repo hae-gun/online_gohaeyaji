@@ -155,3 +155,15 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .kinds label{display:inline-flex;align-items:center;gap:6px;font-size:14px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
 .kinds input{accent-color:var(--gold);margin:0}
 .kinds label:has(input:checked){border-color:var(--gold);color:var(--gold)}
+
+/* channel switching (protocol v0.10) */
+.chanBtn{display:block;margin-top:6px;font:inherit;font-size:12.5px;color:var(--ink);background:rgba(18,14,22,.6);border:1px solid var(--line);border-radius:999px;padding:4px 12px;cursor:pointer}
+.chanBtn:hover{border-color:var(--gold)}
+.chanList{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto}
+.chanRow{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.chanRow b{font-size:15px;min-width:52px}
+.chanRow.here{border-color:var(--gold)}
+.chanRow .meter{height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+.chanRow .meter i{display:block;height:100%;background:var(--gold)}
+.chanRow small{display:block;color:var(--muted);font-size:12px;margin-top:4px;font-variant-numeric:tabular-nums}
+.chanRow button{font:inherit;font-size:13.5px}

@@ -20,10 +20,11 @@ import org.springframework.stereotype.Service;
  *
  * Kept in Redis until an admin deletes them, at most inquiryKeep (oldest dropped first):
  *   gy:inquiry:seq          INCR, the id
- *   gy:inquiry:{id}         HASH at, kind, text, channelNo, name, ip, done
+ *   gy:inquiry:{id}         HASH at, kind, text, channelNo, name, done
  *   gy:inquiries            ZSET id by time (the admin list)
  *   gy:inquiries:open       SET ids not marked done yet (the count on the admin page)
- *   gy:inquiry:ip:{ip}      INCR with a 1 h TTL, the per-IP limit
+ *   gy:inquiry:ip:{hash}    INCR with a 1 h TTL, the per-IP limit. Only a hash of the IP, and
+ *                           only for that hour: the IP is never stored with the message.
  *
  * Redis must persist (appendonly) in production, or the box empties on a restart.
  */
@@ -39,8 +40,7 @@ public class Inquiries {
     }
 
     /** One message as the admin page shows it. */
-    public record Entry(long id, long at, String kind, String text, int channelNo, String name, String ip,
-                        boolean done) {
+    public record Entry(long id, long at, String kind, String text, int channelNo, String name, boolean done) {
     }
 
     private final StringRedisTemplate redis;
@@ -78,7 +78,7 @@ public class Inquiries {
         if (clean == null || kind == null || !KINDS.contains(kind)) {
             return new Result(Verdict.INVALID, 0);
         }
-        String ipKey = RedisKeys.inquiryIp(ip);
+        String ipKey = RedisKeys.inquiryIp(ipHash(ip));
         Long sent = redis.opsForValue().increment(ipKey);
         if (sent != null && sent == 1) {
             redis.expire(ipKey, Duration.ofHours(1));
@@ -93,7 +93,6 @@ public class Inquiries {
         h.put("text", clean);
         h.put("channelNo", String.valueOf(channelNo));
         h.put("name", name == null ? "" : name);
-        h.put("ip", ip);
         h.put("done", "0");
         redis.opsForHash().putAll(RedisKeys.inquiry(id), h);
         redis.opsForZSet().add(RedisKeys.INQUIRIES, String.valueOf(id), now);
@@ -141,7 +140,7 @@ public class Inquiries {
             return null;
         }
         return new Entry(id, num(h.get("at")), str(h.get("kind")), str(h.get("text")), (int) num(h.get("channelNo")),
-                str(h.get("name")), str(h.get("ip")), "1".equals(h.get("done")));
+                str(h.get("name")), "1".equals(h.get("done")));
     }
 
     public long openCount() {
@@ -170,6 +169,17 @@ public class Inquiries {
         redis.opsForZSet().remove(RedisKeys.INQUIRIES, String.valueOf(id));
         redis.opsForSet().remove(RedisKeys.INQUIRIES_OPEN, String.valueOf(id));
         return existed;
+    }
+
+    /** A short one-way hash, so the rate-limit key does not hold the address itself. */
+    private static String ipHash(String ip) {
+        try {
+            byte[] d = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(("gohaeyaji-inquiry:" + ip).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(d, 0, 12);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private static long num(Object o) {

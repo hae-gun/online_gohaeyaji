@@ -49,6 +49,9 @@ class RealtimeFlowTest {
     @Autowired
     SessionRegistry registry;
 
+    @Autowired
+    com.gohaeyaji.realtime.channel.ChannelService channelService;
+
     @BeforeEach
     void cleanState() throws InterruptedException {
         // wait until the previous test's sockets are fully cleaned up on the server,
@@ -198,6 +201,78 @@ class RealtimeFlowTest {
                 c.close();
             }
         }
+    }
+
+    // ------------------------------------------------------------ channels (protocol v0.10)
+
+    @Test
+    void peopleCanSwitchToAnotherOpenChannel() throws Exception {
+        // channel 2 exists (opened earlier, now quiet); channel 9 does not
+        redisTemplate.opsForZSet().add("gy:channels", "1", 1);
+        redisTemplate.opsForZSet().add("gy:channels", "2", 2);
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port); TestClient c = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            b.hello();
+            c.hello();
+            a.send("{\"type\":\"move\",\"x\":1,\"z\":5,\"ry\":0}");
+            b.await("presence", m -> containsPid(m.path("moved"), pidA));
+
+            a.send("{\"type\":\"channels\",\"reqId\":\"l1\"}");
+            JsonNode list = a.await("channelList");
+            assertThat(list.path("current").asInt()).isEqualTo(1);
+            assertThat(list.path("capacity").asInt()).isEqualTo(60);
+            assertThat(list.path("channels").toString()).contains("\"no\":2");
+
+            a.send("{\"type\":\"switchChannel\",\"reqId\":\"s0\",\"channelNo\":9}");
+            assertThat(a.await("switchResult", m -> "s0".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("NO_CHANNEL");
+            a.send("{\"type\":\"switchChannel\",\"reqId\":\"s1\",\"channelNo\":2}");
+            assertThat(a.await("switchResult", m -> "s1".equals(m.path("reqId").asText())).path("ok").asBoolean()).isTrue();
+            JsonNode welcome = a.await("welcome", m -> m.path("channelNo").asInt() == 2);
+            String name = welcome.path("you").path("name").asText();
+            assertThat(name).isNotEmpty();                                           // same name in the new channel
+            b.await("presence", m -> m.path("left").toString().contains(String.valueOf(pidA)));   // gone from channel 1
+            assertThat(channelService.members(1)).isEqualTo(2);
+            assertThat(channelService.members(2)).isEqualTo(1);
+
+            // c follows a into channel 2 and sees them there
+            c.send("{\"type\":\"switchChannel\",\"reqId\":\"s2\",\"channelNo\":2}");
+            c.await("switchResult");
+            int pidA2 = welcome.path("you").path("pid").asInt();
+            a.send("{\"type\":\"move\",\"x\":2,\"z\":5,\"ry\":0}");
+            c.await("presence", m -> m.path("ch").asInt() == 2 && containsPid(m.path("moved"), pidA2));
+
+            a.send("{\"type\":\"switchChannel\",\"reqId\":\"s3\",\"channelNo\":1}");             // within 3 s
+            assertThat(a.await("switchResult", m -> "s3".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("TOO_SOON");
+        }
+    }
+
+    @Test
+    void aFullChannelCannotBeJoinedBySwitching() throws Exception {
+        redisTemplate.opsForZSet().add("gy:channels", "1", 1);
+        redisTemplate.opsForZSet().add("gy:channels", "2", 2);
+        redisTemplate.opsForZSet().add("gy:servers", "srv-other", System.currentTimeMillis() + 60_000);
+        redisTemplate.opsForHash().put("gy:ch:2:members", "srv-other", "60");
+        try (TestClient a = TestClient.connect(port)) {
+            a.hello();
+            a.send("{\"type\":\"switchChannel\",\"reqId\":\"s1\",\"channelNo\":2}");
+            assertThat(a.await("switchResult").path("reason").asText()).isEqualTo("FULL");
+        }
+    }
+
+    @Test
+    void channelsLeftEmptyAreClosedAndTheirNumbersReused() throws Exception {
+        redisTemplate.opsForZSet().add("gy:channels", "1", 1);
+        redisTemplate.opsForZSet().add("gy:channels", "2", 2);
+        redisTemplate.opsForZSet().add("gy:channels", "3", 3);
+        // channel 2 empty for 10 minutes, channel 3 empty just now
+        redisTemplate.opsForValue().set("gy:ch:2:emptySince", String.valueOf(System.currentTimeMillis() - 600_000));
+        channelService.heartbeat();
+        assertThat(redisTemplate.opsForZSet().range("gy:channels", 0, -1)).containsExactly("1", "3");
+        assertThat(redisTemplate.hasKey("gy:ch:3:emptySince")).isTrue();
+        // channel 1 is never closed, even empty
+        redisTemplate.opsForValue().set("gy:ch:1:emptySince", "0");
+        channelService.heartbeat();
+        assertThat(redisTemplate.opsForZSet().range("gy:channels", 0, -1)).contains("1");
     }
 
     @Test
@@ -616,7 +691,7 @@ class RealtimeFlowTest {
         JsonNode e = list.get(0);
         assertThat(e.path("text").asText()).isEqualTo("the door sticks\n\nplease");
         assertThat(e.path("kind").asText()).isEqualTo("bug");
-        assertThat(e.path("ip").asText()).isNotEmpty();
+        assertThat(e.has("ip")).isFalse();                                   // the IP is never kept with a message
         assertThat(e.path("done").asBoolean()).isFalse();
         long id = e.path("id").asLong();
         assertThat(json.readTree(admin("GET", "/admin/api/overview", "test-secret", false).body()).path("inquiriesOpen").asLong()).isEqualTo(1);

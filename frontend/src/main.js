@@ -129,7 +129,7 @@ const NET_MESSAGE = {
   closed: '서버와 연결할 수 없습니다. 잠시 후 새로고침해 주세요',
 };
 rooms.onStatus((s) => {
-  if (s.channelNo) channelNo = s.channelNo;
+  if (s.channelNo) { channelNo = s.channelNo; $('#chanNo').textContent = channelNo; }
   const banner = $('#netStatus');
   banner.hidden = s.state === 'ready';
   banner.textContent = NET_MESSAGE[s.state] || '';
@@ -153,10 +153,69 @@ const others = createOtherPlayers(world, $('#nameTags'), (e) => openPlayerMenu(e
 const moveSender = createMoveSender(rooms);
 rooms.onPresence((e) => {
   others.handle(e);
-  // after a (re)connect the server does not know where I am; show myself again right away
-  if (e.kind === 'reset' && state === 'hall') moveSender.now(player.position, player.rotation.y);
+  // after a (re)connect or a channel switch the server does not know where I am; show myself again
+  if (e.kind === 'reset' && state === 'hall') {
+    moveSender.now(player.position, player.rotation.y);
+    if (myEmote.seated) rooms.sendEmote('sit', { x: player.position.x, z: player.position.z, ry: player.rotation.y });
+  }
 });
 if (rooms.sharesPresence) $('#peopleWrap').hidden = false;
+
+/* ---------- switching channel (protocol v0.10) ---------- */
+const chanPanel = $('#chanPanel'), chanList = $('#chanList'), chanError = $('#chanError');
+const SWITCH_REASON = {
+  FULL: '그 채널은 가득 찼습니다. 다른 채널을 골라 주세요.',
+  NO_CHANNEL: '그 채널은 사람이 없어 닫혔습니다. 목록을 새로고침해 주세요.',
+  IN_BOOTH: '고해소 안에서는 채널을 옮길 수 없습니다.',
+  TOO_SOON: '채널은 3초에 한 번 옮길 수 있습니다.',
+  SAME: '이미 이 채널에 있습니다.',
+  OFFLINE: '서버와 연결되어 있지 않습니다.',
+  TIMEOUT: '서버가 답하지 않습니다. 잠시 후 다시 시도해 주세요.',
+};
+if (rooms.canSwitchChannel) $('#chanBtn').hidden = false;
+async function loadChannels() {
+  chanError.hidden = true;
+  const r = await rooms.listChannels();
+  if (!r.ok) { chanError.textContent = SWITCH_REASON[r.reason] || SWITCH_REASON.TIMEOUT; chanError.hidden = false; return; }
+  chanList.textContent = '';
+  for (const c of r.channels) {
+    const here = c.no === r.current, full = c.members >= r.capacity;
+    const row = document.createElement('div');
+    row.className = `chanRow${here ? ' here' : ''}`;
+    row.setAttribute('role', 'listitem');
+    const name = document.createElement('b');
+    name.textContent = `${c.no}채널`;
+    const info = document.createElement('div');
+    const meter = document.createElement('div'); meter.className = 'meter';
+    const fill = document.createElement('i'); fill.style.width = `${Math.min(100, (c.members / r.capacity) * 100)}%`; meter.appendChild(fill);
+    const count = document.createElement('small'); count.textContent = `${c.members} / ${r.capacity}명${here ? ', 지금 여기' : ''}`;
+    info.append(meter, count);
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.textContent = here ? '여기 있음' : full ? '가득 참' : '옮기기';
+    go.disabled = here || full;
+    go.onclick = () => switchTo(c.no);
+    row.append(name, info, go);
+    chanList.appendChild(row);
+  }
+}
+async function switchTo(no) {
+  if (state !== 'hall') { chanError.textContent = SWITCH_REASON.IN_BOOTH; chanError.hidden = false; return; }
+  chanList.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+  const r = await rooms.switchChannel(no);
+  if (!r.ok) {
+    chanError.textContent = SWITCH_REASON[r.reason] || SWITCH_REASON.TIMEOUT;
+    chanError.hidden = false;
+    loadChannels();
+    return;
+  }
+  chanPanel.hidden = true;
+  toast(`${no}채널로 옮겼습니다`);
+}
+$('#chanBtn').onclick = () => { chanPanel.hidden = false; chanList.textContent = ''; loadChannels(); };
+$('#chanRefresh').onclick = loadChannels;
+$('#chanClose').onclick = () => { chanPanel.hidden = true; };
+chanPanel.addEventListener('keydown', (e) => { if (e.key === 'Escape') chanPanel.hidden = true; });
 
 /* ---------- my baptismal name (protocol v0.4) ---------- */
 rooms.onName((name) => { $('#myName').textContent = name; });
@@ -425,7 +484,7 @@ let shownPeople = -1;
 
 /* ---------- input ---------- */
 const keys = createKeyboard((k) => {
-  if (!namePanel.hidden || faceEditor.isOpen() || !inquiryPanel.hidden) return;   // a dialog is open: buttons inside it may hold focus
+  if (!namePanel.hidden || faceEditor.isOpen() || !inquiryPanel.hidden || !chanPanel.hidden) return;   // a dialog is open: buttons inside it may hold focus
   if (k === 'e' && state === 'hall') act();
   if (state === 'hall' && ['1', '2', '3', '4'].includes(k)) playEmote(EMOTES[Number(k) - 1].id);
   if (k === 'v' && state === 'hall') toggleView();
@@ -708,7 +767,7 @@ const clock = new THREE.Clock();
 
 function updatePlayer(dt) {
   let vx = 0, vz = 0;
-  if (state === 'hall' && namePanel.hidden && !faceEditor.isOpen() && inquiryPanel.hidden) {
+  if (state === 'hall' && namePanel.hidden && !faceEditor.isOpen() && inquiryPanel.hidden && chanPanel.hidden) {
     let f = 0, r = 0;
     if (keys.w || keys.arrowup) f += 1;
     if (keys.s || keys.arrowdown) f -= 1;
