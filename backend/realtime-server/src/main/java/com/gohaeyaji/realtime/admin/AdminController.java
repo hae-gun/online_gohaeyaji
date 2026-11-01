@@ -5,6 +5,7 @@ import com.gohaeyaji.realtime.channel.ChannelService;
 import com.gohaeyaji.realtime.face.FaceModeration;
 import com.gohaeyaji.realtime.face.FaceReports;
 import com.gohaeyaji.realtime.inquiry.Inquiries;
+import com.gohaeyaji.realtime.feedback.AnswerFeedback;
 import com.gohaeyaji.realtime.config.RealtimeProperties;
 import com.gohaeyaji.realtime.redis.RedisKeys;
 import com.gohaeyaji.realtime.session.SessionRegistry;
@@ -45,11 +46,12 @@ public class AdminController {
     private final StringRedisTemplate redis;
     private final MeterRegistry meters;
     private final Inquiries inquiries;
+    private final AnswerFeedback feedback;
     private final RealtimeProperties props;
 
     public AdminController(SessionRegistry registry, ChannelService channelService, BoothService booths, FaceReports reports,
                            FaceModeration moderation, StringRedisTemplate redis, MeterRegistry meters,
-                           Inquiries inquiries, RealtimeProperties props) {
+                           Inquiries inquiries, AnswerFeedback feedback, RealtimeProperties props) {
         this.registry = registry;
         this.channelService = channelService;
         this.booths = booths;
@@ -58,6 +60,7 @@ public class AdminController {
         this.redis = redis;
         this.meters = meters;
         this.inquiries = inquiries;
+        this.feedback = feedback;
         this.props = props;
     }
 
@@ -80,6 +83,7 @@ public class AdminController {
         out.put("serversAlive", channelService.aliveServers().size());
         out.put("boothCount", props.boothCount());
         out.put("inquiriesOpen", inquiries.openCount());
+        out.put("feedbackTodo", feedback.todoCount());
 
         List<Map<String, Object>> channels = new ArrayList<>();
         Set<String> nos = redis.opsForZSet().range(RedisKeys.CHANNELS, 0, -1);
@@ -172,6 +176,31 @@ public class AdminController {
     @ResponseBody
     public ResponseEntity<Map<String, Object>> inquiryDelete(@PathVariable long id) {
         if (!inquiries.delete(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(Map.of("ok", true));
+    }
+
+    /** Confessions sent to the answer improvement box (with consent), newest first. */
+    @GetMapping("/admin/api/feedback")
+    @ResponseBody
+    public List<AnswerFeedback.Entry> feedback() {
+        return feedback.list(1000);
+    }
+
+    @PostMapping("/admin/api/feedback/{id}/mark/{status}")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> feedbackMark(@PathVariable long id, @PathVariable String status) {
+        if (!feedback.mark(id, status)) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(Map.of("ok", true, "entry", feedback.entry(id)));
+    }
+
+    @PostMapping("/admin/api/feedback/{id}/delete")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> feedbackDelete(@PathVariable long id) {
+        if (!feedback.delete(id)) {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(Map.of("ok", true));

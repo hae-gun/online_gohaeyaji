@@ -34,6 +34,21 @@
       <p class="empty muted" id="inquiryEmpty" hidden>해당하는 문의가 없습니다.</p>
     </section>
 
+    <section aria-labelledby="h-feedback">
+      <div class="row">
+        <h2 id="h-feedback">답변 개선함 <span class="muted">(30일 보관)</span></h2>
+        <div class="filters" id="feedbackFilters" role="group" aria-label="상태로 거르기"></div>
+      </div>
+      <p class="muted">사용자가 "답이 엉뚱해요"를 누르고 동의한 고해만 모입니다. 이름과 IP는 없고, 전화번호와 이메일과 긴 숫자는 가려져 있습니다. 표시한 것들로 AI에게 줄 내용을 만들어 answers.json을 고친 뒤 배포하세요.</p>
+      <div class="row">
+        <button type="button" id="feedbackExport" class="ok">AI에 넘길 내용 만들기</button>
+        <span class="muted" id="feedbackExportNote"></span>
+      </div>
+      <textarea id="feedbackPrompt" readonly hidden></textarea>
+      <div class="inquiries" id="feedbackList"></div>
+      <p class="empty muted" id="feedbackEmpty" hidden>해당하는 고해가 없습니다.</p>
+    </section>
+
     <section aria-labelledby="h-faces">
       <div class="row">
         <h2 id="h-faces">신고된 얼굴 그림 <span class="muted">(최근 7일)</span></h2>

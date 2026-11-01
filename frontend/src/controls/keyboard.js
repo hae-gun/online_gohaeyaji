@@ -19,7 +19,9 @@ const SCROLL_KEYS = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '];
 export function createKeyboard(onPress) {
   const held = {};
   addEventListener('keydown', (e) => {
-    if (e.target && e.target.tagName === 'INPUT') return; // typing a confession
+    // typing in a text box (a confession, a name, an inquiry): not game keys
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
     const k = keyOf(e);
     held[k] = true;
     if (SCROLL_KEYS.includes(k)) e.preventDefault();

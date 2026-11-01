@@ -124,6 +124,16 @@ public final class ClientSession {
     }
 
     private long lastInquiryAt;
+    private long lastFeedbackAt;
+
+    /** One answer feedback per gapMs (protocol section 19). */
+    public synchronized boolean acceptFeedback(long now, long gapMs) {
+        if (lastFeedbackAt != 0 && now - lastFeedbackAt < gapMs) {
+            return false;
+        }
+        lastFeedbackAt = now;
+        return true;
+    }
 
     public boolean acceptFace(long now, long minGapMs) {
         if (lastFaceAt != 0 && now - lastFaceAt < minGapMs) {

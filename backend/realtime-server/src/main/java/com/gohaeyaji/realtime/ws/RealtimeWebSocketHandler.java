@@ -9,6 +9,7 @@ import com.gohaeyaji.realtime.face.FaceModeration;
 import com.gohaeyaji.realtime.face.FaceReports;
 import com.gohaeyaji.realtime.face.FaceRules;
 import com.gohaeyaji.realtime.inquiry.Inquiries;
+import com.gohaeyaji.realtime.feedback.AnswerFeedback;
 import com.gohaeyaji.realtime.name.NameService;
 import com.gohaeyaji.realtime.presence.Emotes;
 import com.gohaeyaji.realtime.presence.PresenceService;
@@ -70,6 +71,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     private final FaceReports faceReports;
     private final FaceModeration moderation;
     private final Inquiries inquiries;
+    private final AnswerFeedback feedback;
     private final MessageSender sender;
     private final ObjectMapper mapper;
     private final SecureRandom random = new SecureRandom();
@@ -81,7 +83,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
 
     public RealtimeWebSocketHandler(RealtimeProperties props, SessionRegistry registry, ChannelService channels,
                                     BoothService booths, PresenceService presence, NameService names,
-                                    FaceReports faceReports, FaceModeration moderation, Inquiries inquiries, MessageSender sender,
+                                    FaceReports faceReports, FaceModeration moderation, Inquiries inquiries, AnswerFeedback feedback, MessageSender sender,
                                     ObjectMapper mapper, MeterRegistry meters) {
         this.props = props;
         this.registry = registry;
@@ -92,6 +94,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         this.faceReports = faceReports;
         this.moderation = moderation;
         this.inquiries = inquiries;
+        this.feedback = feedback;
         this.sender = sender;
         this.mapper = mapper;
         Gauge.builder("gohaeyaji.sessions", registry, SessionRegistry::size)
@@ -169,6 +172,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             case "emote" -> onEmote(session, msg);
             case "inquiry" -> onInquiry(session, msg, reqId);
             case "channels" -> onChannels(session, reqId);
+            case "feedback" -> onFeedback(session, msg, reqId);
             case "switchChannel" -> onSwitchChannel(session, msg, reqId);
             case "activity" -> session.touchActivity(now());
             case "resync" -> sendSnapshot(session);
@@ -230,6 +234,30 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
                 presence.sitting(channelNo),
                 props.presenceMs(),
                 now()));
+    }
+
+    /**
+     * A confession the person chose to send after an answer that missed (protocol section 19).
+     * Only from inside a booth, where the answer was given. No name or IP is kept.
+     */
+    private void onFeedback(ClientSession session, JsonNode msg, String reqId) {
+        long now = now();
+        if (session.boothId() == null) {
+            sender.send(session, Messages.FeedbackResult.fail(reqId, Messages.FEEDBACK_INVALID));
+            return;
+        }
+        if (!session.acceptFeedback(now, props.feedbackMinGapMs())) {
+            sender.send(session, Messages.FeedbackResult.fail(reqId, Messages.FEEDBACK_TOO_SOON));
+            return;
+        }
+        AnswerFeedback.Verdict v = feedback.submit(msg.path("reason").asText(null), msg.path("text").asText(null),
+                msg.path("persona").asText(null), msg.path("category").asText(null), msg.path("answer").asText(null),
+                session.remoteIp(), now);
+        switch (v) {
+            case OK -> sender.send(session, Messages.FeedbackResult.ok(reqId));
+            case TOO_MANY -> sender.send(session, Messages.FeedbackResult.fail(reqId, Messages.FEEDBACK_TOO_MANY));
+            default -> sender.send(session, Messages.FeedbackResult.fail(reqId, Messages.FEEDBACK_INVALID));
+        }
     }
 
     /** Open channels with their member counts (protocol section 18). */

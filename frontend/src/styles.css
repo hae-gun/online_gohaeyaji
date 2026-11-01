@@ -167,3 +167,9 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .chanRow .meter i{display:block;height:100%;background:var(--gold)}
 .chanRow small{display:block;color:var(--muted);font-size:12px;margin-top:4px;font-variant-numeric:tabular-nums}
 .chanRow button{font:inherit;font-size:13.5px}
+
+/* answer feedback with consent (protocol v0.11) */
+.fbBtn{align-self:flex-end;font-size:12.5px;padding:5px 12px;background:rgba(18,14,22,.6)}
+#fbText{font:inherit;font-size:15px;line-height:1.6;color:var(--ink);background:#14101a;border:1px solid var(--line);border-radius:10px;padding:10px 12px;resize:vertical}
+.fbLabel{color:var(--muted);font-size:12px;margin-bottom:-8px}
+.card .fbAnswer{color:var(--ink);font-size:13.5px;border-left:3px solid var(--line);padding-left:10px;max-height:120px;overflow-y:auto}

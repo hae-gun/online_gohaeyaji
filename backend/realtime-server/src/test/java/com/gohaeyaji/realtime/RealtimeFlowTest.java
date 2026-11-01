@@ -704,6 +704,41 @@ class RealtimeFlowTest {
         assertThat(admin("POST", "/admin/api/inquiries/" + id + "/delete", "test-secret", true).statusCode()).isEqualTo(404);
     }
 
+    // ------------------------------------------------------------ answer improvement box (protocol v0.11)
+
+    @Test
+    void consentedConfessionsReachTheAdminPageMaskedAndWithoutIp() throws Exception {
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        String fb = "{\"type\":\"feedback\",\"reqId\":\"%s\",\"reason\":\"wrong\",\"persona\":\"eom\",\"category\":\"generic\","
+                + "\"text\":\"연락은 010-1234-5678로 주세요\",\"answer\":\"그 마음은 압니다.\"}";
+        try (TestClient a = TestClient.connect(port)) {
+            a.hello();
+            a.send(String.format(fb, "f0"));                                        // outside a booth: no
+            assertThat(a.await("feedbackResult", m -> "f0".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("INVALID");
+            a.send("{\"type\":\"claim\",\"reqId\":\"c1\",\"boothId\":4}");
+            a.await("claimResult");
+            a.send(String.format(fb, "f1"));
+            assertThat(a.await("feedbackResult", m -> "f1".equals(m.path("reqId").asText())).path("ok").asBoolean()).isTrue();
+            a.send(String.format(fb, "f2"));                                        // within 10 s
+            assertThat(a.await("feedbackResult", m -> "f2".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("TOO_SOON");
+        }
+        JsonNode list = json.readTree(admin("GET", "/admin/api/feedback", "test-secret", false).body());
+        assertThat(list).hasSize(1);
+        JsonNode e = list.get(0);
+        assertThat(e.path("text").asText()).isEqualTo("연락은 [전화번호]로 주세요");
+        assertThat(e.path("persona").asText()).isEqualTo("eom");
+        assertThat(e.path("status").asText()).isEqualTo("todo");
+        assertThat(e.has("ip")).isFalse();
+        long id = e.path("id").asLong();
+        assertThat(redisTemplate.getExpire("gy:feedback:" + id)).isPositive();      // gone after 30 days
+        assertThat(json.readTree(admin("GET", "/admin/api/overview", "test-secret", false).body()).path("feedbackTodo").asLong()).isEqualTo(1);
+        assertThat(admin("POST", "/admin/api/feedback/" + id + "/mark/new", "test-secret", true).statusCode()).isEqualTo(200);
+        assertThat(json.readTree(admin("GET", "/admin/api/overview", "test-secret", false).body()).path("feedbackTodo").asLong()).isZero();
+        assertThat(admin("POST", "/admin/api/feedback/" + id + "/mark/bogus", "test-secret", true).statusCode()).isEqualTo(404);
+        assertThat(admin("POST", "/admin/api/feedback/" + id + "/delete", "test-secret", true).statusCode()).isEqualTo(200);
+        assertThat(admin("GET", "/admin/api/feedback", "test-secret", false).body()).isEqualTo("[]");
+    }
+
     @Test
     void countsOfADeadServerDoNotFillChannels() throws Exception {
         // a server that crashed with 48 people in channel 1 and never came back

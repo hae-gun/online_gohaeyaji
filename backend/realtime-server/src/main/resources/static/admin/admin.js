@@ -54,6 +54,7 @@
       [o.channels.length, '열린 채널'],
       [o.serversAlive, '살아 있는 서버'],
       [o.inquiriesOpen, '안 읽은 문의'],
+      [o.feedbackTodo, '답변 개선함 할 일'],
       [o.channels.reduce((s, c) => s + c.boothsOccupied, 0), '사용 중 고해소'],
       [Math.round(o.faceReportsTotal), '신고(서버 시작 후)'],
       [Math.round(o.faceBansTotal), '금지(서버 시작 후)'],
@@ -265,6 +266,116 @@
   }
   markInquiryFilters();
 
+  // ------------------------------------------------------------ answer improvement box
+  const PRIEST = { jin: '진 신부님(진지)', eom: '엄 신부님(꾸짖음)', yu: '유 신부님(유머)', baek: '백 신부님(전설)' };
+  const REASON = { wrong: '주제를 잘못 알아들음', bland: '너무 뻔한 답' };
+  const FB_STATUS = { todo: '할 일', wrong: '카테고리 잘못', new: '새 주제', ignore: '무시' };
+  let feedback = [];
+  let feedbackFilter = 'todo';
+
+  async function loadFeedback() {
+    feedback = await api('/feedback');
+    renderFeedback();
+  }
+
+  async function feedbackAct(id, action) {
+    if (action === 'delete' && !confirm('이 고해를 지울까요? 되돌릴 수 없습니다.')) return;
+    try {
+      await api(action === 'delete' ? `/feedback/${id}/delete` : `/feedback/${id}/mark/${action}`, { method: 'POST', body: '{}' });
+      await Promise.all([loadFeedback(), loadOverview()]);
+    } catch (e) {
+      toast(`처리하지 못했습니다 (${e.message})`);
+    }
+  }
+
+  function renderFeedback() {
+    const box = $('#feedbackList');
+    box.textContent = '';
+    const list = feedback.filter((e) => feedbackFilter === 'all' || e.status === feedbackFilter);
+    $('#feedbackEmpty').hidden = list.length > 0;
+    for (const e of list) {
+      const card = document.createElement('article');
+      card.className = `inquiry${e.status === 'ignore' ? ' done' : ''}`;
+      const head = document.createElement('div');
+      head.className = 'ihead';
+      const badge = document.createElement('span');
+      badge.className = `badge fb-${e.status}`;
+      badge.textContent = FB_STATUS[e.status] || e.status;
+      const meta = document.createElement('span');
+      meta.className = 'muted';
+      meta.textContent = `${fmtTime(e.at)}  ${PRIEST[e.persona] || e.persona}  판단: ${e.category === 'generic' ? '기본 답변(어느 주제에도 안 걸림)' : e.category}  사유: ${REASON[e.reason] || e.reason}`;
+      head.append(badge, meta);
+      const q = document.createElement('p'); q.className = 'itext'; q.textContent = `고해: ${e.text}`;
+      const a = document.createElement('p'); a.className = 'itext muted'; a.textContent = `나간 답: ${e.answer}`;
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      for (const [st, label] of [['wrong', '카테고리 잘못'], ['new', '새 주제'], ['ignore', '무시'], ['todo', '할 일로']]) {
+        if (st === e.status) continue;
+        const b = document.createElement('button');
+        b.type = 'button'; b.textContent = label;
+        b.onclick = () => feedbackAct(e.id, st);
+        actions.appendChild(b);
+      }
+      const del = document.createElement('button');
+      del.type = 'button'; del.className = 'danger'; del.textContent = '삭제';
+      del.onclick = () => feedbackAct(e.id, 'delete');
+      actions.appendChild(del);
+      card.append(head, q, a, actions);
+      box.appendChild(card);
+    }
+  }
+
+  /** The text to paste into an AI chat: the data format, the tone, and the marked confessions. */
+  function buildPrompt(items) {
+    const lines = items.map((e, i) => `${i + 1}. [${FB_STATUS[e.status]}] 신부님: ${e.persona} / 판단한 카테고리: ${e.category} / 사유: ${REASON[e.reason] || e.reason}
+   고해: "${e.text}"
+   나간 답: "${e.answer}"`);
+    return `고해야지(일상의 작은 실패를 털어놓는 패러디 고해소)의 답변 데이터 answers.json을 개선하려고 합니다.
+아래는 사용자가 "답이 엉뚱해요"를 누르고 동의해서 보낸 고해들입니다.
+
+[answers.json 형식]
+- categories: [{ "id": "영문 소문자", "word": "대표 단어", "keys": [...], "empathy": [...] 또는 { "jin": [...], "eom": [...], "yu": [...] }, "penance": [...], "closing": [...] 또는 { "jin": [...], "eom": [...], "yu": [...] } }]
+- keys: 고해에 이 말이 들어 있으면 이 카테고리. "A|B"는 A와 B가 모두 들어 있을 때
+- empathy 문장의 {k}, {k은}, {k이}, {k을} 자리에는 걸린 키워드가 조사와 함께 들어감
+- 신부님: jin(진지하고 다정), eom(엄하게 꾸짖지만 끝은 따뜻), yu(유머), baek(백 년 된 전설의 신부님, 드물게 등장)
+- penance(보속)는 오늘 바로 할 수 있는 작고 구체적인 행동 하나
+
+[요청]
+1. [카테고리 잘못]은 원래 가야 했던 카테고리와, 그쪽에 추가할 keys
+2. [새 주제]는 새 카테고리 전체. empathy와 closing은 jin, eom, yu 각각 3개 이상, penance 3개 이상
+3. [할 일]은 위 둘 중 맞는 쪽으로 판단
+4. 톤: 실제 고해성사를 흉내 내지 않고, 일상의 작은 실패를 웃으며 다독이는 패러디. 종교와 사람을 조롱하지 않기. 위기 상황(자해, 자살 등)은 다루지 않기
+5. 결과는 JSON 하나로만:
+{ "addKeys": [{ "category": "기존 id", "keys": ["..."] }], "newCategories": [ { 위 형식의 카테고리 } ] }
+
+[고해 목록]
+${lines.join('\n')}
+`;
+  }
+
+  $('#feedbackExport').onclick = async () => {
+    const items = feedback.filter((e) => e.status === 'wrong' || e.status === 'new' || e.status === 'todo');
+    const ta = $('#feedbackPrompt');
+    if (!items.length) { toast('넘길 고해가 없습니다'); return; }
+    ta.value = buildPrompt(items);
+    ta.hidden = false;
+    ta.select();
+    try { await navigator.clipboard.writeText(ta.value); $('#feedbackExportNote').textContent = `${items.length}건을 복사했습니다. AI 대화창에 붙여 넣으세요`; }
+    catch (_) { $('#feedbackExportNote').textContent = `${items.length}건. 아래 내용을 복사해 AI 대화창에 붙여 넣으세요`; }
+  };
+
+  const feedbackFiltersEl = $('#feedbackFilters');
+  for (const [id, label] of [['todo', '할 일'], ['wrong', '카테고리 잘못'], ['new', '새 주제'], ['ignore', '무시'], ['all', '전체']]) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = label; b.dataset.id = id;
+    b.onclick = () => { feedbackFilter = id; markFeedbackFilters(); renderFeedback(); };
+    feedbackFiltersEl.appendChild(b);
+  }
+  function markFeedbackFilters() {
+    for (const b of feedbackFiltersEl.children) b.setAttribute('aria-pressed', String(b.dataset.id === feedbackFilter));
+  }
+  markFeedbackFilters();
+
   async function loadFaces() {
     faces = await api('/faces');
     renderFaces();
@@ -285,7 +396,7 @@
 
   async function refresh() {
     try {
-      await Promise.all([loadOverview(), loadFaces(), loadInquiries()]);
+      await Promise.all([loadOverview(), loadFaces(), loadInquiries(), loadFeedback()]);
       $('#updated').textContent = `${new Date().toLocaleTimeString('ko-KR')} 기준, 10초마다 새로고침`;
     } catch (e) {
       $('#updated').textContent = `불러오지 못했습니다 (${e.message})`;

@@ -66,6 +66,20 @@ public final class RedisKeys {
         return "gy:inquiry:ip:" + ipHash;
     }
 
+    /** Answer improvement box (protocol section 19): only confessions people chose to send. */
+    public static final String FEEDBACK_SEQ = "gy:feedback:seq";
+    public static final String FEEDBACKS = "gy:feedbacks";
+    public static final String FEEDBACKS_TODO = "gy:feedbacks:todo";
+
+    public static String feedback(long id) {
+        return "gy:feedback:" + id;
+    }
+
+    /** Sent from one IP in the last hour; the key holds a hash of the IP, not the IP. */
+    public static String feedbackIp(String ipHash) {
+        return "gy:feedback:ip:" + ipHash;
+    }
+
     public static String booth(int channelNo, int boothId) {
         return CHANNEL_PREFIX + channelNo + ":booth:" + boothId;
     }

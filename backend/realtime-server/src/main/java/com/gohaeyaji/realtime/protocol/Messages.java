@@ -134,6 +134,18 @@ public final class Messages {
         }
     }
 
+    /** Answer to "feedback" (protocol section 19). */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record FeedbackResult(String type, String reqId, boolean ok, String reason) {
+        public static FeedbackResult ok(String reqId) {
+            return new FeedbackResult("feedbackResult", reqId, true, null);
+        }
+
+        public static FeedbackResult fail(String reqId, String reason) {
+            return new FeedbackResult("feedbackResult", reqId, false, reason);
+        }
+    }
+
     /** Answer to "inquiry" (protocol section 17). */
     public record InquiryResult(String type, String reqId, boolean ok, String reason) {
         public static InquiryResult ok(String reqId) {
@@ -223,6 +235,10 @@ public final class Messages {
     public static final String SWITCH_NO_CHANNEL = "NO_CHANNEL";
     public static final String SWITCH_IN_BOOTH = "IN_BOOTH";
     public static final String SWITCH_TOO_SOON = "TOO_SOON";
+
+    public static final String FEEDBACK_INVALID = "INVALID";
+    public static final String FEEDBACK_TOO_SOON = "TOO_SOON";
+    public static final String FEEDBACK_TOO_MANY = "TOO_MANY";
 
     public static final String INQUIRY_INVALID = "INVALID";
     public static final String INQUIRY_TOO_SOON = "TOO_SOON";

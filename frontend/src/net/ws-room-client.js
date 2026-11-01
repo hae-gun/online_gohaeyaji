@@ -156,13 +156,14 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         break;
       }
       case 'channelList':
+      case 'feedbackResult':
       case 'switchResult': {
         const resolve = pendingChannels.get(msg.reqId);
         if (!resolve) return;
         pendingChannels.delete(msg.reqId);
         resolve(msg.type === 'channelList'
           ? { ok: true, current: msg.current, capacity: msg.capacity, channels: msg.channels || [] }
-          : (msg.ok ? { ok: true, channelNo: msg.channelNo } : { ok: false, reason: msg.reason }));
+          : (msg.ok ? { ok: true, channelNo: msg.channelNo } : { ok: false, reason: msg.reason }));   // switchResult, feedbackResult
         break;
       }
       case 'inquiryResult': {
@@ -289,6 +290,14 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
       return ask({ type: 'switchChannel', channelNo });
     },
     canSwitchChannel: true,
+
+    /**
+     * A confession the person agreed to send after an answer that missed (protocol section 19).
+     * @param {{ reason: string, text: string, persona: string, category: string, answer: string }} f
+     */
+    sendFeedback(f) {
+      return ask({ type: 'feedback', ...f });
+    },
 
     /** A message for the site's admins from the box in the confession hall (protocol section 17). */
     sendInquiry(kind, text) {

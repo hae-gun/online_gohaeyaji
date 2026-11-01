@@ -57,6 +57,10 @@ gohaeyaji:
   inquiry-min-chars: 5
   inquiry-max-chars: 500
   inquiry-keep: 2000              # oldest dropped beyond this
+  # answer improvement box (protocol section 19): only confessions people chose to send
+  feedback-min-gap-ms: 10000      # one per 10 s per person
+  feedback-per-ip-per-hour: 30
+  feedback-keep-ms: 2592000000    # 30 days, then gone
   # admin page (/admin). Empty password = admin page off. Set both through environment variables.
   admin-user: ${ADMIN_USER:admin}
   admin-password: ${ADMIN_PASSWORD:}

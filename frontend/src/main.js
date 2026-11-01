@@ -21,6 +21,7 @@ import { createMoveSender } from './net/move-sender.js';
 import { checkName, normalizeName, randomSaintName, NAME_REASON } from './net/names.js';
 import { createFaceEditor } from './ui/face-editor.js';
 import { hiddenFaces } from './net/faces.js';
+import { maskContact } from './net/feedback.js';
 import { EMOTES, createEmotePlayer } from './world/emotes.js';
 import { history } from './storage/history.js';
 import { $, toast, fade, createBubble, initHistoryPanel } from './ui/hud.js';
@@ -371,7 +372,21 @@ function openInquiry() {
   inquiryError.hidden = true;
   inquiryPanel.hidden = false;
   $('#inquiryCount').textContent = String([...inquiryText.value].length);
-  try { inquiryText.focus(); } catch (_) { /* ignore */ }
+  focusAfterKey(inquiryText);
+}
+/**
+ * Focuses a text box opened with a key (E). Focusing it right away lets the same key press land
+ * in the box: with the Korean IME on, E types 'ㄷ'. So wait until the key is released.
+ */
+function focusAfterKey(el) {
+  const focus = () => { try { el.focus(); } catch (_) { /* ignore */ } };
+  if (!keys.e) { focus(); return; }
+  const onUp = (ev) => {
+    if (ev.code !== 'KeyE') return;
+    removeEventListener('keyup', onUp, true);
+    setTimeout(focus, 0);
+  };
+  addEventListener('keyup', onUp, true);
 }
 const closeInquiry = () => { inquiryPanel.hidden = true; };
 $('#inquiryCancel').onclick = closeInquiry;
@@ -484,7 +499,7 @@ let shownPeople = -1;
 
 /* ---------- input ---------- */
 const keys = createKeyboard((k) => {
-  if (!namePanel.hidden || faceEditor.isOpen() || !inquiryPanel.hidden || !chanPanel.hidden) return;   // a dialog is open: buttons inside it may hold focus
+  if (!namePanel.hidden || faceEditor.isOpen() || !inquiryPanel.hidden || !chanPanel.hidden || !fbPanel.hidden) return;   // a dialog is open: buttons inside it may hold focus
   if (k === 'e' && state === 'hall') act();
   if (state === 'hall' && ['1', '2', '3', '4'].includes(k)) playEmote(EMOTES[Number(k) - 1].id);
   if (k === 'v' && state === 'hall') toggleView();
@@ -642,6 +657,42 @@ const idle = {
   },
 };
 
+/* ---------- answer feedback, only with consent (protocol v0.11) ---------- */
+let lastAnswer = null;
+const fbPanel = $('#fbPanel'), fbError = $('#fbError');
+const FB_REASON = {
+  INVALID: '보낼 수 없는 내용입니다. 고해를 1~200자로 적어 주세요.',
+  TOO_SOON: '조금 뒤에 다시 보내 주세요.',
+  TOO_MANY: '이 연결에서 보낸 것이 많습니다. 한 시간 뒤에 다시 보내 주세요.',
+  OFFLINE: '서버와 연결되어 있을 때만 보낼 수 있습니다.',
+  TIMEOUT: '서버가 답하지 않았습니다. 잠시 후 다시 보내 주세요.',
+};
+$('#fbBtn').onclick = () => {
+  if (!lastAnswer) return;
+  fbError.hidden = true;
+  $('#fbText').value = maskContact(lastAnswer.text);
+  $('#fbAnswer').textContent = lastAnswer.answer;
+  fbPanel.hidden = false;
+  idle.pause();   // reading and deciding is not being idle
+};
+const closeFb = () => { fbPanel.hidden = true; if (state === 'room') idle.start(); };
+$('#fbCancel').onclick = closeFb;
+fbPanel.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFb(); });
+$('#fbForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!lastAnswer) return;
+  const text = maskContact($('#fbText').value.trim());
+  const reason = $('#fbForm').querySelector('input[name="fbReason"]:checked')?.value || 'wrong';
+  $('#fbSend').disabled = true;
+  const r = await rooms.sendFeedback({ reason, text, persona: lastAnswer.persona, category: lastAnswer.category, answer: lastAnswer.answer });
+  $('#fbSend').disabled = false;
+  if (!r.ok) { fbError.textContent = FB_REASON[r.reason] || FB_REASON.INVALID; fbError.hidden = false; return; }
+  lastAnswer = null;
+  $('#fbBtn').hidden = true;
+  closeFb();
+  toast('보내 주셔서 감사합니다. 신부님이 더 잘 알아듣도록 고치겠습니다');
+});
+
 function setInputEnabled(on) {
   $('#confess').disabled = !on;
   $('#sendBtn').disabled = !on;
@@ -657,6 +708,8 @@ $('#chatForm').addEventListener('submit', (e) => {
   idle.pause();   // waiting for the priest
   $('#confess').value = '';
   setInputEnabled(false);
+  $('#fbBtn').hidden = true;
+  lastAnswer = null;
   $('#guide').textContent = '신부님이 듣고 계십니다';
   bubble.say('……', { silent: true });
   confessional.setMood('listen');
@@ -674,6 +727,11 @@ $('#chatForm').addEventListener('submit', (e) => {
       history.add({ t: Date.now(), q: text, c: r.category, p: r.penance, pr: r.persona });
     } else {
       $('#penance').hidden = true;
+    }
+    // "답이 엉뚱해요": only where a real answer was given (never for crisis replies), and only with a server
+    if ((r.kind === 'answer' || r.kind === 'chat') && rooms.sendFeedback) {
+      lastAnswer = { text, persona: r.persona, category: r.category || 'generic', answer: r.line };
+      $('#fbBtn').hidden = false;
     }
     $('#guide').textContent = '더 고해하실 것이 있으면 작성하세요';
     setInputEnabled(true);
@@ -719,6 +777,9 @@ function leaveRoom({ reason = 'USER', notifyServer = true, message = '' } = {}) 
   idle.pause();
   bubble.stop();
   confessional.reset();
+  $('#fbBtn').hidden = true;
+  fbPanel.hidden = true;
+  lastAnswer = null;
   const b = current;
   // free the booth right away so others see the LED go off; the door animation is local only
   if (notifyServer) rooms.release(b.id, reason);

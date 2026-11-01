@@ -1,4 +1,4 @@
-# 실시간 서버 메시지 규약 (v0.10)
+# 실시간 서버 메시지 규약 (v0.11)
 
 프론트엔드(`frontend/src/net/`)와 realtime-server가 주고받는 WebSocket 메시지 규약입니다. 양쪽은 이 문서만 보고 개발합니다. 메시지 형식을 바꾸면 프로토콜 버전 `v`를 올립니다.
 
@@ -461,6 +461,9 @@
 | `gy:inquiries` | ZSET (score = 받은 시각) | 관리자 페이지 문의 목록. 2000건 넘으면 오래된 것부터 지움 |
 | `gy:inquiries:open` | SET | 처리하지 않은 문의 번호 (관리자 페이지 숫자) |
 | `gy:inquiry:ip:{hash}` | 정수, TTL 1시간 | IP당 문의 수. 키에는 IP의 해시만, 1시간 뒤 사라짐 |
+| `gy:feedback:{id}` | HASH: at, reason, text, persona, category, answer, status, TTL 30일 | 답변 개선함 한 건 (v0.11). 이름과 IP 없음 |
+| `gy:feedbacks`, `gy:feedbacks:todo` | ZSET(시각), SET | 관리자 목록, 아직 안 본 것 |
+| `gy:feedback:ip:{hash}` | 정수, TTL 1시간 | IP당 보낸 수. 키에는 IP의 해시만 |
 | `gy:ch:{no}:emptySince` | 시각(ms) | 채널이 비기 시작한 때. 5분 지나면 채널을 닫음 (v0.10) |
 
 - 인원 수는 서버별로 셈. 서버는 시작할 때 무작위 ID를 받고 5초마다 하트비트(`server_heartbeat.lua`)로 자기 몫을 실제 접속 수로 덮어씀. 15초 넘게 하트비트가 없는 서버의 몫은 합계에서 빠지고 다음 하트비트 때 지워짐. 재시작한 서버는 새 ID라 예전 몫을 이어받지 않음. 정상 종료 때는 바로 자기 몫을 지움
@@ -561,6 +564,20 @@
 | 서버가 하는 일 | 인원 이동은 `switch_channel.lua` 하나로(두 사람이 마지막 한 자리에 동시에 들어와도 한 명만). 예전 채널에서는 나간 것으로(`presence.left`), 새 채널에서 새 pid, 이름과 그린 얼굴은 그대로. 앉아 있었다면 클라이언트가 새 채널에 다시 알림 |
 | 새 채널을 만드는 옮기기 | 없음. 이미 열린 채널로만 옮김. 새 채널은 자동 배정이 모두 80% 찼을 때만 열림 |
 
+## 19. 답변 개선함 (v0.11)
+
+고해 내용은 기본적으로 어디에도 저장하지 않는다. 사람이 직접 동의하고 보낸 것만 예외.
+
+| 항목 | 값 |
+|---|---|
+| 화면 | 신부님 답(일반 답변과 일상 대화) 아래 "답이 엉뚱해요" 버튼. 위기 답변(safety), 금지어, 너무 짧은 입력에는 없음. 서버 연결 때만 |
+| 동의 | 누르면 창이 열림: 무엇을 보내는지(고해와 신부님 답), 어디에 쓰는지(답변 고치기), 언제 지우는지(30일), 무엇을 안 보내는지(이름, IP), 가리는 것(전화번호, 이메일, 긴 숫자). 보낼 고해는 보내기 전에 고칠 수 있음. "동의하고 보내기"를 눌러야만 전송 |
+| 메시지 | `{ "type": "feedback", "reqId": "r2", "reason": "wrong", "text": "...", "persona": "jin", "category": "generic", "answer": "..." }` -> `{ "type": "feedbackResult", "reqId": "r2", "ok": true }`. `reason`: `wrong`(주제를 잘못 알아들음), `bland`(너무 뻔함) |
+| 서버 검사 | 고해소 안에서만, 고해 1~200자, 답 800자까지, 신부님과 카테고리 형식, 10초에 한 번, IP당 1시간 30건(IP 해시로만 셈). 저장 전에 전화번호, 이메일, 긴 숫자를 한 번 더 가림 |
+| 실패 이유 | `INVALID`, `TOO_SOON`, `TOO_MANY` |
+| 관리자 페이지 | "답변 개선함": 할 일, 카테고리 잘못, 새 주제, 무시로 분류, 삭제. "AI에 넘길 내용 만들기"는 answers.json 형식 설명, 톤, 표시한 고해 목록을 한 번에 복사. API `GET /admin/api/feedback`, `POST /admin/api/feedback/{id}/mark/{todo|wrong|new|ignore}`, `POST /admin/api/feedback/{id}/delete` |
+| 반영 | 지금은 AI가 준 JSON을 answers.json에 넣고 다시 배포. 답변 엔진을 서버로 옮기면(7단계) 관리자 페이지에서 바로 반영하고 되돌릴 수 있게 할 예정 |
+
 ## 결정 기록
 
 | ID | 항목 | 결정 |
@@ -597,6 +614,7 @@
 
 | 버전 | 내용 |
 |---|---|
+| v0.11 | 동의한 고해만 받는 답변 개선함: `feedback`, `feedbackResult`, 관리자 페이지 답변 개선함 |
 | v0.10 | 채널 옮기기 `channels`, `channelList`, `switchChannel`, `switchResult`. `booth`와 `presence`에 `ch`. 빈 채널 5분 뒤 닫기. 문의에 IP 저장 안 함 |
 | v0.9 | 앉기를 상태로: `emote` sit에 좌석 `x`, `z`, `ry`, `welcome.sitting`. 앉은 채로 동작. 서버 위치 범위를 고해소 방까지 넓힘(x 38까지) |
 | v0.8 | 고해소 21칸(`welcome.boothCount`), 문의 `inquiry`, `inquiryResult`, 그린 얼굴에 직접 고른 색(5와 `:rrggbb`). 프로토콜 번호 `v`는 1 그대로(추가만 있어서 예전 화면도 동작. 다만 예전 화면은 21번 고해소를 못 씀) |
