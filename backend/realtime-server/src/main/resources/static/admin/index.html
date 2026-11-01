@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>고해야지 관리</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <header>
+    <h1>고해야지 관리</h1>
+    <span id="updated" class="muted"></span>
+    <a href="/grafana/" target="_blank" rel="noopener">Grafana 열기</a>
+  </header>
+
+  <main>
+    <section aria-labelledby="h-overview">
+      <h2 id="h-overview">현황</h2>
+      <div class="stats" id="stats"></div>
+      <table>
+        <thead><tr><th>채널</th><th>인원(전체)</th><th>이 서버 접속</th><th>사용 중 고해소</th></tr></thead>
+        <tbody id="channels"></tbody>
+      </table>
+    </section>
+
+    <section aria-labelledby="h-faces">
+      <div class="row">
+        <h2 id="h-faces">신고된 얼굴 그림 <span class="muted">(최근 7일)</span></h2>
+        <div class="filters" id="filters" role="group" aria-label="상태로 거르기"></div>
+      </div>
+      <p class="muted">서로 다른 3명이 신고하면 자동으로 24시간 금지됩니다. 여기서 직접 금지하거나, 잘못 내려간 그림을 돌려줄 수 있습니다. 금지하면 지금 그 그림을 쓰는 사람도 바로 기본 얼굴로 돌아갑니다.</p>
+      <div class="faces" id="faces"></div>
+      <p class="empty muted" id="empty" hidden>해당하는 그림이 없습니다.</p>
+    </section>
+  </main>
+  <div id="toast" role="status" hidden></div>
+  <script src="admin.js"></script>
+</body>
+</html>

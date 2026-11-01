@@ -31,6 +31,19 @@ public final class RedisKeys {
         return "gy:face:" + faceHash + ":ban";
     }
 
+    /** The reported drawing itself, kept for the admin page. */
+    public static String faceData(String faceHash) {
+        return "gy:face:" + faceHash + ":data";
+    }
+
+    /** What happened to a reported drawing: reports, firstAt, lastAt, bannedAt, bannedBy. */
+    public static String faceRecord(String faceHash) {
+        return "gy:face:" + faceHash + ":record";
+    }
+
+    /** Admin index of reported drawings: member = data key, score = last report time. */
+    public static final String ADMIN_FACES = "gy:admin:faces";
+
     public static String booth(int channelNo, int boothId) {
         return CHANNEL_PREFIX + channelNo + ":booth:" + boothId;
     }

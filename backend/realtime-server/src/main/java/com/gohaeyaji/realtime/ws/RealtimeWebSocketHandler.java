@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gohaeyaji.realtime.booth.BoothService;
 import com.gohaeyaji.realtime.channel.ChannelService;
 import com.gohaeyaji.realtime.config.RealtimeProperties;
+import com.gohaeyaji.realtime.face.FaceModeration;
 import com.gohaeyaji.realtime.face.FaceReports;
 import com.gohaeyaji.realtime.face.FaceRules;
 import com.gohaeyaji.realtime.name.NameService;
@@ -16,7 +17,6 @@ import com.gohaeyaji.realtime.protocol.Messages.BoothEvent;
 import com.gohaeyaji.realtime.protocol.Messages.Booths;
 import com.gohaeyaji.realtime.protocol.Messages.ClaimResult;
 import com.gohaeyaji.realtime.protocol.Messages.ErrorMessage;
-import com.gohaeyaji.realtime.protocol.Messages.FaceRemoved;
 import com.gohaeyaji.realtime.protocol.Messages.FaceResult;
 import com.gohaeyaji.realtime.protocol.Messages.ReportResult;
 import com.gohaeyaji.realtime.protocol.Messages.Idle;
@@ -65,6 +65,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     private final PresenceService presence;
     private final NameService names;
     private final FaceReports faceReports;
+    private final FaceModeration moderation;
     private final MessageSender sender;
     private final ObjectMapper mapper;
     private final SecureRandom random = new SecureRandom();
@@ -76,8 +77,8 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
 
     public RealtimeWebSocketHandler(RealtimeProperties props, SessionRegistry registry, ChannelService channels,
                                     BoothService booths, PresenceService presence, NameService names,
-                                    FaceReports faceReports, MessageSender sender, ObjectMapper mapper,
-                                    MeterRegistry meters) {
+                                    FaceReports faceReports, FaceModeration moderation, MessageSender sender,
+                                    ObjectMapper mapper, MeterRegistry meters) {
         this.props = props;
         this.registry = registry;
         this.channels = channels;
@@ -85,6 +86,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         this.presence = presence;
         this.names = names;
         this.faceReports = faceReports;
+        this.moderation = moderation;
         this.sender = sender;
         this.mapper = mapper;
         Gauge.builder("gohaeyaji.sessions", registry, SessionRegistry::size)
@@ -307,20 +309,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
                 ? ReportResult.fail(reqId, Messages.REPORT_ALREADY)
                 : ReportResult.ok(reqId));
         if (result == FaceReports.Result.BANNED) {
-            takeDown(face);
-        }
-    }
-
-    /** Everyone on this server wearing a banned drawing goes back to the default face. */
-    private void takeDown(String face) {
-        long until = now() + props.faceBlockMs();
-        for (ClientSession s : registry.all()) {
-            if (s.isReady() && face.equals(s.face())) {
-                s.face(null);
-                s.blockFace(until);
-                presence.setFace(s.channelNo(), s.pid(), null);
-                sender.send(s, new FaceRemoved(Messages.REMOVED_REPORTED, props.faceBlockMs()));
-            }
+            moderation.takeDown(face);
         }
     }
 

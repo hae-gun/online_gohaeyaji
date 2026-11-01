@@ -32,6 +32,8 @@
 - 이름 규칙(규약 v0.4, 14장): 2~10자 한글 영문 숫자, 사칭(신부, 주교, 운영 등) 금지, 금지어는 서버가 비공개 `blocked.json`을 읽어 검사, 변경은 10초에 1회, 브라우저 localStorage `gohaeyaji-name`에 기억
 - 그린 얼굴(규약 v0.6, 15장): 상단 "얼굴 그리기"에서 32x32 칸에 점을 찍어 눈코입을 그림(가는 붓 1칸, 굵은 붓 2x2). 색은 지우개, 검정, 빨강, 흰색, 분홍뿐이고 머리 앞면 얼굴만 그릴 수 있음. 예전 16x16 그림은 2배로 늘려 자동 변환. 다른 사람에게도 보이고, 보는 사람이 전체를 끄거나 이름표(✎)를 눌러 그림별로 숨기거나 신고할 수 있음. 숨긴 그림은 내용 해시로 브라우저에 기억. 서로 다른 3세션이 같은 그림을 신고하면 24시간 금지, 그 그림을 쓰던 사람은 기본 얼굴로 돌아가고 10분 동안 못 바꿈(`FaceReports`, `report_face.lua`). 지금 얼굴과 예전 그림 최대 12개를 브라우저에 보관. 코드: `net/faces.js`, `ui/face-editor.js`, `pixel-face.js`의 `setCustom`
 - 동작(규약 v0.7, 16장): 이동 안내 위 반투명 버튼 네 개 또는 숫자키 1~4로 두 손 모아 기도, 성호경, 무릎 꿇고 만세, 꾸벅꾸벅 졸기(Claude 추천, 미사 중 조는 모습). 한 번에 하나만(끝날 때까지 버튼 잠김, 서버도 같은 규칙), 움직임은 끊기지 않게 시작과 끝을 부드럽게 이어 붙이고(ease in/out) 자세 사이도 보간. 걷기 동작과 신부님 성호경도 같은 방식, 동작 중 걷기와 시점 변경 가능(팔과 머리는 동작, 다리는 걷기). 다른 사람에게는 presence.emoted로 보임. 코드: `world/emotes.js`(목표점은 `figure.js` 유저 `pose`), 서버 `presence/Emotes.java`(시간은 프론트와 같게 유지)
+- 관리자 페이지 `/admin`(realtime-server 안, 별도 인스턴스 없음): 현황(접속, 채널, 고해소, 메모리)과 신고된 얼굴 그림 목록(원본과 기록 7일 보관), 24시간 금지, 영구 금지, 돌려주기. HTTP Basic 로그인(`ADMIN_USER`, `ADMIN_PASSWORD`, 비밀번호가 없으면 페이지 자체가 404), 로그인 5번 실패하면 그 IP 10분 차단, 변경 요청은 `X-Admin` 헤더 필수(CSRF 방지). 코드: `admin/`, `face/FaceReports`, `face/FaceModeration`, `static/admin/`. 배포 때 Caddy에서 `/admin`과 `/actuator`는 내 IP만 허용할 것
+- 배포 계획(2026-11-01 결정): 프론트는 GitHub Pages 유지, 백엔드는 AWS. 앱 서버 1대(Caddy, Spring + 관리자 페이지, Redis, t4g.small~medium)와 모니터링 서버 1대(Prometheus, Grafana, t4g.small). 월 5~10만 원 예산
 
 ## 구조
 
@@ -110,7 +112,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 
 ## 다음 할 일
 
-1. 맥에서 `./gradlew test`(테스트 27개) 후 `bootRun` + `npm run dev:server` 창 두 개로 서로 보이는지, 이름표가 뜨는지 확인
+1. 맥에서 `./gradlew test`(테스트 29개) 후 `bootRun` + `npm run dev:server` 창 두 개로 서로 보이는지, 이름표가 뜨는지 확인
 2. 줄서기, 재접속 복구, 레이트리밋
 3. 호스팅 결정 후 배포, 부하테스트
 

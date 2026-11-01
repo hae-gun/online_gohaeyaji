@@ -46,6 +46,10 @@ gohaeyaji:
   face-ban-ms: 86400000           # a banned drawing cannot be worn again for 24 h
   face-block-ms: 600000           # whoever wore it cannot set any face for 10 min
   max-reports-per-minute: 10
+  admin-keep-ms: 604800000        # the admin page keeps reported drawings for 7 days
+  # admin page (/admin). Empty password = admin page off. Set both through environment variables.
+  admin-user: ${ADMIN_USER:admin}
+  admin-password: ${ADMIN_PASSWORD:}
   # private blocked word list (git-ignored), same file the browser uses; relative to the working directory.
   # The default works for ./gradlew bootRun from backend/realtime-server. In Docker, mount the file and set the variable.
   blocked-words-file: ${BLOCKED_WORDS_FILE:../../frontend/public/data/blocked.json}

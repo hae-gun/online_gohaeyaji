@@ -489,6 +489,7 @@
 | 신고 (v0.6) | 그림(SHA-256 앞 16바이트) 기준으로 Redis에 신고한 세션 집합(`gy:face:{hash}:reports`, 1시간). 서로 다른 3세션이 신고하면 그 그림을 24시간 금지(`gy:face:{hash}:ban`, 원자적으로 한 번만, `report_face.lua`). 그 그림을 쓰던 사람은 기본 얼굴로 돌아가고 `faceRemoved`를 받으며 10분 동안 얼굴을 못 바꿈. 금지된 그림은 `hello.face`, `setFace` 모두 거절 |
 | 검사 | 서버는 형식(길이, 숫자 0~4)과 금지 목록만 검사. 그림 내용은 자동으로 거를 수 없어서 신고와 숨기기로 대응 |
 | 지표 | `gohaeyaji_face_reports_total`, `gohaeyaji_face_bans_total` |
+| 관리자 페이지 | `/admin`(Spring 안, HTTP Basic 로그인, 비밀번호 `ADMIN_PASSWORD`가 없으면 페이지 자체가 없음). 신고된 그림은 원본과 기록을 7일 보관(`gy:face:{hash}:data`, `:record`, 목록 `gy:admin:faces`). 관리자가 24시간 금지, 영구 금지(만료 없음), 돌려주기(금지와 신고 기록 삭제) 가능. 금지하면 지금 쓰는 사람에게서도 바로 내림 |
 | 한계 | 신고 대상 찾기는 같은 서버에 붙은 사람만(6단계에서 Redis로). 세션을 새로 열면 신고를 다시 할 수 있어서, IP당 연결 20개 제한이 사실상의 상한 |
 | 서버 여러 대 | 위치, 이름과 같음. 6단계에서 Redis Pub/Sub로 확장 |
 

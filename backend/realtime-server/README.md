@@ -77,6 +77,7 @@ src/main/resources/redis/   원자적으로 처리해야 하는 모든 상태 �
 - [x] 위치 동기화 (`move`, `presence`, 200ms 배칭, pid, 초당 5회 제한) (규약 v0.3)
 - [ ] 줄서기 (`queueJoin`, `queueCall`, 20초 예약)
 - [ ] 재접속 복구 (`resumeToken`, 15초 유예)
+- [x] 관리자 페이지 `/admin`: 현황, 신고된 얼굴 그림(7일 보관), 24시간 금지, 영구 금지, 돌려주기 (Basic 로그인, `ADMIN_PASSWORD`)
 - [ ] 레이트리밋
 - [ ] 빈 채널 5분 뒤 정리, 서버 비정상 종료 시 인원 수 보정
 - [ ] 서버 여러 대: Redis Pub/Sub로 이벤트 전파

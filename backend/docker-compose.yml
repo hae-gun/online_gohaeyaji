@@ -23,6 +23,8 @@ services:
       ALLOWED_ORIGINS: https://hae-gun.github.io,http://localhost:5173
       # private blocked word list for display names (git-ignored); without it only the basic rules apply
       BLOCKED_WORDS_FILE: /data/blocked.json
+      # admin page (/admin): empty password = off. Put the real one in backend/.env (git-ignored)
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     volumes:
       - ../frontend/public/data/blocked.json:/data/blocked.json:ro
     ports:

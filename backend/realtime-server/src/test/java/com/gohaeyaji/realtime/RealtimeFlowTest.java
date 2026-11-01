@@ -31,7 +31,8 @@ import org.testcontainers.utility.DockerImageName;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"gohaeyaji.max-connections-per-ip=500",
                 // a fake blocked word list, so the real (private) one is never needed for tests
-                "gohaeyaji.blocked-words-file=src/test/resources/blocked-test.json"})
+                "gohaeyaji.blocked-words-file=src/test/resources/blocked-test.json",
+                "gohaeyaji.admin-password=test-secret"})
 @Testcontainers
 class RealtimeFlowTest {
 
@@ -467,6 +468,73 @@ class RealtimeFlowTest {
             a.send("{\"type\":\"emote\",\"id\":\"pray\"}");
             Thread.sleep(500);
             assertThat(b.all("presence").stream().filter(m -> pairValue(m.path("emoted"), pidA) != null).count()).isZero();
+        }
+    }
+
+    // ------------------------------------------------------------ admin page
+
+    private java.net.http.HttpResponse<String> admin(String method, String path, String password, boolean xAdmin) throws Exception {
+        var b = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://localhost:" + port + path));
+        if (password != null) {
+            b.header("Authorization", "Basic " + java.util.Base64.getEncoder().encodeToString(("admin:" + password).getBytes()));
+        }
+        if (xAdmin) {
+            b.header("X-Admin", "1");
+        }
+        b.header("Content-Type", "application/json");
+        b.method(method, "POST".equals(method) ? java.net.http.HttpRequest.BodyPublishers.ofString("{\"permanent\":true}") : java.net.http.HttpRequest.BodyPublishers.noBody());
+        return java.net.http.HttpClient.newHttpClient().send(b.build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    void adminPageNeedsTheRightPassword() throws Exception {
+        assertThat(admin("GET", "/admin/api/overview", null, false).statusCode()).isEqualTo(401);
+        assertThat(admin("GET", "/admin/api/overview", "wrong", false).statusCode()).isEqualTo(401);
+        var ok = admin("GET", "/admin/api/overview", "test-secret", false);
+        assertThat(ok.statusCode()).isEqualTo(200);
+        assertThat(ok.body()).contains("channels");
+        assertThat(admin("GET", "/admin/", "test-secret", false).statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void adminSeesReportedDrawingsAndCanRestoreOrBanForGood() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient r1 = TestClient.connect(port);
+             TestClient r2 = TestClient.connect(port); TestClient r3 = TestClient.connect(port)) {
+            a.send("{\"type\":\"hello\",\"v\":1,\"face\":\"" + SMILE + "\"}");
+            int pidA = a.await("welcome").path("you").path("pid").asInt();
+            for (TestClient r : List.of(r1, r2, r3)) {
+                r.hello();
+                r.send("{\"type\":\"report\",\"reqId\":\"x\",\"pid\":" + pidA + "}");
+                r.await("reportResult");
+            }
+            a.await("faceRemoved");
+
+            JsonNode list = new com.fasterxml.jackson.databind.ObjectMapper().readTree(admin("GET", "/admin/api/faces", "test-secret", false).body());
+            assertThat(list).hasSize(1);
+            JsonNode entry = list.get(0);
+            assertThat(entry.path("face").asText()).isEqualTo(SMILE);
+            assertThat(entry.path("reports").asLong()).isEqualTo(3);
+            assertThat(entry.path("bannedBy").asText()).isEqualTo("reports");
+            String hash = entry.path("hash").asText();
+
+            // changes need the X-Admin header (CSRF)
+            assertThat(admin("POST", "/admin/api/faces/" + hash + "/restore", "test-secret", false).statusCode()).isEqualTo(403);
+            assertThat(admin("POST", "/admin/api/faces/" + hash + "/restore", "test-secret", true).statusCode()).isEqualTo(200);
+
+            // given back: it can be worn again
+            try (TestClient again = TestClient.connect(port)) {
+                again.hello();
+                again.send("{\"type\":\"setFace\",\"reqId\":\"f\",\"face\":\"" + SMILE + "\"}");
+                assertThat(again.await("faceResult").path("ok").asBoolean()).isTrue();
+
+                // banned for good: whoever wears it loses it at once, and it never expires
+                var res = admin("POST", "/admin/api/faces/" + hash + "/ban", "test-secret", true);
+                assertThat(res.statusCode()).isEqualTo(200);
+                again.await("faceRemoved");
+                JsonNode after = new com.fasterxml.jackson.databind.ObjectMapper().readTree(res.body()).path("entry");
+                assertThat(after.path("banTtlMs").asLong()).isEqualTo(-1);
+                assertThat(after.path("bannedBy").asText()).isEqualTo("admin-permanent");
+            }
         }
     }
 

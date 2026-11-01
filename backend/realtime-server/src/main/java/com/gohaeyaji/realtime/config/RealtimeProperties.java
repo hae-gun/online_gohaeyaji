@@ -31,6 +31,9 @@ public record RealtimeProperties(
         long faceBanMs,
         long faceBlockMs,
         int maxReportsPerMinute,
+        long adminKeepMs,
+        String adminUser,
+        String adminPassword,
         String blockedWordsFile,
         List<String> allowedOrigins
 ) {
