@@ -2,9 +2,10 @@
  * Hand-drawn faces (protocol section 15).
  *
  * A face is a 32x32 grid written row by row as 1024 digits: 0 empty (skin shows through),
- * 1 black, 2 red, 3 white, 4 pink. (v0.5 used 16x16; old drawings in this browser are doubled.) Only colours for eyes, a nose, a mouth and cheeks, and only
- * the front of the head: people draw a face, not a picture. The server checks the same rules
- * (FaceRules.java).
+ * 1 black, 2 red, 3 white, 4 pink, 5 a colour the person picked (v0.8). When 5 is used, ":rrggbb"
+ * follows the grid; a drawing without 5 never carries a colour, so one picture has one code.
+ * (v0.5 used 16x16; old drawings in this browser are doubled.) Only the front of the head is
+ * drawable: people draw a face, not a picture. The server checks the same rules (FaceRules.java).
  *
  * This browser keeps the face in use and up to GALLERY_MAX earlier drawings, so they can be
  * loaded again on the next visit. Nothing else stores them.
@@ -13,12 +14,26 @@ export const FACE_SIZE = 32;
 export const FACE_CELLS = FACE_SIZE * FACE_SIZE;
 export const PALETTE = [null, '#151010', '#a3231b', '#ffffff', '#f07a8a'];
 export const PALETTE_NAMES = ['지우개', '검정', '빨강', '흰색', '분홍'];
+/** Grid digit of the picked colour. */
+export const PICKED = 5;
+export const DEFAULT_PICKED = '#3a7bff';
 export const EMPTY_FACE = '0'.repeat(FACE_CELLS);
-const VALID = /^[0-4]{1024}$/;
+const VALID = /^[0-5]{1024}(:[0-9a-f]{6})?$/;
 const OLD = /^[0-4]{256}$/;
 const GALLERY_MAX = 12;
 
-export const validFace = (f) => typeof f === 'string' && VALID.test(f);
+export const validFace = (f) => typeof f === 'string' && VALID.test(f)
+  && (f.length > FACE_CELLS) === f.slice(0, FACE_CELLS).includes('5');   // colour exactly when 5 is used
+
+/** The grid (1024 digits) and the picked colour ('#rrggbb' or null) of a face code. */
+export function splitFace(f) {
+  return { grid: f.slice(0, FACE_CELLS), picked: f.length > FACE_CELLS ? `#${f.slice(FACE_CELLS + 1)}` : null };
+}
+/** Builds a face code from a grid and the picked colour; the colour is left out when unused. */
+export function joinFace(grid, picked) {
+  if (!grid.includes('5')) return grid;
+  return `${grid}:${(picked || DEFAULT_PICKED).replace('#', '').toLowerCase()}`;
+}
 
 /** A 16x16 drawing from v0.5, each cell doubled into 2x2. Anything else is returned as is. */
 export function upgradeFace(f) {
@@ -28,7 +43,7 @@ export function upgradeFace(f) {
   return out;
 }
 /** null means "default face": an erased drawing is not sent around as 256 zeros. */
-export const normalizeFace = (f) => (validFace(f) && /[1-4]/.test(f) ? f : null);
+export const normalizeFace = (f) => (validFace(f) && /[1-5]/.test(f.slice(0, FACE_CELLS)) ? f : null);
 
 /** A starting point for people who do not want a blank grid. */
 export const STARTER_FACE = (() => {
@@ -46,8 +61,10 @@ export const STARTER_FACE = (() => {
 /** Draws a face code onto a 2D context, `cell` pixels per grid cell, on a transparent background. */
 export function paintFace(ctx, face, cell, ox = 0, oy = 0) {
   if (!validFace(face)) return;
+  const { picked } = splitFace(face);
   for (let i = 0; i < FACE_CELLS; i++) {
-    const c = PALETTE[face.charCodeAt(i) - 48];
+    const d = face.charCodeAt(i) - 48;
+    const c = d === PICKED ? picked : PALETTE[d];
     if (!c) continue;
     ctx.fillStyle = c;
     ctx.fillRect(ox + (i % FACE_SIZE) * cell, oy + Math.floor(i / FACE_SIZE) * cell, cell, cell);

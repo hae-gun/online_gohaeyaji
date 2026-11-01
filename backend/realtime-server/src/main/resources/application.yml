@@ -24,7 +24,7 @@ management:
 # Values follow docs/realtime-protocol.md (v0.4)
 gohaeyaji:
   protocol-version: 1
-  booth-count: 20
+  booth-count: 21           # 7 on each of three walls (left, front, right)
   channel-capacity: 60
   channel-soft-limit: 48          # 80% of capacity; new sessions go to the next channel beyond this
   heartbeat-ms: 10000
@@ -35,7 +35,7 @@ gohaeyaji:
   idle-server-grace-ms: 10000     # server-side safety net fires at limit + grace
   idle-warn-ms: 20000
   idle-danger-ms: 10000
-  max-message-bytes: 2048         # a 32x32 face (1024 digits) still fits
+  max-message-bytes: 2048         # a 32x32 face (1024 digits + colour) and a 500 character inquiry still fit
   max-connections-per-ip: 20
   server-heartbeat-ms: 5000       # each server refreshes its member counts in Redis
   server-dead-ms: 15000           # counts of a server silent this long are dropped
@@ -49,6 +49,12 @@ gohaeyaji:
   face-block-ms: 600000           # whoever wore it cannot set any face for 10 min
   max-reports-per-minute: 10
   admin-keep-ms: 604800000        # the admin page keeps reported drawings for 7 days
+  # inquiry box "신께 알리기" (protocol section 17)
+  inquiry-min-gap-ms: 60000       # one message per minute per person
+  inquiry-per-ip-per-hour: 10
+  inquiry-min-chars: 5
+  inquiry-max-chars: 500
+  inquiry-keep: 2000              # oldest dropped beyond this
   # admin page (/admin). Empty password = admin page off. Set both through environment variables.
   admin-user: ${ADMIN_USER:admin}
   admin-password: ${ADMIN_PASSWORD:}

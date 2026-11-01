@@ -68,7 +68,7 @@ class RealtimeFlowTest {
         try (TestClient c = TestClient.connect(port)) {
             JsonNode welcome = c.hello();
             assertThat(welcome.path("channelNo").asInt()).isEqualTo(1);
-            assertThat(welcome.path("boothCount").asInt()).isEqualTo(20);
+            assertThat(welcome.path("boothCount").asInt()).isEqualTo(21);
             assertThat(welcome.path("booths").path("occupied")).isEmpty();
             assertThat(welcome.path("sessionId").asText()).startsWith("s_");
             assertThat(welcome.path("idle").path("limitMs").asLong()).isEqualTo(90_000);
@@ -395,6 +395,20 @@ class RealtimeFlowTest {
     }
 
     @Test
+    void aPickedColourTravelsWithTheDrawing() throws Exception {
+        String picked = SMILE.replace('2', '5');
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            b.hello();
+            a.send("{\"type\":\"setFace\",\"reqId\":\"c1\",\"face\":\"" + picked + "\"}");          // 5 without its colour
+            assertThat(a.await("faceResult", m -> "c1".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("INVALID");
+            a.send("{\"type\":\"setFace\",\"reqId\":\"c2\",\"face\":\"" + picked + ":3A7BFF\"}");
+            assertThat(a.await("faceResult", m -> "c2".equals(m.path("reqId").asText())).path("ok").asBoolean()).isTrue();
+            b.await("presence", m -> (picked + ":3a7bff").equals(pairValue(m.path("faced"), pidA)));   // stored in lower case
+        }
+    }
+
+    @Test
     void threeReportsTakeADrawingDown() throws Exception {
         try (TestClient a = TestClient.connect(port); TestClient r1 = TestClient.connect(port);
              TestClient r2 = TestClient.connect(port); TestClient r3 = TestClient.connect(port)) {
@@ -564,6 +578,40 @@ class RealtimeFlowTest {
                 assertThat(later.await("faceResult").path("reason").asText()).isEqualTo("BLOCKED");
             }
         }
+    }
+
+    // ------------------------------------------------------------ inquiry box (protocol v0.8)
+
+    @Test
+    void inquiriesReachTheAdminPageOnePerMinute() throws Exception {
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        try (TestClient a = TestClient.connect(port)) {
+            a.hello();
+            a.send("{\"type\":\"inquiry\",\"reqId\":\"q0\",\"kind\":\"question\",\"text\":\"hi\"}");      // too short
+            assertThat(a.await("inquiryResult", m -> "q0".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("INVALID");
+            a.send("{\"type\":\"inquiry\",\"reqId\":\"q1\",\"kind\":\"spam\",\"text\":\"hello there\"}"); // unknown kind
+            assertThat(a.await("inquiryResult", m -> "q1".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("INVALID");
+            a.send("{\"type\":\"inquiry\",\"reqId\":\"q2\",\"kind\":\"bug\",\"text\":\"  the door\\u0007 sticks\\n\\n\\n\\nplease  \"}");
+            assertThat(a.await("inquiryResult", m -> "q2".equals(m.path("reqId").asText())).path("ok").asBoolean()).isTrue();
+            a.send("{\"type\":\"inquiry\",\"reqId\":\"q3\",\"kind\":\"idea\",\"text\":\"one more thing\"}");
+            assertThat(a.await("inquiryResult", m -> "q3".equals(m.path("reqId").asText())).path("reason").asText()).isEqualTo("TOO_SOON");
+        }
+        JsonNode list = json.readTree(admin("GET", "/admin/api/inquiries", "test-secret", false).body());
+        assertThat(list).hasSize(1);
+        JsonNode e = list.get(0);
+        assertThat(e.path("text").asText()).isEqualTo("the door sticks\n\nplease");
+        assertThat(e.path("kind").asText()).isEqualTo("bug");
+        assertThat(e.path("ip").asText()).isNotEmpty();
+        assertThat(e.path("done").asBoolean()).isFalse();
+        long id = e.path("id").asLong();
+        assertThat(json.readTree(admin("GET", "/admin/api/overview", "test-secret", false).body()).path("inquiriesOpen").asLong()).isEqualTo(1);
+
+        assertThat(admin("POST", "/admin/api/inquiries/" + id + "/done", "test-secret", false).statusCode()).isEqualTo(403);   // CSRF
+        assertThat(admin("POST", "/admin/api/inquiries/" + id + "/done", "test-secret", true).statusCode()).isEqualTo(200);
+        assertThat(json.readTree(admin("GET", "/admin/api/overview", "test-secret", false).body()).path("inquiriesOpen").asLong()).isZero();
+        assertThat(admin("POST", "/admin/api/inquiries/" + id + "/delete", "test-secret", true).statusCode()).isEqualTo(200);
+        assertThat(admin("GET", "/admin/api/inquiries", "test-secret", false).body()).isEqualTo("[]");
+        assertThat(admin("POST", "/admin/api/inquiries/" + id + "/delete", "test-secret", true).statusCode()).isEqualTo(404);
     }
 
     @Test

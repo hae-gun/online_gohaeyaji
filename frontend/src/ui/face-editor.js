@@ -1,12 +1,13 @@
 import { $ } from './hud.js';
 import {
-  FACE_SIZE, PALETTE, PALETTE_NAMES, EMPTY_FACE, STARTER_FACE,
-  paintFace, normalizeFace, storedFace,
+  FACE_SIZE, PALETTE, PALETTE_NAMES, EMPTY_FACE, STARTER_FACE, PICKED, DEFAULT_PICKED,
+  paintFace, normalizeFace, storedFace, splitFace, joinFace,
 } from '../net/faces.js';
 
 /**
  * "얼굴 그리기": a 32x32 dot grid over a blank skin-coloured head. Click or drag to place dots,
- * pick one of five colours (eraser, black, red, white, pink) and a 1x1 or 2x2 brush.
+ * pick one of five colours (eraser, black, red, white, pink) or one colour of your own (any RGB,
+ * one per drawing: changing it recolours every dot drawn with it), and a 1x1 or 2x2 brush.
  * Only the face is drawable.
  *
  * Earlier drawings stay in this browser (storedFace.gallery) and can be loaded again.
@@ -25,6 +26,8 @@ export function createFaceEditor({ getFace, apply }) {
   const SKIN = '#efc39b';
 
   let cells = EMPTY_FACE.split('');
+  let picked = DEFAULT_PICKED;
+  const code = () => joinFace(cells.join(''), picked);
   let colour = 1;
   let painting = false;
   let brush = 2;   // 2x2 by default: 1024 cells are a lot to fill one by one
@@ -53,12 +56,35 @@ export function createFaceEditor({ getFace, apply }) {
     b.onclick = () => { colour = i; markSwatch(); };
     swatches.appendChild(b);
   });
+  // the sixth colour: whatever the person picks
+  const own = document.createElement('button');
+  own.type = 'button';
+  own.className = 'swatch own';
+  own.title = '내 색 (아래에서 고르기)';
+  own.setAttribute('aria-label', '내가 고른 색');
+  own.onclick = () => { colour = PICKED; markSwatch(); };
+  swatches.appendChild(own);
+  const pickerLabel = document.createElement('label');
+  pickerLabel.className = 'ownPick';
+  const picker = document.createElement('input');
+  picker.type = 'color';
+  picker.value = picked;
+  picker.setAttribute('aria-label', '내 색 고르기');
+  pickerLabel.append(picker, document.createTextNode('내 색 고르기'));
+  swatches.appendChild(pickerLabel);
+  picker.addEventListener('input', () => {
+    picked = picker.value;
+    colour = PICKED;
+    markSwatch();
+    render();
+  });
   function markSwatch() {
-    [...swatches.children].forEach((b, i) => b.setAttribute('aria-pressed', String(i === colour)));
+    [...swatches.querySelectorAll('.swatch')].forEach((b, i) => b.setAttribute('aria-pressed', String(i === colour)));
+    own.style.setProperty('--c', picked);
   }
 
   function render() {
-    const code = cells.join('');
+    const face = code();
     // the head: skin circle, so people see where the face sits
     ctx.fillStyle = '#1d1823';
     ctx.fillRect(0, 0, grid.width, grid.height);
@@ -66,7 +92,7 @@ export function createFaceEditor({ getFace, apply }) {
     ctx.beginPath();
     ctx.arc(grid.width / 2, grid.height / 2, grid.width / 2 - 2, 0, Math.PI * 2);
     ctx.fill();
-    paintFace(ctx, code, CELL);
+    paintFace(ctx, face, CELL);
     ctx.lineWidth = 1;
     for (let i = 1; i < FACE_SIZE; i++) {
       // a stronger line every 4 cells helps keep both eyes level
@@ -78,7 +104,7 @@ export function createFaceEditor({ getFace, apply }) {
     const pv = preview.canvas;
     preview.fillStyle = '#1d1823'; preview.fillRect(0, 0, pv.width, pv.height);
     preview.fillStyle = SKIN; preview.beginPath(); preview.arc(pv.width / 2, pv.height / 2, pv.width / 2 - 1, 0, Math.PI * 2); preview.fill();
-    paintFace(preview, code, pv.width / FACE_SIZE);
+    paintFace(preview, face, pv.width / FACE_SIZE);
   }
 
   function cellAt(e) {
@@ -128,7 +154,11 @@ export function createFaceEditor({ getFace, apply }) {
   grid.addEventListener('pointercancel', stop);
 
   function load(face) {
-    cells = (normalizeFace(face) || EMPTY_FACE).split('');
+    const f = normalizeFace(face) || EMPTY_FACE;
+    const parts = splitFace(f);
+    cells = parts.grid.split('');
+    if (parts.picked) { picked = parts.picked; picker.value = picked; }
+    markSwatch();
     errorEl.hidden = true;
     render();
   }
@@ -173,7 +203,7 @@ export function createFaceEditor({ getFace, apply }) {
   $('#faceStarter').onclick = () => load(STARTER_FACE);
   $('#faceCancel').onclick = () => { panel.hidden = true; };
   $('#faceSave').onclick = async () => {
-    const face = normalizeFace(cells.join(''));
+    const face = normalizeFace(code());
     $('#faceSave').disabled = true;
     const r = await apply(face);
     $('#faceSave').disabled = false;

@@ -3,7 +3,7 @@
 -- KEYS[3] the drawing itself, KEYS[4] its record for the admin page (hash), KEYS[5] admin index (zset),
 -- KEYS[6] report log (list of JSON: time, who reported and who was reported, with IPs)
 -- ARGV[1] reporter session id, ARGV[2] reports needed, ARGV[3] report window (ms), ARGV[4] ban time (ms),
--- ARGV[5] the drawing (1024 digits), ARGV[6] now (ms), ARGV[7] how long the admin page keeps records (ms),
+-- ARGV[5] the drawing (face code, see FaceRules), ARGV[6] now (ms), ARGV[7] how long the admin page keeps records (ms),
 -- ARGV[8] this report as JSON for the log
 -- Returns: -1 already reported by this session, 0 counted, 1 counted and now banned (only once)
 if redis.call('SADD', KEYS[1], ARGV[1]) == 0 then

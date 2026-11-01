@@ -9,7 +9,7 @@ import { makeFigure, walkPose } from './world/figure.js';
 import { createOtherPlayers } from './world/others.js';
 import { buildConfessional } from './world/confessional.js';
 import { createKeyboard } from './controls/keyboard.js';
-import { createNavigation } from './controls/navigation.js';
+import { createNavigation, placeOf } from './controls/navigation.js';
 import { createCameraRig } from './controls/camera-rig.js';
 import { loadAnswerData, createAnswerEngine } from './answer/engine.js';
 import { pickPersona, testPersona } from './answer/pick-persona.js';
@@ -26,7 +26,7 @@ import { history } from './storage/history.js';
 import { $, toast, fade, createBubble, initHistoryPanel } from './ui/hud.js';
 
 /*
- * Flow:  intro -> hall (yard + corridor) -> opening (door animation) -> room -> hall
+ * Flow:  intro -> hall (yard, nave, confession hall) -> opening (door animation) -> room -> hall
  *
  * main.js only wires modules together and runs the frame loop.
  * World building lives in world/, input in controls/, the booth lock in net/.
@@ -56,7 +56,8 @@ const hall = buildHall(world, glassTex);
 const colliders = hall.colliders;   // the orbit camera stays in front of these
 const outside = buildExterior(world, { glassTex, colliders });
 const booths = buildBooths(world, colliders);
-const nav = createNavigation(outside.obstacles);
+// booths stand on the floor like any other obstacle
+const nav = createNavigation([...outside.obstacles, ...hall.obstacles, ...booths.map((b) => ({ box: true, ...b.box }))]);
 const pigeons = createPigeons(world, plazaPigeonSpots(FOUNTAIN, outside.obstacles));
 const confessional = buildConfessional();
 
@@ -109,7 +110,7 @@ let state = 'intro';           // 'intro' | 'hall' | 'opening' | 'room'
 let current = null;            // booth the player is inside
 let priest = null;             // persona of the priest in that booth ({ id, name })
 let nearBooth = null;
-let isOutside = true;
+let place = 'yard';            // 'yard' | 'nave' | 'booths' (placeOf)
 let path = [];                 // tap-to-walk waypoints
 let walkBooth = null;          // booth to face when the path ends
 let stuck = 0;
@@ -131,7 +132,7 @@ rooms.onStatus((s) => {
   const banner = $('#netStatus');
   banner.hidden = s.state === 'ready';
   banner.textContent = NET_MESSAGE[s.state] || '';
-  if (!isOutside) $('#placeName').textContent = `고해소 ${channelNo}채널`;
+  showPlace();
 });
 
 // the server took our booth away (idle safety net, lease expired, connection lost)
@@ -221,7 +222,7 @@ function playEmote(id) {
   // someone who has not moved yet is invisible to others; show up first so the emote is seen
   moveSender.now(player.position, player.rotation.y);
 }
-/** Sit on the bench next to me (protocol section 16, emote 'sit'). Walking stands up again. */
+/** Sit on the bench or pew next to me (protocol section 16, emote 'sit'). Walking stands up again. */
 function sitDown(bench) {
   if (state !== 'hall' || myEmote.playing) return;
   path = []; walkBooth = null;
@@ -233,10 +234,107 @@ function sitDown(bench) {
   moveSender.now(player.position, player.rotation.y);
   rooms.sendEmote('sit');
 }
+/* ---------- things to do in the nave and the confession hall ---------- */
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+const CANDLE_LINES = [
+  '초를 켰습니다. 3분 동안 조용히 타오릅니다',
+  '초를 켰습니다. 소원은 마음속으로만 말해 주세요',
+  '초를 켰습니다. 다이어트 성공을 빌었다면 초콜릿은 내려놓으세요',
+  '초를 켰습니다. 불은 3분 뒤 알아서 꺼집니다',
+];
+const OFFER_LINES = [
+  '봉헌 감사합니다. 실제로 돈은 나가지 않습니다',
+  '짤랑. 마음만 받겠습니다',
+  '봉헌 감사합니다. 오늘 하루 지갑이 평안하길',
+  '짤랑. 액수는 하늘만 압니다',
+];
+let offerings = 0;
+/** What E does where I stand: { label, run } or null. Booth doors are handled separately. */
+function nearAction() {
+  const p = player.position;
+  const near = (v, r) => Math.hypot(v.x - p.x, v.z - p.z) < r;
+  if (place === 'nave') {
+    if (near(hall.places.candles, 1.6)) {
+      return {
+        label: '초 켜기',
+        run() {
+          if (!hall.lightCandle()) { toast('초가 모두 켜져 있습니다. 하나가 꺼질 때까지 기다려 주세요'); return; }
+          ambient.chime();
+          toast(pick(CANDLE_LINES));
+        },
+      };
+    }
+    if (near(hall.places.offering, 1.2)) {
+      return {
+        label: '봉헌하기',
+        run() {
+          offerings++;
+          hall.dropCoin();
+          ambient.coin();
+          toast(offerings === 7 ? '일곱 번째 봉헌입니다. 하늘이 슬슬 부담스러워합니다' : pick(OFFER_LINES));
+        },
+      };
+    }
+    if (hall.places.fonts.some((f) => near(f, 1.3))) {
+      return {
+        label: '성수 찍고 성호 긋기',
+        run() {
+          if (myEmote.playing) return;
+          playEmote('cross');
+          toast('성수를 찍고 성호를 그었습니다');
+        },
+      };
+    }
+  }
+  if (place === 'booths' && near(hall.places.inquiry, 2.1)) {
+    return { label: '신께 알리기', run: openInquiry };
+  }
+  if (nearBench) return { label: place === 'nave' ? '장의자에 앉기' : '벤치에 앉기', run: () => sitDown(nearBench) };
+  return null;
+}
+let nearDo = null;
 function act() {
   if (nearBooth) tryEnter();
-  else if (nearBench) sitDown(nearBench);
+  else if (nearDo) nearDo.run();
 }
+
+/* ---------- inquiry box "신께 알리기" (protocol v0.8) ---------- */
+const inquiryPanel = $('#inquiryPanel'), inquiryText = $('#inquiryText'), inquiryError = $('#inquiryError');
+const INQUIRY_REASON = {
+  INVALID: '5자 이상 500자 이하로 적어 주세요.',
+  TOO_SOON: '1분에 한 번 보낼 수 있습니다. 조금 뒤에 다시 보내 주세요.',
+  TOO_MANY: '이 연결에서 보낸 문의가 많습니다. 한 시간 뒤에 다시 보내 주세요.',
+  OFFLINE: '서버와 연결되어 있을 때만 보낼 수 있습니다.',
+  TIMEOUT: '서버가 답하지 않았습니다. 잠시 후 다시 보내 주세요.',
+};
+function openInquiry() {
+  inquiryError.hidden = true;
+  inquiryPanel.hidden = false;
+  $('#inquiryCount').textContent = String([...inquiryText.value].length);
+  try { inquiryText.focus(); } catch (_) { /* ignore */ }
+}
+const closeInquiry = () => { inquiryPanel.hidden = true; };
+$('#inquiryCancel').onclick = closeInquiry;
+inquiryPanel.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInquiry(); });
+inquiryText.addEventListener('input', () => {
+  inquiryError.hidden = true;
+  $('#inquiryCount').textContent = String([...inquiryText.value].length);
+});
+$('#inquiryForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = inquiryText.value.trim();
+  const kind = $('#inquiryForm').querySelector('input[name="kind"]:checked')?.value || 'question';
+  if ([...text].length < 5) { inquiryError.textContent = INQUIRY_REASON.INVALID; inquiryError.hidden = false; return; }
+  $('#inquirySend').disabled = true;
+  const r = await rooms.sendInquiry(kind, text);
+  $('#inquirySend').disabled = false;
+  if (!r.ok) { inquiryError.textContent = INQUIRY_REASON[r.reason] || INQUIRY_REASON.INVALID; inquiryError.hidden = false; return; }
+  inquiryText.value = '';
+  closeInquiry();
+  hall.sendLetter();
+  ambient.chime();
+  toast('하늘로 보냈습니다. 운영자가 꼭 읽겠습니다');
+});
 let shownEmote = null;
 function updateEmoteBar() {
   const playing = myEmote.playing;
@@ -326,7 +424,7 @@ let shownPeople = -1;
 
 /* ---------- input ---------- */
 const keys = createKeyboard((k) => {
-  if (!namePanel.hidden || faceEditor.isOpen()) return;   // a dialog is open: buttons inside it may hold focus
+  if (!namePanel.hidden || faceEditor.isOpen() || !inquiryPanel.hidden) return;   // a dialog is open: buttons inside it may hold focus
   if (k === 'e' && state === 'hall') act();
   if (state === 'hall' && ['1', '2', '3', '4'].includes(k)) playEmote(EMOTES[Number(k) - 1].id);
   if (k === 'v' && state === 'hall') toggleView();
@@ -345,7 +443,7 @@ function tapAt(cx, cy) {
   ndc.set((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1);
   ray.setFromCamera(ndc, camera);
   const doorHits = ray.intersectObjects(booths.map((b) => b.group), true).filter((h) => h.object.userData.booth !== undefined);
-  const groundHits = ray.intersectObjects([hall.floor, ...outside.groundMeshes]);
+  const groundHits = ray.intersectObjects([...hall.floors, ...outside.groundMeshes]);
   if (doorHits.length && (!groundHits.length || doorHits[0].distance <= groundHits[0].distance + 0.5)) {
     const b = booths[doorHits[0].object.userData.booth];
     path = nav.planPath(player.position, b.spot);
@@ -385,7 +483,7 @@ async function tryEnter() {
   b.doorTarget = 1.3;
   $('#actBtn').hidden = true;
   $('#prompt').hidden = true;
-  player.rotation.y = b.side < 0 ? -Math.PI / 2 : Math.PI / 2;
+  player.rotation.y = b.facing;
   setTimeout(() => { if (state === 'opening') fade(true); }, 450);
   setTimeout(() => { if (state === 'opening') enterRoom(); }, 850);
 }
@@ -566,10 +664,10 @@ function leaveRoom({ reason = 'USER', notifyServer = true, message = '' } = {}) 
     ambient.setPlace('hall');
     $('#roomUi').hidden = true;
     $('#hallUi').hidden = false;
-    player.position.copy(b.spot);
-    player.position.x -= b.side * 0.3;
-    player.rotation.y = Math.PI;
-    rig.yaw = 0;
+    // a step out from the door, turned toward the room
+    player.position.copy(b.spot).addScaledVector(b.normal, 0.3);
+    player.rotation.y = b.facing + Math.PI;
+    rig.yaw = b.facing + Math.PI * 2;
     path = [];
     b.doorTarget = 0;
     current = null;
@@ -603,7 +701,7 @@ const clock = new THREE.Clock();
 
 function updatePlayer(dt) {
   let vx = 0, vz = 0;
-  if (state === 'hall' && namePanel.hidden && !faceEditor.isOpen()) {
+  if (state === 'hall' && namePanel.hidden && !faceEditor.isOpen() && inquiryPanel.hidden) {
     let f = 0, r = 0;
     if (keys.w || keys.arrowup) f += 1;
     if (keys.s || keys.arrowdown) f -= 1;
@@ -618,7 +716,7 @@ function updatePlayer(dt) {
       const tg = path[0], dx = tg.x - player.position.x, dz = tg.z - player.position.z, d = Math.hypot(dx, dz);
       if (d < 0.15) {
         path.shift();
-        if (!path.length && walkBooth) { player.rotation.y = walkBooth.side < 0 ? -Math.PI / 2 : Math.PI / 2; walkBooth = null; }
+        if (!path.length && walkBooth) { player.rotation.y = walkBooth.facing; walkBooth = null; }
       } else { vx = dx / d; vz = dz / d; }
     }
   }
@@ -653,41 +751,44 @@ function updateSurroundings(dt) {
   outside.leafL.rotation.y += (near * 1.35 - outside.leafL.rotation.y) * Math.min(1, dt * 5);
   outside.leafR.rotation.y += (-near * 1.35 - outside.leafR.rotation.y) * Math.min(1, dt * 5);
 
-  const out = player.position.z > FACADE_Z;
-  if (out !== isOutside) {
-    isOutside = out;
-    if (state === 'hall') ambient.setPlace(out ? 'yard' : 'hall');
-    $('#placeName').textContent = out ? '성당 앞마당' : `고해소 ${channelNo}채널`;
+  const now = placeOf(player.position.x, player.position.z);
+  if (now !== place) {
+    place = now;
+    if (state === 'hall') ambient.setPlace(place === 'yard' ? 'yard' : 'hall');
+    showPlace();
   }
 
   // which booth door the player stands at
   let nb = null, nd = 1.35;
-  if (!out) {
+  if (place === 'booths') {
     for (const b of booths) {
       const d = Math.hypot(b.spot.x - player.position.x, b.spot.z - player.position.z);
-      if (d < nd && Math.sign(player.position.x) === b.side) { nd = d; nb = b; }
+      if (d < nd) { nd = d; nb = b; }
     }
   }
   nearBooth = nb;
-  // a free bench next to me (not while something else is playing)
+  // a free bench or pew next to me (not while something else is playing)
   let bench = null;
-  if (out && !nb && !myEmote.playing) {
-    let bd = 1.25;
-    for (const b of outside.benches) {
+  if (!nb && !myEmote.playing && place !== 'booths') {
+    let bd = 1.0;
+    for (const b of place === 'yard' ? outside.benches : hall.seats) {
       const d = Math.min(Math.hypot(b.front.x - player.position.x, b.front.z - player.position.z),
         Math.hypot(b.seat.x - player.position.x, b.seat.z - player.position.z));
       if (d < bd) { bd = d; bench = b; }
     }
   }
   nearBench = bench;
+  nearDo = nb || myEmote.playing === 'sit' ? null : nearAction();
   const prompt = $('#prompt'), act = $('#actBtn');
   if (state === 'hall' && myEmote.playing === 'sit') {
     prompt.hidden = false;
-    prompt.textContent = '벤치에 앉아 있습니다. 움직이면 일어납니다';
+    prompt.textContent = '앉아 있습니다. 움직이면 일어납니다';
     act.hidden = true;
-  } else if (state === 'hall' && bench) {
+  } else if (state === 'hall' && nearDo) {
     prompt.hidden = false;
-    prompt.innerHTML = '<kbd>E</kbd>벤치에 앉기';
+    prompt.innerHTML = '<kbd>E</kbd>';
+    prompt.append(nearDo.label);
+    act.textContent = nearDo.label;
     act.hidden = false;
   } else if (state === 'hall' && nb) {
     prompt.hidden = false;
@@ -696,12 +797,17 @@ function updateSurroundings(dt) {
       act.hidden = true;
     } else {
       prompt.innerHTML = `<kbd>E</kbd>${nb.id + 1}번 고해소 문 열기`;
+      act.textContent = '문 열기';
       act.hidden = false;
     }
   } else {
     prompt.hidden = true;
     act.hidden = true;
   }
+}
+
+function showPlace() {
+  $('#placeName').textContent = { yard: '성당 앞마당', nave: '성당 안', booths: `고해소 ${channelNo}채널` }[place];
 }
 
 function animate() {
@@ -717,6 +823,7 @@ function animate() {
   }
   others.update(dt);
   outside.update(dt, t);
+  hall.update(dt, t);
   pigeons.update(dt, t, [player.position, ...others.positions()]);
   if (state === 'hall' || state === 'intro') {
     const moving = updatePlayer(dt);

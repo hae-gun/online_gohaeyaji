@@ -120,6 +120,10 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .swatch{width:34px;height:34px;padding:0;border-radius:8px;background:var(--c);border:2px solid var(--line)}
 .swatch.eraser{background:repeating-conic-gradient(#3a3340 0 25%,#2a2430 0 50%) 0 0/10px 10px}
 .swatch[aria-pressed="true"]{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold)}
+.swatch.own{background:var(--c);position:relative}
+.swatch.own::after{content:"내";position:absolute;inset:auto 2px 1px auto;font-size:10px;color:#fff;text-shadow:0 0 2px #000}
+.ownPick{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;padding-left:4px}
+.ownPick input{width:34px;height:34px;padding:0;border:2px solid var(--line);border-radius:8px;background:none;cursor:pointer}
 .faceGallery{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
 .faceThumb{position:relative}
 .faceThumb button{padding:3px;border-radius:10px;line-height:0}
@@ -144,3 +148,10 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .emoteBar button .fill{position:absolute;left:0;bottom:0;height:3px;width:0;background:var(--gold)}
 .emoteBar button:disabled{opacity:.45;cursor:default}
 .emoteBar button.active{opacity:1;border-color:var(--gold);color:var(--gold)}
+
+/* inquiry box "신께 알리기" (protocol v0.8) */
+#inquiryText{font:inherit;font-size:15px;line-height:1.6;color:var(--ink);background:#14101a;border:1px solid var(--line);border-radius:10px;padding:10px 12px;resize:vertical;min-height:120px}
+.kinds{display:flex;gap:6px;flex-wrap:wrap}
+.kinds label{display:inline-flex;align-items:center;gap:6px;font-size:14px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
+.kinds input{accent-color:var(--gold);margin:0}
+.kinds label:has(input:checked){border-color:var(--gold);color:var(--gold)}

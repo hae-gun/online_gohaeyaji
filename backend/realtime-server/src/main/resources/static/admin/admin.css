@@ -42,3 +42,12 @@ details summary{cursor:pointer;color:var(--muted)}
 table.log{margin-top:6px;font-size:12px;border-radius:8px}
 table.log th,table.log td{padding:5px 8px;vertical-align:top}
 table.log .ip{color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;white-space:nowrap}
+.inquiries{display:flex;flex-direction:column;gap:10px}
+.inquiry{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.inquiry.done{opacity:.6}
+.ihead{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.ihead .ip{margin-left:auto;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.itext{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}
+.badge.kind-bug{color:#ff9b8a;border-color:rgba(226,69,58,.6)}
+.badge.kind-idea{color:#9fe0b4;border-color:rgba(95,191,127,.6)}
+.badge.kind-question,.badge.kind-request{color:var(--gold)}

@@ -8,7 +8,7 @@ import { storedFace, normalizeFace } from './faces.js';
  * Handles: hello/welcome, ping every heartbeatMs, claim/release with reqId,
  * booth events ordered by seq (resync on a gap), server-forced releases,
  * reconnect with exponential backoff and jitter, positions (move, presence), names (rename)
- * hand-drawn faces (setFace, report, faceRemoved) and emotes (emote).
+ * hand-drawn faces (setFace, report, faceRemoved), emotes (emote) and the inquiry box (inquiry).
  */
 const PROTOCOL_VERSION = 1;
 const CLAIM_TIMEOUT_MS = 5_000;
@@ -41,6 +41,7 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
   const pendingRenames = new Map();  // reqId -> resolve
   const pendingFaces = new Map();    // reqId -> { resolve, face }
   const pendingReports = new Map();  // reqId -> resolve
+  const pendingInquiries = new Map(); // reqId -> resolve
   const faceRemovedListeners = [];
   const client = { idle: { ...DEFAULT_IDLE }, myName: storedName.load() || '', myFace: storedFace.load() };
   const setMyName = (name) => {
@@ -136,6 +137,13 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         p.resolve(msg.ok ? { ok: true } : { ok: false, reason: msg.reason });
         break;
       }
+      case 'inquiryResult': {
+        const resolve = pendingInquiries.get(msg.reqId);
+        if (!resolve) return;
+        pendingInquiries.delete(msg.reqId);
+        resolve(msg.ok ? { ok: true } : { ok: false, reason: msg.reason });
+        break;
+      }
       case 'reportResult': {
         const resolve = pendingReports.get(msg.reqId);
         if (!resolve) return;
@@ -184,6 +192,8 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
     pendingFaces.clear();
     pendingReports.forEach((resolve) => resolve({ ok: false, reason: 'OFFLINE' }));
     pendingReports.clear();
+    pendingInquiries.forEach((resolve) => resolve({ ok: false, reason: 'OFFLINE' }));
+    pendingInquiries.clear();
     // the server releases our booth when the socket drops (no resume yet)
     if (myBooth !== null) {
       const b = myBooth;
@@ -238,6 +248,19 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
       });
     },
     onFaceRemoved(fn) { faceRemovedListeners.push(fn); },
+
+    /** A message for the site's admins from the box in the confession hall (protocol section 17). */
+    sendInquiry(kind, text) {
+      if (!ready) return Promise.resolve({ ok: false, reason: 'OFFLINE' });
+      const reqId = nextReq();
+      return new Promise((resolve) => {
+        pendingInquiries.set(reqId, resolve);
+        send({ type: 'inquiry', reqId, kind, text });
+        setTimeout(() => {
+          if (pendingInquiries.delete(reqId)) resolve({ ok: false, reason: 'TIMEOUT' });
+        }, REPORT_TIMEOUT_MS);
+      });
+    },
 
     /** Ask the server for a new display name. Resolves with the name it accepted, or why not. */
     rename(name) {

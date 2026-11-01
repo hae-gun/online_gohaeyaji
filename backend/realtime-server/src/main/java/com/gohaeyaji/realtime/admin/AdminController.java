@@ -4,6 +4,8 @@ import com.gohaeyaji.realtime.booth.BoothService;
 import com.gohaeyaji.realtime.channel.ChannelService;
 import com.gohaeyaji.realtime.face.FaceModeration;
 import com.gohaeyaji.realtime.face.FaceReports;
+import com.gohaeyaji.realtime.inquiry.Inquiries;
+import com.gohaeyaji.realtime.config.RealtimeProperties;
 import com.gohaeyaji.realtime.redis.RedisKeys;
 import com.gohaeyaji.realtime.session.SessionRegistry;
 import io.micrometer.core.instrument.Counter;
@@ -25,7 +27,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * Admin page (/admin): a quick look at who is on, and the reported drawings with their history.
+ * Admin page (/admin): a quick look at who is on, the reported drawings with their history, and the
+ * messages left in the inquiry box (신께 알리기).
  * Detailed graphs belong in Grafana; this page is for decisions (ban for good, give back).
  * Login and CSRF protection: AdminAuthFilter.
  */
@@ -41,9 +44,12 @@ public class AdminController {
     private final FaceModeration moderation;
     private final StringRedisTemplate redis;
     private final MeterRegistry meters;
+    private final Inquiries inquiries;
+    private final RealtimeProperties props;
 
     public AdminController(SessionRegistry registry, ChannelService channelService, BoothService booths, FaceReports reports,
-                           FaceModeration moderation, StringRedisTemplate redis, MeterRegistry meters) {
+                           FaceModeration moderation, StringRedisTemplate redis, MeterRegistry meters,
+                           Inquiries inquiries, RealtimeProperties props) {
         this.registry = registry;
         this.channelService = channelService;
         this.booths = booths;
@@ -51,6 +57,8 @@ public class AdminController {
         this.moderation = moderation;
         this.redis = redis;
         this.meters = meters;
+        this.inquiries = inquiries;
+        this.props = props;
     }
 
     @GetMapping({"/admin", "/admin/"})
@@ -70,6 +78,8 @@ public class AdminController {
         out.put("sessionsHere", registry.size());
         out.put("serverId", channelService.serverId());
         out.put("serversAlive", channelService.aliveServers().size());
+        out.put("boothCount", props.boothCount());
+        out.put("inquiriesOpen", inquiries.openCount());
 
         List<Map<String, Object>> channels = new ArrayList<>();
         Set<String> nos = redis.opsForZSet().range(RedisKeys.CHANNELS, 0, -1);
@@ -135,6 +145,33 @@ public class AdminController {
             return ResponseEntity.badRequest().build();
         }
         if (!reports.delete(hash)) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(Map.of("ok", true));
+    }
+
+    /** Messages from the inquiry box, newest first. */
+    @GetMapping("/admin/api/inquiries")
+    @ResponseBody
+    public List<Inquiries.Entry> inquiries() {
+        return inquiries.list(500);
+    }
+
+    /** Marks a message as handled ("done") or back to open ("reopen"). */
+    @PostMapping("/admin/api/inquiries/{id}/{action:done|reopen}")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> inquiryDone(@PathVariable long id, @PathVariable String action) {
+        if (!inquiries.markDone(id, "done".equals(action))) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(Map.of("ok", true, "entry", inquiries.entry(id)));
+    }
+
+    /** Deletes the message with the name and IP stored with it. */
+    @PostMapping("/admin/api/inquiries/{id}/delete")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> inquiryDelete(@PathVariable long id) {
+        if (!inquiries.delete(id)) {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(Map.of("ok", true));

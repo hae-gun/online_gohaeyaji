@@ -15,8 +15,8 @@ npm run build
 | `src/main.js` | 모듈 연결, 상태 전이(intro, hall, opening, room), 프레임 루프 |
 | `src/world/exterior.js` | 하늘, 성당 정면(사그라다 파밀리아 느낌의 탑 4개와 중앙 첨탑), 정문, 분수대 광장, 벤치(앉는 자리), 나무와 가로등 |
 | `src/world/pigeons.js` | 광장 비둘기. 날아와서 앉고 쪼다가 사람이 다가오면 날아감. 내 화면에만 보임 |
-| `src/world/hall.js` | 복도, 조명, 스테인드글라스 |
-| `src/world/booths.js` | 고해소 20칸, LED, 문 |
+| `src/world/hall.js` | 본당(장의자, 제대, 촛불대, 봉헌함, 성수대, 고해소 가는 곳 표지판)과 고해소 방(신께 알리기 함), 바깥에서 보이는 외벽 |
+| `src/world/booths.js` | 고해소 21칸(왼쪽, 앞, 오른쪽 벽에 7칸씩), LED, 문 |
 | `src/world/figure.js` | 플레이어와 신부 캐릭터 |
 | `src/world/confessional.js` | 고해소 내부 장면, 성호경, 끄덕임, 깜빡임 |
 | `src/controls/keyboard.js` | 물리 키 기준 입력 (한글 입력 상태 대응) |

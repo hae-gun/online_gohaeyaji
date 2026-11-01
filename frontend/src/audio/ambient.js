@@ -2,7 +2,7 @@
  * Synthesized ambience (bells and birds) with Web Audio, so there are no sound files yet.
  * Browsers only allow audio after a user gesture, so start() is called from the entry button.
  *
- * Volume follows where the player is: yard is loudest, the corridor a little quieter,
+ * Volume follows where the player is: yard is loudest, inside the cathedral a little quieter,
  * inside a confessional almost silent.
  */
 const LEVEL = { yard: 0.6, hall: 0.4, room: 0.05 };
@@ -66,6 +66,33 @@ export function createAmbient() {
       if (!ac || muted) return;
       const loud = ac.createGain(); loud.gain.value = 0.55; loud.connect(ac.destination);
       for (let i = 0; i < n; i++) setTimeout(() => bell(loud), i * 1300);
+    },
+    /** Two small coins landing in the offering box. */
+    coin() {
+      if (!ac || muted) return;
+      const t = ac.currentTime;
+      [[2637, 0], [3136, 0.09], [2349, 0.2]].forEach(([f, d]) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = 'triangle'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t + d);
+        g.gain.exponentialRampToValueAtTime(0.12, t + d + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.25);
+        o.connect(g); g.connect(ac.destination); o.start(t + d); o.stop(t + d + 0.3);
+      });
+    },
+    /** A soft rising chime: a candle lit, a letter sent up. */
+    chime() {
+      if (!ac || muted) return;
+      const t = ac.currentTime;
+      [523, 659, 784, 1047].forEach((f, i) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        const d = i * 0.11;
+        g.gain.setValueAtTime(0.0001, t + d);
+        g.gain.exponentialRampToValueAtTime(0.07, t + d + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + d + 1.2);
+        o.connect(g); g.connect(ac.destination); o.start(t + d); o.stop(t + d + 1.3);
+      });
     },
     /** @param {'yard'|'hall'|'room'} p */
     setPlace(p) { place = p; apply(); },

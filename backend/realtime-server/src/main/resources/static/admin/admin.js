@@ -2,7 +2,7 @@
 'use strict';
 (() => {
   const $ = (s) => document.querySelector(s);
-  // same colours as frontend/src/net/faces.js: 0 empty, 1 black, 2 red, 3 white, 4 pink
+  // same colours as frontend/src/net/faces.js: 0 empty, 1 black, 2 red, 3 white, 4 pink, 5 picked (":rrggbb" after the grid)
   const PALETTE = [null, '#151010', '#a3231b', '#ffffff', '#f07a8a'];
   const SKIN = '#efc39b';
   const FILTERS = [
@@ -53,6 +53,7 @@
       [o.channels.reduce((s, c) => s + c.members, 0), '전체 인원(살아 있는 서버 합계)'],
       [o.channels.length, '열린 채널'],
       [o.serversAlive, '살아 있는 서버'],
+      [o.inquiriesOpen, '안 읽은 문의'],
       [o.channels.reduce((s, c) => s + c.boothsOccupied, 0), '사용 중 고해소'],
       [Math.round(o.faceReportsTotal), '신고(서버 시작 후)'],
       [Math.round(o.faceBansTotal), '금지(서버 시작 후)'],
@@ -73,7 +74,7 @@
     tb.textContent = '';
     for (const c of o.channels) {
       const tr = document.createElement('tr');
-      for (const v of [`${c.channelNo}채널`, c.members, c.connectedHere, `${c.boothsOccupied} / 20`]) {
+      for (const v of [`${c.channelNo}채널`, c.members, c.connectedHere, `${c.boothsOccupied} / ${o.boothCount || 21}`]) {
         const td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
       }
       tb.appendChild(tr);
@@ -91,8 +92,10 @@
     cv.width = cv.height = 128;
     const c = cv.getContext('2d');
     c.fillStyle = SKIN; c.beginPath(); c.arc(64, 64, 63, 0, Math.PI * 2); c.fill();
+    const picked = face.length === 1031 ? `#${face.slice(1025)}` : null;
     for (let i = 0; i < 1024; i++) {
-      const col = PALETTE[face.charCodeAt(i) - 48];
+      const d = face.charCodeAt(i) - 48;
+      const col = d === 5 ? picked : PALETTE[d];
       if (!col) continue;
       c.fillStyle = col;
       c.fillRect((i % 32) * 4, Math.floor(i / 32) * 4, 4, 4);
@@ -191,6 +194,80 @@
     return d;
   }
 
+  // ------------------------------------------------------------ inquiry box (신께 알리기)
+  const KIND_TEXT = { question: '질문', request: '문의', idea: '제안', bug: '오류 신고' };
+  let inquiries = [];
+  let inquiryFilter = 'open';
+
+  async function loadInquiries() {
+    inquiries = await api('/inquiries');
+    renderInquiries();
+  }
+
+  async function inquiryAct(id, action) {
+    if (action === 'delete' && !confirm('이 문의를 지울까요? 함께 저장된 이름과 IP도 지워지고 되돌릴 수 없습니다.')) return;
+    try {
+      await api(`/inquiries/${id}/${action}`, { method: 'POST', body: '{}' });
+      toast({ done: '처리함으로 표시했습니다', reopen: '안 읽음으로 되돌렸습니다', delete: '지웠습니다' }[action]);
+      await Promise.all([loadInquiries(), loadOverview()]);
+    } catch (e) {
+      toast(`처리하지 못했습니다 (${e.message})`);
+    }
+  }
+
+  function renderInquiries() {
+    const box = $('#inquiries');
+    box.textContent = '';
+    const list = inquiries.filter((e) => inquiryFilter === 'all' || !e.done);
+    $('#inquiryEmpty').hidden = list.length > 0;
+    for (const e of list) {
+      const card = document.createElement('article');
+      card.className = `inquiry${e.done ? ' done' : ''}`;
+      const head = document.createElement('div');
+      head.className = 'ihead';
+      const kind = document.createElement('span');
+      kind.className = `badge kind-${e.kind}`;
+      kind.textContent = KIND_TEXT[e.kind] || e.kind;
+      const meta = document.createElement('span');
+      meta.className = 'muted';
+      meta.textContent = `${fmtTime(e.at)}  ${e.channelNo}채널  ${e.name || '(이름 없음)'}`;
+      const ip = document.createElement('span');
+      ip.className = 'ip';
+      ip.textContent = e.ip;
+      head.append(kind, meta, ip);
+      // plain text only: whatever people typed is never read as HTML
+      const text = document.createElement('p');
+      text.className = 'itext';
+      text.textContent = e.text;
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const btn = (label, cls, action) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.textContent = label; if (cls) b.className = cls;
+        b.onclick = () => inquiryAct(e.id, action);
+        actions.appendChild(b);
+      };
+      if (e.done) btn('안 읽음으로', '', 'reopen'); else btn('처리함', 'ok', 'done');
+      btn('삭제', 'danger', 'delete');
+      card.append(head, text, actions);
+      box.appendChild(card);
+    }
+  }
+
+  const inquiryFiltersEl = $('#inquiryFilters');
+  for (const [id, label] of [['open', '안 읽은 것'], ['all', '전체']]) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.dataset.id = id;
+    b.onclick = () => { inquiryFilter = id; markInquiryFilters(); renderInquiries(); };
+    inquiryFiltersEl.appendChild(b);
+  }
+  function markInquiryFilters() {
+    for (const b of inquiryFiltersEl.children) b.setAttribute('aria-pressed', String(b.dataset.id === inquiryFilter));
+  }
+  markInquiryFilters();
+
   async function loadFaces() {
     faces = await api('/faces');
     renderFaces();
@@ -211,7 +288,7 @@
 
   async function refresh() {
     try {
-      await Promise.all([loadOverview(), loadFaces()]);
+      await Promise.all([loadOverview(), loadFaces(), loadInquiries()]);
       $('#updated').textContent = `${new Date().toLocaleTimeString('ko-KR')} 기준, 10초마다 새로고침`;
     } catch (e) {
       $('#updated').textContent = `불러오지 못했습니다 (${e.message})`;

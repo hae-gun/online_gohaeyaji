@@ -87,6 +87,17 @@ public final class ClientSession {
     }
 
     /** @return true if enough time has passed since the last accepted face change */
+    /** Whether the inquiry box takes another message from this person yet (protocol section 17). */
+    public synchronized boolean canInquire(long now, long minGapMs) {
+        return lastInquiryAt == 0 || now - lastInquiryAt >= minGapMs;
+    }
+
+    public synchronized void inquired(long now) {
+        lastInquiryAt = now;
+    }
+
+    private long lastInquiryAt;
+
     public boolean acceptFace(long now, long minGapMs) {
         if (lastFaceAt != 0 && now - lastFaceAt < minGapMs) {
             return false;

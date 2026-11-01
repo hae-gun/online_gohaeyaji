@@ -36,7 +36,7 @@
 ```
 frontend/   Vite 5.4.21 + three.js 0.128.0 (색감 때문에 고정)
   src/main.js          상태 전이(intro, hall, opening, room, leaving), 프레임 루프
-  src/world/           앞마당(분수대 광장, 벤치, 비둘기), 성당 정면(가우디풍), 복도, 고해소 20칸, 캐릭터, 고해소 내부와 성호경
+  src/world/           앞마당(분수대 광장, 벤치, 비둘기), 성당 정면(가우디풍), 본당(hall.js: 장의자, 촛불, 봉헌함, 성수대)과 고해소 방(21칸, 신께 알리기 함), 캐릭터, 고해소 내부와 성호경
   src/controls/        keyboard(e.code 기준), camera-rig(궤도, 벽 충돌, 1인칭), navigation
   src/answer/          답변 엔진: 위기 키워드 > 금지어 > 카테고리 매칭 > 템플릿
   src/net/room-client.js     RoomClient 계약 + 로컬 시뮬레이션
@@ -71,7 +71,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 ## 규약 핵심 (docs/realtime-protocol.md v0.4)
 
 - 메시지: hello/welcome, ping/pong(10초), claim/claimResult, release/released, activity, booth(변경분, seq), snapshot, resync, error. 줄서기 메시지(queueJoin, queueCall 등)는 정의만 됨
-- 채널: 고해소 20칸, 정원 60명, 48명(80%) 차면 다음 채널 생성, 앞 채널부터 채움, 남은 12자리는 재접속용
+- 채널: 고해소 21칸(v0.8, 왼쪽 앞 오른쪽 벽에 7칸씩), 정원 60명, 48명(80%) 차면 다음 채널 생성, 앞 채널부터 채움, 남은 12자리는 재접속용
 - 타이머: 하트비트 끊김 30초, 방 임대 30초(ping마다 연장), 재접속 유예 15초, 무입력 90초(20초 남으면 노란색, 10초 남으면 빨간색 카운터, 성호경과 답변 대기 중 멈춤), 서버 안전망 100초, 줄 호출 예약 20초
 - 탭마다 별도 세션(한 세션 방 1개, 줄 1자리). IP당 연결 20개. 메시지 2KB. 허용 Origin: https://hae-gun.github.io, http://localhost:5173
 - 종료 코드: 4001 버전 불일치, 4002 하트비트, 4004 IP 초과, 4005 크기, 4006 남용, 4008 만석
@@ -94,6 +94,15 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 | 7 | 답변 엔진 서버 이전 | 출시 전 필수 (지금은 배포 사이트에서 /data/*.json 열람 가능) |
 
 서버 미구현: 줄서기, 재접속 복구(resumeToken), 레이트리밋, 빈 채널 정리, 서버 비정상 종료 시 인원 수 보정, analyzer 연동.
+
+## 성당 안 (규약 v0.8, 2026-11-01)
+
+- 정문 -> 본당(`NAVE`, x -8.5..8.5). 입구 오른쪽 표지판 "고해소 가는 곳", 오른쪽 벽 옆문(`SIDE_DOOR`, z 3.6..6.6) -> 고해소 방(`CONFESSION_HALL`, x 9.1..36.6). 장소 이름과 소리는 `placeOf(x, z)`: yard, nave, booths
+- 본당에서 E: 촛불 켜기(내 화면만, 3분), 봉헌하기(내 화면만, 결제 없음), 성수 찍기(`cross` 동작이라 모두에게 보임), 장의자에 앉기(`sit`)
+- 길찾기(`navigation.js`)는 0.3m 격자 A*를 시작할 때 한 번 만들고, 경로는 직선으로 펴서 씀. 장애물은 원 `{x,z,r}`과 상자 `{box,x0,x1,z0,z1}`. 고해소 몸통도 상자 장애물
+- 바깥에서 보이는 본당과 고해소 방 외벽은 한쪽 면만 그리는 평면(안에서는 안 보이고 카메라 광선도 통과). 두 방 사이에는 외벽을 두지 않음(옆문이 막히므로)
+- 신께 알리기: 고해소 방 가운데 함 -> `inquiry` -> Redis -> 관리자 페이지 "신께 알리기" 칸. 연락처는 안 받음. 세례명과 IP는 저장(개인정보 처리방침에 적어야 함). 운영 Redis는 영속화 필요
+- 얼굴 그리기에 직접 고르는 색 한 칸(숫자 5, 코드 뒤 `:rrggbb`)
 
 ## 알아둘 함정
 

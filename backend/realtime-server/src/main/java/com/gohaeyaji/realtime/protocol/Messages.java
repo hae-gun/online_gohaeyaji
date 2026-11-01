@@ -107,6 +107,17 @@ public final class Messages {
 
     /** Answer to "rename". On failure name is what the server read, reason says why. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    /** Answer to "inquiry" (protocol section 17). */
+    public record InquiryResult(String type, String reqId, boolean ok, String reason) {
+        public static InquiryResult ok(String reqId) {
+            return new InquiryResult("inquiryResult", reqId, true, null);
+        }
+
+        public static InquiryResult fail(String reqId, String reason) {
+            return new InquiryResult("inquiryResult", reqId, false, reason);
+        }
+    }
+
     public record RenameResult(String type, String reqId, boolean ok, String name, String reason) {
         public static RenameResult ok(String reqId, String name) {
             return new RenameResult("renameResult", reqId, true, name, null);
@@ -180,6 +191,10 @@ public final class Messages {
     public static final String REMOVED_REPORTED = "REPORTED";
 
     /** error codes. */
+    public static final String INQUIRY_INVALID = "INVALID";
+    public static final String INQUIRY_TOO_SOON = "TOO_SOON";
+    public static final String INQUIRY_TOO_MANY = "TOO_MANY";
+
     public static final String ERR_BAD_MESSAGE = "BAD_MESSAGE";
     public static final String ERR_NOT_READY = "NOT_READY";
     public static final String ERR_UNKNOWN_TYPE = "UNKNOWN_TYPE";

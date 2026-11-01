@@ -8,6 +8,7 @@ import com.gohaeyaji.realtime.config.RealtimeProperties;
 import com.gohaeyaji.realtime.face.FaceModeration;
 import com.gohaeyaji.realtime.face.FaceReports;
 import com.gohaeyaji.realtime.face.FaceRules;
+import com.gohaeyaji.realtime.inquiry.Inquiries;
 import com.gohaeyaji.realtime.name.NameService;
 import com.gohaeyaji.realtime.presence.Emotes;
 import com.gohaeyaji.realtime.presence.PresenceService;
@@ -20,6 +21,7 @@ import com.gohaeyaji.realtime.protocol.Messages.ErrorMessage;
 import com.gohaeyaji.realtime.protocol.Messages.FaceResult;
 import com.gohaeyaji.realtime.protocol.Messages.ReportResult;
 import com.gohaeyaji.realtime.protocol.Messages.Idle;
+import com.gohaeyaji.realtime.protocol.Messages.InquiryResult;
 import com.gohaeyaji.realtime.protocol.Messages.Pong;
 import com.gohaeyaji.realtime.protocol.Messages.Released;
 import com.gohaeyaji.realtime.protocol.Messages.RenameResult;
@@ -45,9 +47,9 @@ import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorato
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 /**
- * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.7:
+ * Entry point for every WebSocket frame. Implements docs/realtime-protocol.md v0.8:
  * hello/welcome, ping/pong, claim/release, activity, resync, move (positions), rename (names),
- * setFace and report (hand-drawn faces), emote (gestures).
+ * setFace and report (hand-drawn faces), emote (gestures), inquiry (the box in the confession hall).
  *
  * Not yet: queue (queueJoin/queueLeave), resume after reconnect, rate limits, confess.
  */
@@ -66,6 +68,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     private final NameService names;
     private final FaceReports faceReports;
     private final FaceModeration moderation;
+    private final Inquiries inquiries;
     private final MessageSender sender;
     private final ObjectMapper mapper;
     private final SecureRandom random = new SecureRandom();
@@ -77,7 +80,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
 
     public RealtimeWebSocketHandler(RealtimeProperties props, SessionRegistry registry, ChannelService channels,
                                     BoothService booths, PresenceService presence, NameService names,
-                                    FaceReports faceReports, FaceModeration moderation, MessageSender sender,
+                                    FaceReports faceReports, FaceModeration moderation, Inquiries inquiries, MessageSender sender,
                                     ObjectMapper mapper, MeterRegistry meters) {
         this.props = props;
         this.registry = registry;
@@ -87,6 +90,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         this.names = names;
         this.faceReports = faceReports;
         this.moderation = moderation;
+        this.inquiries = inquiries;
         this.sender = sender;
         this.mapper = mapper;
         Gauge.builder("gohaeyaji.sessions", registry, SessionRegistry::size)
@@ -162,6 +166,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             case "setFace" -> onSetFace(session, msg, reqId);
             case "report" -> onReport(session, msg, reqId);
             case "emote" -> onEmote(session, msg);
+            case "inquiry" -> onInquiry(session, msg, reqId);
             case "activity" -> session.touchActivity(now());
             case "resync" -> sendSnapshot(session);
             case "queueJoin", "queueLeave", "confess" ->
@@ -325,6 +330,25 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         presence.emote(session.channelNo(), session.pid(), id);
+    }
+
+    /** A message for the site's admins from the box in the confession hall (protocol section 17). */
+    private void onInquiry(ClientSession session, JsonNode msg, String reqId) {
+        long now = now();
+        if (!session.canInquire(now, props.inquiryMinGapMs())) {
+            sender.send(session, InquiryResult.fail(reqId, Messages.INQUIRY_TOO_SOON));
+            return;
+        }
+        Inquiries.Result r = inquiries.submit(msg.path("kind").asText(null), msg.path("text").asText(null),
+                session.channelNo(), session.name(), session.remoteIp(), now);
+        switch (r.verdict()) {
+            case OK -> {
+                session.inquired(now);
+                sender.send(session, InquiryResult.ok(reqId));
+            }
+            case TOO_MANY -> sender.send(session, InquiryResult.fail(reqId, Messages.INQUIRY_TOO_MANY));
+            default -> sender.send(session, InquiryResult.fail(reqId, Messages.INQUIRY_INVALID));
+        }
     }
 
     private void onPing(ClientSession session, JsonNode msg) {

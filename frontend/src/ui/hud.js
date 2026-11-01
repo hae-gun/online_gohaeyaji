@@ -76,7 +76,7 @@ export function initHistoryPanel(history) {
     box.textContent = '';
     if (!list.length) {
       const p = document.createElement('p');
-      p.textContent = '아직 고해한 기록이 없습니다. 복도의 빈 고해소에 들어가 보세요.';
+      p.textContent = '아직 고해한 기록이 없습니다. 성당 안 오른쪽 고해소 방에서 빈 고해소에 들어가 보세요.';
       box.appendChild(p);
       return;
     }

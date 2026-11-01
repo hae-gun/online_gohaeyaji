@@ -28,6 +28,7 @@
  *   report(pid: number): Promise<{ ok: boolean, reason?: string }>,
  *   sendEmote(id: string): void,
  *   onFaceRemoved(listener: (e: { reason: string, blockedMs: number }) => void): void,
+ *   sendInquiry(kind: string, text: string): Promise<{ ok: boolean, reason?: string }>,
  * }} RoomClient
  *
  * Positions of other players (protocol v0.3). Rows are [pid, x, z, ry] or, in a reset,
@@ -103,6 +104,8 @@ export function createLocalRoomClient({ count, simulate = false }) {
     async report() { return { ok: false, reason: 'NO_FACE' }; },   // nobody else exists here
     sendEmote() { /* nobody to show it to */ },
     onFaceRemoved() { /* never happens without a server */ },
+    // the inquiry box needs the server: nobody would read it here
+    async sendInquiry() { return { ok: false, reason: 'OFFLINE' }; },
     async setFace(face) {
       myFace = normalizeFace(face);
       storedFace.save(myFace);

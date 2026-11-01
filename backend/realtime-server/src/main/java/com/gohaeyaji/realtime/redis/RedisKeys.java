@@ -52,6 +52,20 @@ public final class RedisKeys {
     /** Admin index of reported drawings: member = data key, score = last report time. */
     public static final String ADMIN_FACES = "gy:admin:faces";
 
+    /** Inquiry box (protocol section 17): id counter, one HASH per message, list by time, ids not done yet. */
+    public static final String INQUIRY_SEQ = "gy:inquiry:seq";
+    public static final String INQUIRIES = "gy:inquiries";
+    public static final String INQUIRIES_OPEN = "gy:inquiries:open";
+
+    public static String inquiry(long id) {
+        return "gy:inquiry:" + id;
+    }
+
+    /** Messages sent from this IP in the last hour. */
+    public static String inquiryIp(String ip) {
+        return "gy:inquiry:ip:" + ip;
+    }
+
     public static String booth(int channelNo, int boothId) {
         return CHANNEL_PREFIX + channelNo + ":booth:" + boothId;
     }

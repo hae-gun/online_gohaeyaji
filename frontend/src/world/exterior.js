@@ -172,7 +172,7 @@ export function buildExterior(scene, { glassTex, colliders }) {
   tower(-7.6, FZ - 0.35, 9, 31, 1.15);
   tower(7.6, FZ - 0.35, 9, 31, 1.15);
   // the tallest spire, further back over the nave, with the gold cross
-  tower(0, 3, 7, 47, 2.4);
+  tower(0, 3, 9.5, 47, 2.4);   // starts above the nave ceiling
   const crossV = add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.6, 0.3), goldM)); crossV.position.set(0, 49.8, 3);
   const crossH = add(new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.3, 0.3), goldM)); crossH.position.set(0, 50.3, 3);
   const slitMesh = new THREE.InstancedMesh(slit, slitM, slits.length);
@@ -306,7 +306,7 @@ export function buildExterior(scene, { glassTex, colliders }) {
   // a looser wood beyond the plaza (outside the walkable area, no collision needed)
   for (let i = 0; i < 34; i++) {
     const s = i % 2 ? 1 : -1;
-    const x = s * (15 + rnd() * 16), z = 6 + rnd() * 52;
+    const x = s * (15 + rnd() * 16), z = 14 + rnd() * 44;   // in front of the confession hall's wing
     if (rnd() < 0.45) cypress(x, z, 5 + rnd() * 4, false); else planeTree(x, z, 0.9 + rnd() * 0.5, false);
   }
   for (let i = 0; i < 10; i++) planeTree((rnd() - 0.5) * 26, 52 + rnd() * 14, 1 + rnd() * 0.4, false);

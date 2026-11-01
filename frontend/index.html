@@ -66,7 +66,7 @@
       <h1 class="logo"><em>고해</em>야지</h1>
       <p class="notice">이곳은 실제 고해성사가 아닙니다. 매일 다짐하고 자주 실패하는 일상의 작은 일을 털어놓고, 웃으며 다시 시작하는 패러디 공간입니다. 천주교의 성사와 신앙을 존중하며, 실제 고해성사는 가까운 성당에서 사제를 통해 받을 수 있습니다.</p>
       <p>고해 내용은 서버에 저장하지 않으며, 기록은 이 브라우저에만 남습니다.</p>
-      <p>소리가 나옵니다. 앞마당과 복도에는 종소리와 새소리가, 고해소 안은 조용합니다.</p>
+      <p>소리가 나옵니다. 앞마당과 성당 안에는 종소리와 새소리가, 고해소 안은 조용합니다.</p>
       <button class="primary" id="startBtn" type="button">확인하고 입장하기</button>
     </div>
   </div>
@@ -126,6 +126,26 @@
         <button class="primary" id="faceSave" type="button">이 얼굴 쓰기</button>
       </div>
     </div>
+  </div>
+
+  <div class="overlay" id="inquiryPanel" hidden>
+    <form class="card" id="inquiryForm" autocomplete="off" aria-labelledby="inquiryTitle">
+      <h2 id="inquiryTitle">신께 알리기</h2>
+      <p>사이트에 대한 문의, 질문, 제안, 오류를 남겨 주세요. 하늘 대신 운영자가 읽습니다.</p>
+      <div class="kinds" id="inquiryKinds" role="radiogroup" aria-label="종류">
+        <label><input type="radio" name="kind" value="question" checked> 질문</label>
+        <label><input type="radio" name="kind" value="request"> 문의</label>
+        <label><input type="radio" name="kind" value="idea"> 제안</label>
+        <label><input type="radio" name="kind" value="bug"> 오류 신고</label>
+      </div>
+      <textarea id="inquiryText" maxlength="500" rows="6" placeholder="예: 고해소 문이 안 열려요" aria-describedby="inquiryRule inquiryError"></textarea>
+      <p class="rule" id="inquiryRule"><span id="inquiryCount">0</span>/500자. 고해 내용은 여기에 쓰지 마세요. 답장은 드리지 못하니 연락처나 개인정보도 적지 말아 주세요. 운영 확인을 위해 세례명과 IP가 함께 저장되고, 1분에 한 번 보낼 수 있습니다.</p>
+      <p class="error" id="inquiryError" role="alert" hidden></p>
+      <div class="row">
+        <button id="inquiryCancel" type="button">취소</button>
+        <button class="primary" id="inquirySend" type="submit">하늘로 보내기</button>
+      </div>
+    </form>
   </div>
 
   <div class="playerMenu" id="playerMenu" role="menu" hidden>
