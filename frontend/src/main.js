@@ -688,6 +688,7 @@ $('#sndBtn').onclick = () => {
 };
 $('#startBtn').onclick = () => {
   ambient.start();
+  voice.unlock();   // Safari speaks only after a first phrase inside a click
   $('#intro').hidden = true;
   $('#hallUi').hidden = false;
   state = 'hall';

@@ -19,6 +19,15 @@ export function createVoice() {
   let muted = false;
   let tone = TONES.jin;
   const supported = typeof window !== 'undefined' && 'speechSynthesis' in window;
+  // the Korean voice list often arrives late (Chrome fills it after the first call)
+  let ko = null;
+  const findKo = () => {
+    try { ko = speechSynthesis.getVoices().find((v) => v.lang && v.lang.replace('_', '-').startsWith('ko')) || ko; } catch (_) { /* ignore */ }
+  };
+  if (supported) {
+    findKo();
+    try { speechSynthesis.addEventListener('voiceschanged', findKo); } catch (_) { /* old browsers */ }
+  }
 
   return {
     /** queue=true lets the previous phrase finish instead of cutting it off (used for the blessing words). */
@@ -26,14 +35,25 @@ export function createVoice() {
       if (muted || !supported) return;
       try {
         if (!queue) speechSynthesis.cancel();
+        // Chrome can leave speech paused after the tab was in the background; nothing is heard
+        // until resume() is called
+        speechSynthesis.resume();
         const u = new SpeechSynthesisUtterance(text);
         u.lang = 'ko-KR';
         u.rate = tone.rate;
         u.pitch = tone.pitch;
-        const ko = speechSynthesis.getVoices().find((v) => v.lang && v.lang.startsWith('ko'));
+        if (!ko) findKo();
         if (ko) u.voice = ko;
         speechSynthesis.speak(u);
       } catch (_) { /* speech is optional */ }
+    },
+    /**
+     * Call from a click: Safari (iPhone, iPad, Mac) only lets a page speak after speech was first
+     * started inside a user gesture. A silent, empty phrase is enough.
+     */
+    unlock() {
+      if (!supported) return;
+      try { const u = new SpeechSynthesisUtterance(''); u.volume = 0; speechSynthesis.speak(u); } catch (_) { /* ignore */ }
     },
     stop() { if (supported) try { speechSynthesis.cancel(); } catch (_) { /* ignore */ } },
     /** Which priest is speaking ('jin' | 'eom' | 'yu'). */
