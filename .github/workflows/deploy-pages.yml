@@ -42,14 +42,30 @@ jobs:
       # Without them the site falls back to the *.sample.json files.
       # A secret holds at most 48 KB, so each file can also be stored gzipped and base64 encoded
       # as <NAME>_GZ (scripts/set-data-secrets.sh does this). The _GZ secret wins when both exist.
+      # When even that is too long, it is cut into <NAME>_GZ, <NAME>_GZ_2, ... _6 and glued here.
       - name: Write private data files from secrets
         env:
           ANSWERS_JSON: ${{ secrets.ANSWERS_JSON }}
           ANSWERS_JSON_GZ: ${{ secrets.ANSWERS_JSON_GZ }}
+          ANSWERS_JSON_GZ_2: ${{ secrets.ANSWERS_JSON_GZ_2 }}
+          ANSWERS_JSON_GZ_3: ${{ secrets.ANSWERS_JSON_GZ_3 }}
+          ANSWERS_JSON_GZ_4: ${{ secrets.ANSWERS_JSON_GZ_4 }}
+          ANSWERS_JSON_GZ_5: ${{ secrets.ANSWERS_JSON_GZ_5 }}
+          ANSWERS_JSON_GZ_6: ${{ secrets.ANSWERS_JSON_GZ_6 }}
           SAFETY_JSON: ${{ secrets.SAFETY_JSON }}
           SAFETY_JSON_GZ: ${{ secrets.SAFETY_JSON_GZ }}
+          SAFETY_JSON_GZ_2: ${{ secrets.SAFETY_JSON_GZ_2 }}
+          SAFETY_JSON_GZ_3: ${{ secrets.SAFETY_JSON_GZ_3 }}
+          SAFETY_JSON_GZ_4: ${{ secrets.SAFETY_JSON_GZ_4 }}
+          SAFETY_JSON_GZ_5: ${{ secrets.SAFETY_JSON_GZ_5 }}
+          SAFETY_JSON_GZ_6: ${{ secrets.SAFETY_JSON_GZ_6 }}
           BLOCKED_JSON: ${{ secrets.BLOCKED_JSON }}
           BLOCKED_JSON_GZ: ${{ secrets.BLOCKED_JSON_GZ }}
+          BLOCKED_JSON_GZ_2: ${{ secrets.BLOCKED_JSON_GZ_2 }}
+          BLOCKED_JSON_GZ_3: ${{ secrets.BLOCKED_JSON_GZ_3 }}
+          BLOCKED_JSON_GZ_4: ${{ secrets.BLOCKED_JSON_GZ_4 }}
+          BLOCKED_JSON_GZ_5: ${{ secrets.BLOCKED_JSON_GZ_5 }}
+          BLOCKED_JSON_GZ_6: ${{ secrets.BLOCKED_JSON_GZ_6 }}
         run: |
           write() {
             name="$1"; plain="$2"; packed="$3"
@@ -68,9 +84,11 @@ jobs:
               || { echo "::error::$name from $src is not valid JSON"; exit 1; }
             echo "$name: from $src"
           }
-          write answers.json "$ANSWERS_JSON" "$ANSWERS_JSON_GZ"
-          write safety.json  "$SAFETY_JSON"  "$SAFETY_JSON_GZ"
-          write blocked.json "$BLOCKED_JSON" "$BLOCKED_JSON_GZ"
+          # parts 2..6 are glued onto the first, in order
+          glue() { printf '%s%s%s%s%s%s' "$1" "$2" "$3" "$4" "$5" "$6"; }
+          write answers.json "$ANSWERS_JSON" "$(glue "$ANSWERS_JSON_GZ" "$ANSWERS_JSON_GZ_2" "$ANSWERS_JSON_GZ_3" "$ANSWERS_JSON_GZ_4" "$ANSWERS_JSON_GZ_5" "$ANSWERS_JSON_GZ_6")"
+          write safety.json  "$SAFETY_JSON"  "$(glue "$SAFETY_JSON_GZ" "$SAFETY_JSON_GZ_2" "$SAFETY_JSON_GZ_3" "$SAFETY_JSON_GZ_4" "$SAFETY_JSON_GZ_5" "$SAFETY_JSON_GZ_6")"
+          write blocked.json "$BLOCKED_JSON" "$(glue "$BLOCKED_JSON_GZ" "$BLOCKED_JSON_GZ_2" "$BLOCKED_JSON_GZ_3" "$BLOCKED_JSON_GZ_4" "$BLOCKED_JSON_GZ_5" "$BLOCKED_JSON_GZ_6")"
 
       - run: npm run build
 
