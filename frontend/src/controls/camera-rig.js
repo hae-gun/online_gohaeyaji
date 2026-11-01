@@ -68,7 +68,7 @@ export function createCameraRig({ canvas, camera, isActive, onTap }) {
     rig.yaw = Math.sin(t * 0.15) * 0.45;
     const cp = Math.cos(0.18);
     camera.position.set(target.x + Math.sin(rig.yaw) * cp * 13, 1.6 + Math.sin(0.18) * 13, target.z + Math.cos(rig.yaw) * cp * 13);
-    camera.lookAt(0, 6.5, 14);
+    camera.lookAt(0, 13, 12);   // high enough for the towers
   };
 
   /** Places the camera for this frame. Returns whether the player mesh should be drawn. */

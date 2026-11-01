@@ -13,14 +13,15 @@ npm run build
 | 경로 | 하는 일 |
 |---|---|
 | `src/main.js` | 모듈 연결, 상태 전이(intro, hall, opening, room), 프레임 루프 |
-| `src/world/exterior.js` | 하늘, 앞마당, 성당 정면, 정문, 나무와 가로등 |
+| `src/world/exterior.js` | 하늘, 성당 정면(사그라다 파밀리아 느낌의 탑 4개와 중앙 첨탑), 정문, 분수대 광장, 벤치(앉는 자리), 나무와 가로등 |
+| `src/world/pigeons.js` | 광장 비둘기. 날아와서 앉고 쪼다가 사람이 다가오면 날아감. 내 화면에만 보임 |
 | `src/world/hall.js` | 복도, 조명, 스테인드글라스 |
 | `src/world/booths.js` | 고해소 20칸, LED, 문 |
 | `src/world/figure.js` | 플레이어와 신부 캐릭터 |
 | `src/world/confessional.js` | 고해소 내부 장면, 성호경, 끄덕임, 깜빡임 |
 | `src/controls/keyboard.js` | 물리 키 기준 입력 (한글 입력 상태 대응) |
 | `src/controls/camera-rig.js` | 3인칭 궤도 카메라, 벽 충돌, 1인칭 |
-| `src/controls/navigation.js` | 걸을 수 있는 영역, 정문을 거치는 경로 |
+| `src/controls/navigation.js` | 걸을 수 있는 영역, 정문을 거치고 분수대를 돌아가는 경로, 둥근 장애물 따라 미끄러지기 |
 | `src/answer/engine.js` | 위기 키워드, 금지어, 카테고리 매칭, 템플릿 조합 |
 | `public/data/` | 답변과 금지어 데이터. `*.sample.json`만 git에 올라감 |
 | `src/net/room-client.js` | 고해소 점유 계약과 로컬 시뮬레이션 |

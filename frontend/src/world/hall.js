@@ -52,8 +52,8 @@ export function buildHall(scene, glassTex) {
   ceiling.position.set(0, 7.1, -16);
   scene.add(ceiling); colliders.push(ceiling);
   for (const s of [-1, 1]) {
-    const r = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.3, 55), M(0x4b3a44));
-    r.position.set(s * 2.7, 8.6, -16.2);
+    const r = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.3, 53.6), M(0x4b3a44));
+    r.position.set(s * 2.7, 8.6, -16.5);   // stops behind the facade (front face at z 11.2)
     r.rotation.z = -s * 0.55;
     scene.add(r);
   }

@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import './styles.css';
 import { makeGlassTexture } from './core/three-utils.js';
 import { buildHall } from './world/hall.js';
-import { buildExterior, FACADE_Z } from './world/exterior.js';
+import { buildExterior, FACADE_Z, FOUNTAIN } from './world/exterior.js';
+import { createPigeons, plazaPigeonSpots } from './world/pigeons.js';
 import { buildBooths, BOOTH_COUNT } from './world/booths.js';
 import { makeFigure, walkPose } from './world/figure.js';
 import { createOtherPlayers } from './world/others.js';
@@ -47,7 +48,7 @@ $('#stage').appendChild(renderer.domElement);
 /* ---------- world ---------- */
 const world = new THREE.Scene();
 world.background = new THREE.Color(0x5a4560);
-world.fog = new THREE.Fog(0x5a4560, 30, 85);
+world.fog = new THREE.Fog(0x5a4560, 40, 130);
 const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 220);
 
 const glassTex = makeGlassTexture();
@@ -56,6 +57,7 @@ const colliders = hall.colliders;   // the orbit camera stays in front of these
 const outside = buildExterior(world, { glassTex, colliders });
 const booths = buildBooths(world, colliders);
 const nav = createNavigation(outside.obstacles);
+const pigeons = createPigeons(world, plazaPigeonSpots(FOUNTAIN, outside.obstacles));
 const confessional = buildConfessional();
 
 const player = makeFigure({ shirt: 0xe5533d, pants: 0x2e3a52, hair: 0x3b2618, face: 'derpy' });
@@ -113,6 +115,7 @@ let walkBooth = null;          // booth to face when the path ends
 let stuck = 0;
 let walkPhase = 0;
 let walkAmp = 0;               // 0..1, eases the gait in and out
+let nearBench = null;          // plaza bench close enough to sit on
 let muted = false;
 
 /* ---------- connection status and server-side releases ---------- */
@@ -218,6 +221,22 @@ function playEmote(id) {
   // someone who has not moved yet is invisible to others; show up first so the emote is seen
   moveSender.now(player.position, player.rotation.y);
 }
+/** Sit on the bench next to me (protocol section 16, emote 'sit'). Walking stands up again. */
+function sitDown(bench) {
+  if (state !== 'hall' || myEmote.playing) return;
+  path = []; walkBooth = null;
+  player.position.set(bench.seat.x, 0, bench.seat.z);
+  player.rotation.y = bench.rot;
+  rig.yaw = bench.rot + Math.PI;   // camera behind, looking out over the plaza with the sitter
+  if (!myEmote.start('sit')) return;
+  // position first: others snap onto the seat when the sit arrives
+  moveSender.now(player.position, player.rotation.y);
+  rooms.sendEmote('sit');
+}
+function act() {
+  if (nearBooth) tryEnter();
+  else if (nearBench) sitDown(nearBench);
+}
 let shownEmote = null;
 function updateEmoteBar() {
   const playing = myEmote.playing;
@@ -229,8 +248,8 @@ function updateEmoteBar() {
       if (!playing) fill.style.width = '0';
     }
   }
-  if (playing) {
-    const cur = emoteButtons.find((x) => x.id === playing);
+  const cur = playing && emoteButtons.find((x) => x.id === playing);
+  if (cur) {
     cur.fill.style.width = `${Math.round(myEmote.progress * 100)}%`;
   }
 }
@@ -308,7 +327,7 @@ let shownPeople = -1;
 /* ---------- input ---------- */
 const keys = createKeyboard((k) => {
   if (!namePanel.hidden || faceEditor.isOpen()) return;   // a dialog is open: buttons inside it may hold focus
-  if (k === 'e' && state === 'hall') tryEnter();
+  if (k === 'e' && state === 'hall') act();
   if (state === 'hall' && ['1', '2', '3', '4'].includes(k)) playEmote(EMOTES[Number(k) - 1].id);
   if (k === 'v' && state === 'hall') toggleView();
   if (k === 'escape' && state === 'room') leaveRoom();
@@ -561,7 +580,7 @@ function leaveRoom({ reason = 'USER', notifyServer = true, message = '' } = {}) 
 }
 
 $('#exitBtn').onclick = () => leaveRoom();
-$('#actBtn').onclick = tryEnter;
+$('#actBtn').onclick = act;
 $('#viewBtn').onclick = toggleView;
 $('#sndBtn').onclick = () => {
   muted = !muted;
@@ -650,8 +669,27 @@ function updateSurroundings(dt) {
     }
   }
   nearBooth = nb;
+  // a free bench next to me (not while something else is playing)
+  let bench = null;
+  if (out && !nb && !myEmote.playing) {
+    let bd = 1.25;
+    for (const b of outside.benches) {
+      const d = Math.min(Math.hypot(b.front.x - player.position.x, b.front.z - player.position.z),
+        Math.hypot(b.seat.x - player.position.x, b.seat.z - player.position.z));
+      if (d < bd) { bd = d; bench = b; }
+    }
+  }
+  nearBench = bench;
   const prompt = $('#prompt'), act = $('#actBtn');
-  if (state === 'hall' && nb) {
+  if (state === 'hall' && myEmote.playing === 'sit') {
+    prompt.hidden = false;
+    prompt.textContent = '벤치에 앉아 있습니다. 움직이면 일어납니다';
+    act.hidden = true;
+  } else if (state === 'hall' && bench) {
+    prompt.hidden = false;
+    prompt.innerHTML = '<kbd>E</kbd>벤치에 앉기';
+    act.hidden = false;
+  } else if (state === 'hall' && nb) {
     prompt.hidden = false;
     if (nb.occupied) {
       prompt.textContent = `${nb.id + 1}번 고해소: 고해성사가 진행중입니다`;
@@ -678,6 +716,8 @@ function animate() {
     return;
   }
   others.update(dt);
+  outside.update(dt, t);
+  pigeons.update(dt, t, [player.position, ...others.positions()]);
   if (state === 'hall' || state === 'intro') {
     const moving = updatePlayer(dt);
     if (state === 'hall') moveSender.update(player.position, player.rotation.y, moving);

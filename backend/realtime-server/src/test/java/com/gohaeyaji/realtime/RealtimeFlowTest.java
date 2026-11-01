@@ -459,6 +459,19 @@ class RealtimeFlowTest {
     }
 
     @Test
+    void sittingOnABenchIsAnEmoteWithAShortGate() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            int pidA = a.hello().path("you").path("pid").asInt();
+            b.hello();
+            a.send("{\"type\":\"emote\",\"id\":\"sit\"}");
+            b.await("presence", m -> "sit".equals(pairValue(m.path("emoted"), pidA)));
+            Thread.sleep(1_100);                                  // the sit gate is 1 s, not "until the end"
+            a.send("{\"type\":\"emote\",\"id\":\"pray\"}");
+            b.await("presence", m -> "pray".equals(pairValue(m.path("emoted"), pidA)));
+        }
+    }
+
+    @Test
     void noEmotesFromInsideABooth() throws Exception {
         try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
             int pidA = a.hello().path("you").path("pid").asInt();

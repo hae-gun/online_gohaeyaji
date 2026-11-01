@@ -217,6 +217,8 @@ function makeKid(o) {
     up: { R: v(-0.5, 1.9, 0.1), L: v(0.5, 1.9, 0.1) },
     halfUp: { R: v(-0.62, 1.45, 0.12), L: v(0.62, 1.45, 0.12) },
     limp: { R: v(-0.26, 0.42, 0.22), L: v(0.26, 0.42, 0.22) },
+    // hands resting on the knees when sitting on a bench
+    lap: { R: v(-0.17, 0.5, 0.36), L: v(0.17, 0.5, 0.36) },
   };
   g.userData = { legs, arms, head, ARM: 0.3, face, pose };
   return g;

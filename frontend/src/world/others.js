@@ -116,14 +116,18 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
       } else if (e.kind === 'batch') {
         for (const [pid, name] of e.named || []) setName(pid, name);
         for (const [pid, face] of e.faced || []) setFace(pid, face);
-        for (const [pid, id] of e.emoted || []) {
-          const p = players.get(pid);
-          if (p && pid !== me) { p.emote.stop(); p.emote.start(id); }
-        }
         for (const [pid, x, z, ry] of e.moved) {
           if (pid === me) continue;
           const p = ensure(pid, x, z, ry);
           p.tx = x; p.tz = z; p.try = ry;
+        }
+        // after the moves: someone sitting down is put straight onto the seat they sent
+        for (const [pid, id] of e.emoted || []) {
+          const p = players.get(pid);
+          if (!p || pid === me) continue;
+          p.emote.stop();
+          if (id === 'sit') { p.fig.position.x = p.tx; p.fig.position.z = p.tz; p.fig.rotation.y = p.try; }
+          p.emote.start(id);
         }
         for (const pid of e.left) {
           remove(pid);
@@ -150,6 +154,13 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
     /** Re-check every face after the hidden list changed. */
     refreshFaces() {
       for (const pid of players.keys()) applyFace(pid);
+    },
+
+    /** Where the visible people stand (the pigeons keep away from them). */
+    positions() {
+      const out = [];
+      for (const p of players.values()) if (!p.inBooth) out.push(p.fig.position);
+      return out;
     },
 
     /** Visible people in the channel, not counting me. */

@@ -7,6 +7,8 @@ import * as THREE from 'three';
  *   cross  성호경: forehead, chest, left shoulder, right shoulder, hands together (own left and right)
  *   hooray 무릎 꿇고 만세: kneels and pumps both arms
  *   doze   꾸벅꾸벅: nods off like during a long homily, "Z z" floating up
+ *   sit    벤치에 앉기: not in the emote bar; started with E next to a plaza bench. It has no fixed
+ *          end and lasts until the sitter walks (then they stand up). Others see it too.
  *
  * One at a time. Walking and turning the camera keep working: the arms and head follow the emote,
  * the legs keep walking (a kneel stands up while walking and kneels again on stopping).
@@ -20,7 +22,10 @@ export const EMOTES = [
   { id: 'doze', label: '꾸벅꾸벅', dur: 5.0 },
 ];
 export const EMOTE_IDS = EMOTES.map((e) => e.id);
-const BY_ID = Object.fromEntries(EMOTES.map((e) => [e.id, e]));
+const SIT = { id: 'sit', label: '앉기', dur: Infinity };
+const BY_ID = Object.fromEntries([...EMOTES, SIT].map((e) => [e.id, e]));
+/** How high the hips go when sitting, so the seat (0.47) is under them. */
+const SIT_RISE = 0.17;
 
 const DOWN = new THREE.Vector3(0, -1, 0);
 const EASE_IN = 0.35;   // seconds to blend from rest into the emote
@@ -99,13 +104,14 @@ export function createEmotePlayer(fig) {
   }
 
   function stop() {
-    id = null;
     for (const side of ['R', 'L']) { u.arms[side].rotation.set(0, 0, 0); u.arms[side].scale.set(1, 1, 1); }
     u.head.rotation.set(0, 0, 0);
+    if (id === 'sit') fig.position.y = 0;
     u.legs.forEach((l) => { l.rotation.x = 0; });
     u.face.set({});
     zzz.visible = false;
     kneel = 0;
+    id = null;
   }
 
   return {
@@ -117,12 +123,25 @@ export function createEmotePlayer(fig) {
     },
     get playing() { return id; },
     /** 0..1 of the current emote, for the button's progress */
-    get progress() { return id ? Math.min(1, t / BY_ID[id].dur) : 0; },
+    get progress() { return id && id !== 'sit' ? Math.min(1, t / BY_ID[id].dur) : 0; },
     stop,
     /** @param {boolean} moving walking this frame: kneeling waits until standing still */
     update(dt, moving) {
       if (!id) return;
       t += dt;
+      if (id === 'sit') {
+        // walking away is standing up
+        if (moving) { stop(); return; }
+        const w = smooth(t / 0.45);
+        u.legs.forEach((leg) => { leg.rotation.x = leg.rotation.x * (1 - w) - 1.5 * w; });
+        fig.position.y += SIT_RISE * w;
+        fig.rotation.z *= 1 - w;
+        const lap = pose('R', P.lap.R), lapL = pose('L', P.lap.L);
+        setArm('R', lap, lap, 0, w); setArm('L', lapL, lapL, 0, w);
+        // now and then a slow look around the plaza
+        u.head.rotation.y = Math.sin(t * 0.4) * 0.35 * smooth((t - 2) / 2) * w;
+        return;
+      }
       const dur = BY_ID[id].dur;
       if (t >= dur) { stop(); return; }
       // weight of the whole emote: eases in at the start and out at the end
