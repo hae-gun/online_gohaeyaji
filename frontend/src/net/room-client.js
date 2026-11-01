@@ -26,7 +26,7 @@
  *   myFace: string|null,
  *   setFace(face: string|null): Promise<{ ok: boolean, reason?: string }>,
  *   report(pid: number): Promise<{ ok: boolean, reason?: string }>,
- *   sendEmote(id: string): void,
+ *   sendEmote(id: string, at?: { x: number, z: number, ry: number }): void,
  *   onFaceRemoved(listener: (e: { reason: string, blockedMs: number }) => void): void,
  *   sendInquiry(kind: string, text: string): Promise<{ ok: boolean, reason?: string }>,
  * }} RoomClient
@@ -34,7 +34,7 @@
  * Positions of other players (protocol v0.3). Rows are [pid, x, z, ry] or, in a reset,
  * [pid, x, z, ry, boothId or -1]. Names (v0.4) come as [pid, name] pairs, hand-drawn faces (v0.5)
  * as [pid, face] pairs ("" in a batch = back to the default face):
- * @typedef {{ kind: 'reset', you: number|null, players: number[][], names: [number, string][], faces: [number, string][] }
+ * @typedef {{ kind: 'reset', you: number|null, players: number[][], names: [number, string][], faces: [number, string][], sitting?: number[] }
  *         | { kind: 'batch', moved: number[][], left: number[], named: [number, string][], faced: [number, string][],
  *             emoted: [number, string][] }
  *         | { kind: 'booth', boothId: number, pid: number|null }} PresenceEvent

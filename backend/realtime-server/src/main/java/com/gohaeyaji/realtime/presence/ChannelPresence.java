@@ -23,9 +23,16 @@ final class ChannelPresence {
     private final Map<Integer, String> faces = new HashMap<>();
     private final Set<Integer> refaced = new LinkedHashSet<>();
     private final List<List<Object>> emoted = new ArrayList<>();
+    /** Who sits on a bench or pew right now (protocol section 16): newcomers see them seated. */
+    private final Set<Integer> sitting = new LinkedHashSet<>();
+    /** Moving less than this is turning on the seat, not getting up. */
+    private static final double STAND_UP_DISTANCE = 0.05;
 
     synchronized void move(int pid, double x, double z, double ry) {
         Player p = players.computeIfAbsent(pid, Player::new);
+        if (Math.hypot(x - p.x, z - p.z) > STAND_UP_DISTANCE) {
+            sitting.remove(pid);    // walking away from the seat is standing up
+        }
         p.x = x;
         p.z = z;
         p.ry = ry;
@@ -38,6 +45,7 @@ final class ChannelPresence {
         if (p != null) {
             p.boothId = boothId;
         }
+        sitting.remove(pid);
     }
 
     synchronized void setName(int pid, String name) {
@@ -59,9 +67,31 @@ final class ChannelPresence {
         emoted.add(List.of(pid, id));
     }
 
+    /**
+     * Sits down at the seat (x, z, facing ry): the position is taken as is, so the seat is right
+     * even if the last move was dropped by the rate limit. Announced like an emote with a move in
+     * the same batch, and remembered until the player walks away.
+     */
+    synchronized void sit(int pid, double x, double z, double ry) {
+        Player p = players.computeIfAbsent(pid, Player::new);
+        p.x = x;
+        p.z = z;
+        p.ry = ry;
+        left.remove(pid);
+        dirty.add(pid);
+        sitting.add(pid);
+        emoted.add(List.of(pid, Emotes.SIT));
+    }
+
+    /** Pids sitting now, for the welcome of someone joining. */
+    synchronized List<Integer> sitting() {
+        return new ArrayList<>(sitting);
+    }
+
     synchronized void remove(int pid) {
         faces.remove(pid);
         refaced.remove(pid);
+        sitting.remove(pid);
         dirty.remove(pid);
         renamed.remove(pid);
         names.remove(pid);

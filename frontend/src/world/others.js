@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { makeFigure, NAME_HEIGHT, walkPose } from './figure.js';
 import { hiddenFaces } from '../net/faces.js';
-import { createEmotePlayer } from './emotes.js';
+import { createEmotePlayer, SIT } from './emotes.js';
 
 /**
  * Other players in my channel (protocol v0.3). No names, only a shirt color picked from the pid,
@@ -113,6 +113,11 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
           ensure(pid, x, z, ry);
           if (boothId >= 0) { boothOwner.set(boothId, pid); setInBooth(pid, true); }
         }
+        // people already sitting on a bench or pew (v0.9)
+        for (const pid of e.sitting || []) {
+          const p = players.get(pid);
+          if (p && !p.inBooth) p.emote.start(SIT);
+        }
       } else if (e.kind === 'batch') {
         for (const [pid, name] of e.named || []) setName(pid, name);
         for (const [pid, face] of e.faced || []) setFace(pid, face);
@@ -125,8 +130,12 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
         for (const [pid, id] of e.emoted || []) {
           const p = players.get(pid);
           if (!p || pid === me) continue;
-          p.emote.stop();
-          if (id === 'sit') { p.fig.position.x = p.tx; p.fig.position.z = p.tz; p.fig.rotation.y = p.try; }
+          if (id === SIT) {
+            // put them straight onto the seat they sent (it came in the same batch)
+            p.fig.position.x = p.tx; p.fig.position.z = p.tz; p.fig.rotation.y = p.try;
+          } else {
+            p.emote.cancel();   // a new gesture replaces the old one; a seated person stays seated
+          }
           p.emote.start(id);
         }
         for (const pid of e.left) {

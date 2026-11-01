@@ -19,7 +19,8 @@ import org.springframework.stereotype.Service;
 public class PresenceService {
 
     // world bounds, a little larger than the walkable area so clamping never fights the client
-    private static final double MIN_X = -15, MAX_X = 15, MIN_Z = -42, MAX_Z = 48;
+    // the yard (x -13..13, z up to 49), the nave and the confession hall to the right (x up to 37)
+    private static final double MIN_X = -15, MAX_X = 38, MIN_Z = -42, MAX_Z = 50;
 
     private final StringRedisTemplate redis;
     private final Map<Integer, ChannelPresence> channels = new ConcurrentHashMap<>();
@@ -68,6 +69,20 @@ public class PresenceService {
     /** An emote (protocol section 16); goes out with the next batch, then is forgotten. */
     public void emote(int channelNo, int pid, String id) {
         channel(channelNo).emote(pid, id);
+    }
+
+    /** Sitting on a bench or pew (protocol section 16): kept until the player moves away. */
+    public void sit(int channelNo, int pid, double x, double z, double ry) {
+        if (!Double.isFinite(x) || !Double.isFinite(z) || !Double.isFinite(ry)) {
+            return;
+        }
+        channel(channelNo).sit(pid, round(clamp(x, MIN_X, MAX_X)), round(clamp(z, MIN_Z, MAX_Z)), round(ry % (Math.PI * 2)));
+    }
+
+    /** Pids sitting now; sent in the welcome so newcomers see them seated. */
+    public List<Integer> sitting(int channelNo) {
+        ChannelPresence presence = channels.get(channelNo);
+        return presence == null ? List.of() : presence.sitting();
     }
 
     public List<List<Object>> faces(int channelNo) {

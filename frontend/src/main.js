@@ -224,15 +224,15 @@ function playEmote(id) {
 }
 /** Sit on the bench or pew next to me (protocol section 16, emote 'sit'). Walking stands up again. */
 function sitDown(bench) {
-  if (state !== 'hall' || myEmote.playing) return;
+  if (state !== 'hall' || myEmote.seated) return;
   path = []; walkBooth = null;
   player.position.set(bench.seat.x, 0, bench.seat.z);
   player.rotation.y = bench.rot;
   rig.yaw = bench.rot + Math.PI;   // camera behind, looking out over the plaza with the sitter
-  if (!myEmote.start('sit')) return;
-  // position first: others snap onto the seat when the sit arrives
-  moveSender.now(player.position, player.rotation.y);
-  rooms.sendEmote('sit');
+  myEmote.start('sit');
+  // the seat travels with the sit, so others put me exactly there (a separate move could be
+  // dropped by the server's rate limit right after walking)
+  rooms.sendEmote('sit', { x: player.position.x, z: player.position.z, ry: player.rotation.y });
 }
 /* ---------- things to do in the nave and the confession hall ---------- */
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
@@ -769,7 +769,7 @@ function updateSurroundings(dt) {
   nearBooth = nb;
   // a free bench or pew next to me (not while something else is playing)
   let bench = null;
-  if (!nb && !myEmote.playing && place !== 'booths') {
+  if (!nb && !myEmote.seated && place !== 'booths') {
     let bd = 1.0;
     for (const b of place === 'yard' ? outside.benches : hall.seats) {
       const d = Math.min(Math.hypot(b.front.x - player.position.x, b.front.z - player.position.z),
@@ -778,11 +778,11 @@ function updateSurroundings(dt) {
     }
   }
   nearBench = bench;
-  nearDo = nb || myEmote.playing === 'sit' ? null : nearAction();
+  nearDo = nb || myEmote.seated ? null : nearAction();
   const prompt = $('#prompt'), act = $('#actBtn');
-  if (state === 'hall' && myEmote.playing === 'sit') {
+  if (state === 'hall' && myEmote.seated) {
     prompt.hidden = false;
-    prompt.textContent = '앉아 있습니다. 움직이면 일어납니다';
+    prompt.textContent = '앉아 있습니다. 앉은 채로 동작을 할 수 있고, 움직이면 일어납니다';
     act.hidden = true;
   } else if (state === 'hall' && nearDo) {
     prompt.hidden = false;

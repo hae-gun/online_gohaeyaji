@@ -26,17 +26,18 @@ public final class Messages {
      * @param players visible players in the channel, each {@code [pid, x, z, ry, boothId or -1]}
      * @param names   display names in the channel, each {@code [pid, name]} (also for players not yet visible)
      * @param faces   hand-drawn faces, each {@code [pid, face]}; only people who drew one (v0.5)
+     * @param sitting pids sitting on a bench or pew right now (v0.9)
      */
     public record Welcome(String type, int v, String sessionId, String resumeToken, int channelNo,
                           int boothCount, Booths booths, int queueSize, long seq, long heartbeatMs,
                           Idle idle, You you, List<List<Number>> players, List<List<Object>> names,
-                          List<List<Object>> faces, long presenceMs, long serverTime) {
+                          List<List<Object>> faces, List<Integer> sitting, long presenceMs, long serverTime) {
         public Welcome(int v, String sessionId, String resumeToken, int channelNo, int boothCount,
                        Booths booths, int queueSize, long seq, long heartbeatMs, Idle idle,
                        You you, List<List<Number>> players, List<List<Object>> names,
-                       List<List<Object>> faces, long presenceMs, long serverTime) {
+                       List<List<Object>> faces, List<Integer> sitting, long presenceMs, long serverTime) {
             this("welcome", v, sessionId, resumeToken, channelNo, boothCount, booths, queueSize, seq,
-                    heartbeatMs, idle, you, players, names, faces, presenceMs, serverTime);
+                    heartbeatMs, idle, you, players, names, faces, sitting, presenceMs, serverTime);
         }
     }
 

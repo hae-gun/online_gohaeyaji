@@ -106,6 +106,17 @@ public final class ClientSession {
         return true;
     }
 
+    private long lastSitAt;
+
+    /** Sitting down at most once per gapMs; separate from gestures, which can play while seated. */
+    public synchronized boolean acceptSit(long now, long gapMs) {
+        if (lastSitAt != 0 && now - lastSitAt < gapMs) {
+            return false;
+        }
+        lastSitAt = now;
+        return true;
+    }
+
     /** @return true if no emote is playing now; then this one runs until now + durationMs */
     public boolean acceptEmote(long now, long durationMs, long slackMs) {
         if (now < emoteUntil - slackMs) {

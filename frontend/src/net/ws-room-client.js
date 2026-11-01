@@ -93,7 +93,7 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
         heartbeat = setInterval(() => send({ type: 'ping', t: Date.now() }), heartbeatMs);
         setStatus({ state: 'ready', channelNo: msg.channelNo });
         setMyName(msg.you?.name);
-        emitPresence({ kind: 'reset', you: msg.you?.pid ?? null, players: msg.players || [], names: msg.names || [], faces: msg.faces || [] });
+        emitPresence({ kind: 'reset', you: msg.you?.pid ?? null, players: msg.players || [], names: msg.names || [], faces: msg.faces || [], sitting: msg.sitting || [] });
         break;
       }
       case 'presence':
@@ -231,8 +231,9 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
     },
 
     /** Tell the channel I started an emote (protocol section 16). No answer comes back. */
-    sendEmote(id) {
-      if (ready) send({ type: 'emote', id });
+    sendEmote(id, at) {
+      // sitting carries the seat (x, z, ry) so the server places me exactly there (v0.9)
+      if (ready) send({ type: 'emote', id, ...(at || {}) });
     },
 
     /** Report the drawing another player (pid) wears. */

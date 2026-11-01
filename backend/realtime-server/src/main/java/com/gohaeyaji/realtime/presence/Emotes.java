@@ -7,8 +7,9 @@ import java.util.Map;
  * Must match EMOTES in frontend/src/world/emotes.js. A new emote is only accepted once the
  * previous one has finished, so nobody can spam the channel with gestures.
  *
- * "sit" (sitting on a bench in the plaza) has no fixed end: it lasts until the person walks away.
- * Its value is only the gate, so sitting down and standing up cannot be spammed either.
+ * "sit" (sitting on a bench or a pew) has no fixed end: it lasts until the person walks away, and
+ * gestures can be played while seated. Its value is only its own gate (sitting down once a second).
+ * The server remembers who sits, so people joining later see them seated (welcome.sitting).
  */
 public final class Emotes {
 
@@ -18,6 +19,9 @@ public final class Emotes {
             "hooray", 3_600L,
             "doze", 5_000L,
             "sit", 1_000L);
+
+    /** Sitting: a state rather than a gesture. Its own gate, so a gesture can start right after sitting down. */
+    public static final String SIT = "sit";
 
     /** Network jitter allowance: a client finishing slightly early is not cheating. */
     public static final long SLACK_MS = 300;

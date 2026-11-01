@@ -219,6 +219,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
                 presence.snapshot(channelNo),
                 presence.names(channelNo),
                 presence.faces(channelNo),
+                presence.sitting(channelNo),
                 props.presenceMs(),
                 now()));
     }
@@ -323,6 +324,15 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     /** No answer: the sender already plays it; anything not allowed is dropped and counted. */
     private void onEmote(ClientSession session, JsonNode msg) {
         String id = msg.path("id").asText("");
+        if (Emotes.SIT.equals(id)) {
+            if (session.boothId() != null || !session.acceptSit(now(), Emotes.DURATION_MS.get(id))) {
+                emotesDropped.increment();
+                return;
+            }
+            presence.sit(session.channelNo(), session.pid(),
+                    msg.path("x").asDouble(Double.NaN), msg.path("z").asDouble(Double.NaN), msg.path("ry").asDouble(0));
+            return;
+        }
         Long duration = Emotes.DURATION_MS.get(id);
         if (duration == null || session.boothId() != null
                 || !session.acceptEmote(now(), duration, Emotes.SLACK_MS)) {

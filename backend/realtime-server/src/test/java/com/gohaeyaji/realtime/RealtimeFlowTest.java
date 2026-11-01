@@ -473,15 +473,30 @@ class RealtimeFlowTest {
     }
 
     @Test
-    void sittingOnABenchIsAnEmoteWithAShortGate() throws Exception {
+    void sittingIsRememberedForNewcomersAndGesturesPlaySeated() throws Exception {
         try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
             int pidA = a.hello().path("you").path("pid").asInt();
             b.hello();
-            a.send("{\"type\":\"emote\",\"id\":\"sit\"}");
-            b.await("presence", m -> "sit".equals(pairValue(m.path("emoted"), pidA)));
-            Thread.sleep(1_100);                                  // the sit gate is 1 s, not "until the end"
-            a.send("{\"type\":\"emote\",\"id\":\"pray\"}");
+            // the seat comes with the sit, so a dropped move cannot put the sitter in the wrong place
+            a.send("{\"type\":\"emote\",\"id\":\"sit\",\"x\":3.95,\"z\":1.48,\"ry\":3.14}");
+            JsonNode batch = b.await("presence", m -> "sit".equals(pairValue(m.path("emoted"), pidA)));
+            assertThat(containsPid(batch.path("moved"), pidA)).isTrue();
+            a.send("{\"type\":\"emote\",\"id\":\"pray\"}");                // right away: sitting has its own gate
             b.await("presence", m -> "pray".equals(pairValue(m.path("emoted"), pidA)));
+            try (TestClient c = TestClient.connect(port)) {
+                JsonNode welcome = c.hello();
+                assertThat(welcome.path("sitting").toString()).contains(String.valueOf(pidA));
+            }
+            a.send("{\"type\":\"move\",\"x\":3.95,\"z\":1.48,\"ry\":0.5}");   // turning on the seat
+            Thread.sleep(400);
+            try (TestClient c = TestClient.connect(port)) {
+                assertThat(c.hello().path("sitting").toString()).contains(String.valueOf(pidA));
+            }
+            a.send("{\"type\":\"move\",\"x\":5.2,\"z\":1.48,\"ry\":0.5}");    // walking away
+            Thread.sleep(400);
+            try (TestClient c = TestClient.connect(port)) {
+                assertThat(c.hello().path("sitting")).isEmpty();
+            }
         }
     }
 
