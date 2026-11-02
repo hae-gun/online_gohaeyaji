@@ -3,6 +3,8 @@
 # IP당 동시 연결, 요청 속도 제한 (앱의 IP당 20개 제한보다 앞에서 먼저 거름)
 limit_conn_zone $binary_remote_addr zone=perip:10m;
 limit_req_zone  $binary_remote_addr zone=reqs:10m rate=10r/s;
+# 관리자 페이지: 비밀번호 대입을 늦추려고 IP당 초당 2회
+limit_req_zone  $binary_remote_addr zone=admin:1m rate=2r/s;
 
 map $http_upgrade $connection_upgrade {
   default upgrade;
@@ -47,6 +49,19 @@ server {
     allow ${OPS_IP};
     deny all;
     proxy_pass http://realtime-server:8080;
+  }
+
+  # 관리자 페이지 https://${DOMAIN}/admin
+  # 로그인(HTTP Basic)과 IP당 5회 실패 시 10분 차단은 Spring(AdminAuthFilter)이 함.
+  # 여기서는 TLS와 요청 속도 제한만. 고정 IP에서만 쓴다면 allow <내 IP>; deny all; 을 추가
+  location /admin {
+    limit_req zone=admin burst=20 nodelay;
+
+    proxy_pass http://realtime-server:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
   }
 
   location / { return 404; }
