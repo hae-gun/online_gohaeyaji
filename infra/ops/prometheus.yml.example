@@ -1,0 +1,23 @@
+# cp prometheus.yml.example prometheus.yml 후 APP_IP, DOMAIN을 실제 값으로 (prometheus.yml은 git에 올리지 않음)
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  # app 서버 CPU, 메모리, 네트워크 송신량 (트래픽 한도 관리용)
+  - job_name: app-node
+    static_configs:
+      - targets: ["APP_IP:9100"]
+
+  # Spring 지표 (Nginx가 ops IP에만 허용)
+  # Spring에 micrometer-registry-prometheus 의존성과
+  # management.endpoints.web.exposure.include=prometheus 설정이 있어야 함
+  - job_name: realtime
+    scheme: https
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["DOMAIN"]   # 예: api.gohaeyaji.kr
+
+  # ops 서버 자신
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

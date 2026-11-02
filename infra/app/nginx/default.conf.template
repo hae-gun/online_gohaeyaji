@@ -1,0 +1,53 @@
+# ${DOMAIN}, ${OPS_IP} 는 컨테이너 시작 시 .env 값으로 치환됨 (nginx 공식 이미지 기능)
+
+# IP당 동시 연결, 요청 속도 제한 (앱의 IP당 20개 제한보다 앞에서 먼저 거름)
+limit_conn_zone $binary_remote_addr zone=perip:10m;
+limit_req_zone  $binary_remote_addr zone=reqs:10m rate=10r/s;
+
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  ''      close;
+}
+
+server {
+  listen 80;
+  server_name ${DOMAIN};
+
+  location /.well-known/acme-challenge/ { root /var/www/certbot; }
+  location / { return 301 https://$host$request_uri; }
+}
+
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name ${DOMAIN};
+
+  ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+
+  location /ws {
+    limit_conn perip 20;
+    limit_req  zone=reqs burst=20 nodelay;
+
+    proxy_pass http://realtime-server:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    # Spring은 이 헤더로 실제 클라이언트 IP를 읽어야 함 (안 그러면 모두 Nginx IP로 보임)
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_read_timeout 60s;   # 클라이언트 ping이 10초라 여유 있음
+  }
+
+  # Spring 지표: ops 서버에서만
+  location /actuator/prometheus {
+    allow ${OPS_IP};
+    deny all;
+    proxy_pass http://realtime-server:8080;
+  }
+
+  location / { return 404; }
+}

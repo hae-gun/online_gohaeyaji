@@ -1,0 +1,4 @@
+app/.env
+app/data/
+ops/.env
+ops/prometheus.yml
