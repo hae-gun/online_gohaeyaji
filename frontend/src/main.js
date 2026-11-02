@@ -82,8 +82,8 @@ addEventListener('resize', resize);
 resize();
 
 /* ---------- services ---------- */
-// VITE_REALTIME_URL set (npm run dev:server, or a build with the variable) -> real server.
-// Not set (npm run dev, GitHub Pages) -> in-browser simulation.
+// VITE_REALTIME_URL set (npm run dev:server, or the GitHub Pages build: wss://api.gohaeyaji.com/ws,
+// see .github/workflows/deploy-pages.yml) -> real server. Not set (npm run dev) -> in-browser simulation.
 const REALTIME_URL = import.meta.env.VITE_REALTIME_URL;
 const params = new URLSearchParams(location.search);
 const rooms = REALTIME_URL

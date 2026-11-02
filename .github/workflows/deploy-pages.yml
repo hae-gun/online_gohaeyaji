@@ -90,7 +90,11 @@ jobs:
           write safety.json  "$SAFETY_JSON"  "$(glue "$SAFETY_JSON_GZ" "$SAFETY_JSON_GZ_2" "$SAFETY_JSON_GZ_3" "$SAFETY_JSON_GZ_4" "$SAFETY_JSON_GZ_5" "$SAFETY_JSON_GZ_6")"
           write blocked.json "$BLOCKED_JSON" "$(glue "$BLOCKED_JSON_GZ" "$BLOCKED_JSON_GZ_2" "$BLOCKED_JSON_GZ_3" "$BLOCKED_JSON_GZ_4" "$BLOCKED_JSON_GZ_5" "$BLOCKED_JSON_GZ_6")"
 
+      # The realtime server the site connects to. Without it the build falls back to the
+      # in-browser simulation (see frontend/src/main.js).
       - run: npm run build
+        env:
+          VITE_REALTIME_URL: wss://api.gohaeyaji.com/ws
 
       - uses: actions/upload-pages-artifact@v3
         with:
