@@ -1,31 +1,55 @@
 import * as THREE from 'three';
-import { FACADE_Z } from '../world/exterior.js';
 import { NAVE, SIDE_DOOR } from '../world/hall.js';
 import { CONFESSION_HALL } from '../world/booths.js';
+import { OUTDOOR, EVENT_FIELD, outdoorArea } from '../world/layout.js';
 
-/** Yard limits: the hedges on the sides, the end of the path in the south. */
-const YARD_X = 12.8, YARD_Z = 49;
 /** Front face of the facade; only the doorway lets you closer. */
 const FRONT_Z = 11.5;
 /** Inner face of the facade. */
 const INSIDE_Z = NAVE.z1 - 0.05;
 const WALL = 0.3;   // keep this far from walls
 
+/** Indoors at (x, z): 'nave' | 'booths' (the doorway counts as nave), or null if not inside. */
+function indoorArea(x, z) {
+  const H = CONFESSION_HALL, N = NAVE, D = SIDE_DOOR;
+  if (z > INSIDE_Z && z < FRONT_Z) return Math.abs(x) <= 1.1 ? 'nave' : null;            // main doorway
+  if (x >= N.x0 + WALL && x <= N.x1 - WALL && z >= N.rail && z <= INSIDE_Z) return 'nave';
+  if (x > N.x1 - WALL && x < H.x0 + WALL && z >= D.z0 + WALL && z <= D.z1 - WALL) return 'booths';   // side door
+  if (x >= H.x0 + WALL && x <= H.x1 - WALL && z >= H.z0 + WALL && z <= H.z1 - WALL) return 'booths';
+  return null;
+}
+
 /**
  * Where feet may go and how to get somewhere.
  *
- * Areas: the yard, the main doorway, the nave (in front of the altar rail), the side door and
- * the confession hall. Obstacles are circles {x, z, r} or boxes {box, x0, x1, z0, z1}.
+ * Indoors: the main doorway, the nave (in front of the altar rail), the side door and the
+ * confession hall. Outdoors (world/layout.js): the fountain plaza, the ring around the
+ * buildings, the trails through the wood and the event field. Obstacles are circles {x, z, r}
+ * or boxes {box, x0, x1, z0, z1}, kept in 4 m buckets so checks stay cheap.
  *
- * Tap-to-walk runs A* on a 0.3 m grid built once at start (the world does not move), then
- * straightens the path, so it finds its way through doors, around the fountain, between pews
- * and around booths. Kept as plain math instead of physics; the world is small and flat.
+ * Tap-to-walk runs A* on a 0.35 m grid built once at start (the world does not move), then
+ * straightens the path, so it finds its way through doors, around the fountain and the
+ * buildings, between pews and around booths. Plain math instead of physics.
  */
 export function createNavigation(obstacles) {
-  const H = CONFESSION_HALL, N = NAVE, D = SIDE_DOOR;
-
+  // obstacles by 4 m bucket
+  const B = 4, buckets = new Map();
+  const bkey = (bx, bz) => bx * 100000 + bz;
+  for (const o of obstacles) {
+    const x0 = o.box ? o.x0 : o.x - o.r, x1 = o.box ? o.x1 : o.x + o.r;
+    const z0 = o.box ? o.z0 : o.z - o.r, z1 = o.box ? o.z1 : o.z + o.r;
+    for (let bx = Math.floor(x0 / B); bx <= Math.floor(x1 / B); bx++) {
+      for (let bz = Math.floor(z0 / B); bz <= Math.floor(z1 / B); bz++) {
+        const k = bkey(bx, bz);
+        if (!buckets.has(k)) buckets.set(k, []);
+        buckets.get(k).push(o);
+      }
+    }
+  }
   function blockedBy(x, z) {
-    for (const o of obstacles) {
+    const list = buckets.get(bkey(Math.floor(x / B), Math.floor(z / B)));
+    if (!list) return null;
+    for (const o of list) {
       if (o.box) { if (x > o.x0 && x < o.x1 && z > o.z0 && z < o.z1) return o; }
       else if (Math.hypot(x - o.x, z - o.z) < o.r) return o;
     }
@@ -33,31 +57,24 @@ export function createNavigation(obstacles) {
   }
 
   function walkable(x, z) {
-    if (z >= FRONT_Z) {                                               // yard
-      if (Math.abs(x) > YARD_X || z > YARD_Z) return false;
-    } else if (z > INSIDE_Z) {                                        // main doorway
-      return Math.abs(x) <= 1.1;
-    } else if (x <= N.x1 - WALL) {                                    // nave
-      if (x < N.x0 + WALL || z < N.rail) return false;
-    } else if (x < H.x0 + WALL) {                                     // side door
-      if (z < D.z0 + WALL || z > D.z1 - WALL) return false;
-    } else if (x > H.x1 - WALL || z < H.z0 + WALL || z > H.z1 - WALL) {   // confession hall
-      return false;
-    }
+    if (!indoorArea(x, z) && !outdoorArea(x, z)) return false;
     return !blockedBy(x, z);
   }
 
   /* ---------------------------------------------------------------- grid */
-  const CELL = 0.3, GX0 = -YARD_X - 0.5, GZ0 = H.z0 - 0.5;
-  const W = Math.ceil((H.x1 + 0.5 - GX0) / CELL), Hh = Math.ceil((YARD_Z + 0.5 - GZ0) / CELL);
+  let gx0 = Infinity, gx1 = -Infinity, gz0 = Infinity, gz1 = -Infinity;
+  for (const r of [...OUTDOOR, CONFESSION_HALL, NAVE, EVENT_FIELD]) {
+    gx0 = Math.min(gx0, r.x0); gx1 = Math.max(gx1, r.x1); gz0 = Math.min(gz0, r.z0); gz1 = Math.max(gz1, r.z1);
+  }
+  gx0 -= 1; gx1 += 1; gz0 -= 1; gz1 += 1;
+  const CELL = 0.35, GX0 = gx0, GZ0 = gz0;
+  const W = Math.ceil((gx1 - GX0) / CELL), Hh = Math.ceil((gz1 - GZ0) / CELL);
   const free = new Uint8Array(W * Hh);
   const cx = (i) => GX0 + (i + 0.5) * CELL, cz = (j) => GZ0 + (j + 0.5) * CELL;
   const R = 0.18;   // a little room around the body, so paths do not scrape corners
   for (let j = 0; j < Hh; j++) {
     for (let i = 0; i < W; i++) {
       const x = cx(i), z = cz(j);
-      // outside the play area (left of the nave, far right of the yard) quickly
-      if (x > YARD_X + 0.5 && z >= FRONT_Z) continue;
       free[j * W + i] = walkable(x, z) && walkable(x + R, z) && walkable(x - R, z) && walkable(x, z + R) && walkable(x, z - R) ? 1 : 0;
     }
   }
@@ -221,6 +238,5 @@ export function createNavigation(obstacles) {
 
 /** Which part of the world a point is in, for the place name and the ambient sound. */
 export function placeOf(x, z) {
-  if (z > FACADE_Z) return 'yard';
-  return x > SIDE_DOOR.x ? 'booths' : 'nave';
+  return indoorArea(x, z) || outdoorArea(x, z) || 'around';
 }

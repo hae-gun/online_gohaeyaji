@@ -19,8 +19,9 @@ import org.springframework.stereotype.Service;
 public class PresenceService {
 
     // world bounds, a little larger than the walkable area so clamping never fights the client
-    // the yard (x -13..13, z up to 49), the nave and the confession hall to the right (x up to 37)
-    private static final double MIN_X = -15, MAX_X = 38, MIN_Z = -42, MAX_Z = 50;
+    // the yard and the nave, the confession hall to the right (x up to 37), the path round the
+    // buildings (x -18..42.5, z from -27), the trails and the event field (x -36..36, z up to 108)
+    private static final double MIN_X = -40, MAX_X = 45, MIN_Z = -45, MAX_Z = 112;
 
     private final StringRedisTemplate redis;
     private final Map<Integer, ChannelPresence> channels = new ConcurrentHashMap<>();

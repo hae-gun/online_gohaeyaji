@@ -111,7 +111,7 @@ let state = 'intro';           // 'intro' | 'hall' | 'opening' | 'room'
 let current = null;            // booth the player is inside
 let priest = null;             // persona of the priest in that booth ({ id, name })
 let nearBooth = null;
-let place = 'yard';            // 'yard' | 'nave' | 'booths' (placeOf)
+let place = 'yard';            // 'yard' | 'around' | 'trail' | 'event' | 'nave' | 'booths' (placeOf)
 let path = [];                 // tap-to-walk waypoints
 let walkBooth = null;          // booth to face when the path ends
 let stuck = 0;
@@ -309,6 +309,15 @@ const OFFER_LINES = [
   '짤랑. 액수는 하늘만 압니다',
 ];
 let offerings = 0;
+const FEED_LINES = [
+  '모이를 뿌렸습니다. 비둘기들이 눈치를 봅니다',
+  '모이를 뿌렸습니다. 오늘은 비둘기에게 먼저 베풀었습니다',
+  '모이를 뿌렸습니다. 천천히 다가가면 도망가지 않습니다',
+  '모이를 뿌렸습니다. 비둘기 사이에도 새치기는 있습니다',
+];
+let fedAt = -Infinity;
+/** Places outside the buildings: the yard, the path round the cathedral, the trails, the event field. */
+const OUTDOORS = new Set(['yard', 'around', 'trail', 'event']);
 /** What E does where I stand: { label, run } or null. Booth doors are handled separately. */
 function nearAction() {
   const p = player.position;
@@ -350,6 +359,21 @@ function nearAction() {
     return { label: '신께 알리기', run: openInquiry };
   }
   if (nearBench) return { label: place === 'nave' ? '장의자에 앉기' : '벤치에 앉기', run: () => sitDown(nearBench) };
+  // pigeon feed: anywhere on the fountain plaza
+  if (place === 'yard' && p.z < 33.5 && Math.abs(p.x) < 12.3 && Math.hypot(p.x - FOUNTAIN.x, p.z - FOUNTAIN.z) > 3.4) {
+    return {
+      label: '비둘기 모이 주기',
+      run() {
+        const wait = 8 - (clock.elapsedTime - fedAt);
+        if (wait > 0) { toast(`모이는 ${Math.ceil(wait)}초 뒤에 다시 줄 수 있습니다`); return; }
+        const ry = player.rotation.y;
+        const ahead = { x: p.x + Math.sin(ry) * 1.4, z: p.z + Math.cos(ry) * 1.4 };
+        if (!pigeons.feed(ahead) && !pigeons.feed(p)) { toast('여기에는 모이를 뿌릴 수 없습니다'); return; }
+        fedAt = clock.elapsedTime;
+        toast(pick(FEED_LINES));
+      },
+    };
+  }
   return null;
 }
 let nearDo = null;
@@ -875,7 +899,7 @@ function updateSurroundings(dt) {
   const now = placeOf(player.position.x, player.position.z);
   if (now !== place) {
     place = now;
-    if (state === 'hall') ambient.setPlace(place === 'yard' ? 'yard' : 'hall');
+    if (state === 'hall') ambient.setPlace(OUTDOORS.has(place) ? 'yard' : 'hall');
     showPlace();
   }
 
@@ -892,7 +916,7 @@ function updateSurroundings(dt) {
   let bench = null;
   if (!nb && !myEmote.seated && place !== 'booths') {
     let bd = 1.0;
-    for (const b of place === 'yard' ? outside.benches : hall.seats) {
+    for (const b of OUTDOORS.has(place) ? outside.benches : hall.seats) {
       const d = Math.min(Math.hypot(b.front.x - player.position.x, b.front.z - player.position.z),
         Math.hypot(b.seat.x - player.position.x, b.seat.z - player.position.z));
       if (d < bd) { bd = d; bench = b; }
@@ -928,7 +952,10 @@ function updateSurroundings(dt) {
 }
 
 function showPlace() {
-  $('#placeName').textContent = { yard: '성당 앞마당', nave: '성당 안', booths: `고해소 ${channelNo}채널` }[place];
+  $('#placeName').textContent = {
+    yard: '성당 앞마당', around: '성당 둘레길', trail: '산책로', event: '이벤트 광장',
+    nave: '성당 안', booths: `고해소 ${channelNo}채널`,
+  }[place] || '성당 앞마당';
 }
 
 function animate() {

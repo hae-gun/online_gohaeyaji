@@ -6,11 +6,17 @@ import { M } from '../core/three-utils.js';
  * fountain rim, walks around pecking with that jerky pigeon head, and flies off again after a while
  * or when someone walks up to it.
  *
+ * Feeding (feed(point)): seeds scattered on the tiles bring the flock in. Birds away come down
+ * next to the seeds, birds on the ground walk over and peck, and while they eat they let people
+ * come much closer.
+ *
  * Only for this viewer: pigeons are scenery, not shared state, so two people do not see the same
  * birds. That keeps them off the network entirely.
  */
-const COUNT = 7;
+const COUNT = 9;
 const SCARE_DISTANCE = 2.3;
+const SCARE_WHILE_EATING = 0.9;
+const SEED_SECONDS = 22;
 const FLY_SPEED = 7;
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -63,6 +69,47 @@ export function createPigeons(scene, where) {
   }
 
   const tmp = new THREE.Vector3();
+
+  // the seeds: one patch at a time, a few dozen grains on the ground that fade as they are eaten
+  let seeds = null;   // { x, z, until }
+  const grainGeo = new THREE.SphereGeometry(0.018, 4, 3);
+  const grainMat = new THREE.MeshPhongMaterial({ color: 0xd9b56a, transparent: true });
+  const GRAINS = 40;
+  const grains = new THREE.InstancedMesh(grainGeo, grainMat, GRAINS);
+  grains.visible = false;
+  scene.add(grains);
+  const nearSeeds = () => {
+    const a = Math.random() * Math.PI * 2, r = rand(0.15, 0.6);
+    return new THREE.Vector3(seeds.x + Math.cos(a) * r, 0, seeds.z + Math.sin(a) * r);
+  };
+  const eating = (b) => seeds && b.groundY < 0.1 && Math.hypot(b.mesh.position.x - seeds.x, b.mesh.position.z - seeds.z) < 1.2;
+
+  /** Scatters seeds at point (on the plaza tiles). Returns false when that spot is not on the tiles. */
+  function feed(point) {
+    const at = new THREE.Vector3(point.x, 0, point.z);
+    if (!where.ok(at)) return false;
+    seeds = { x: at.x, z: at.z, until: SEED_SECONDS };
+    const m4 = new THREE.Matrix4();
+    for (let i = 0; i < GRAINS; i++) {
+      const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * 0.6;
+      grains.setMatrixAt(i, m4.makeTranslation(at.x + Math.cos(a) * r, 0.012, at.z + Math.sin(a) * r));
+    }
+    grains.instanceMatrix.needsUpdate = true;
+    grains.visible = true;
+    grainMat.opacity = 1;
+    for (const b of birds) {
+      if (b.state === 'away') b.timer = Math.min(b.timer, rand(0.3, 3.5));
+      else if (b.state === 'ground' && b.groundY < 0.1) {
+        b.target = nearSeeds();
+        b.timer = Math.max(b.timer, SEED_SECONDS);
+      } else if (b.state === 'ground') {
+        // on the fountain rim: hop down and come over
+        takeOff(b);
+        b.timer = 0;
+      }
+    }
+    return true;
+  }
   function bezier(b, k, out) {
     const u = 1 - k;
     return out.set(0, 0, 0)
@@ -78,6 +125,11 @@ export function createPigeons(scene, where) {
   }
 
   function update(dt, t, people) {
+    if (seeds) {
+      seeds.until -= dt;
+      grainMat.opacity = Math.min(1, seeds.until / 6);
+      if (seeds.until <= 0) { seeds = null; grains.visible = false; }
+    }
     for (const b of birds) {
       const m = b.mesh, u = m.userData;
       if (b.state === 'away') {
@@ -85,7 +137,7 @@ export function createPigeons(scene, where) {
         if (b.timer > 0) continue;
         b.state = 'arriving';
         b.p0 = where.sky();
-        b.p2 = where.spot();
+        b.p2 = seeds ? nearSeeds() : where.spot();
         b.p1 = b.p0.clone().lerp(b.p2, 0.65); b.p1.y = b.p2.y + 4;
         b.k = 0; b.len = b.p0.distanceTo(b.p2);
         m.position.copy(b.p0);
@@ -110,13 +162,13 @@ export function createPigeons(scene, where) {
           if (b.state === 'arriving') {
             b.state = 'ground';
             b.groundY = b.p2.y;
-            b.timer = rand(15, 32);
+            b.timer = seeds ? Math.max(rand(15, 32), seeds.until + rand(2, 8)) : rand(15, 32);
             b.step = 0; b.target = null; b.peck = 0;
             m.rotation.x = 0;
             fold(u);
           } else {
             b.state = 'away';
-            b.timer = rand(14, 34);
+            b.timer = seeds ? rand(0.5, 2.5) : rand(14, 34);
             m.visible = false;
           }
         }
@@ -126,7 +178,8 @@ export function createPigeons(scene, where) {
       // on the ground: wander in short hops, peck, and keep an eye on people
       b.timer -= dt;
       let scared = false;
-      for (const p of people) if (Math.hypot(p.x - m.position.x, p.z - m.position.z) < SCARE_DISTANCE) { scared = true; break; }
+      const scare = eating(b) ? SCARE_WHILE_EATING : SCARE_DISTANCE;
+      for (const p of people) if (Math.hypot(p.x - m.position.x, p.z - m.position.z) < scare) { scared = true; break; }
       if (scared || b.timer <= 0) { takeOff(b); continue; }
 
       b.step -= dt;
@@ -144,7 +197,12 @@ export function createPigeons(scene, where) {
         }
       } else if (b.step <= 0) {
         b.step = rand(0.6, 2.2);
-        if (Math.random() < 0.6) {
+        if (seeds && b.groundY < 0.1 && !eating(b)) b.target = nearSeeds();
+        else if (eating(b)) {
+          // busy eating: peck a lot, shuffle a little
+          b.step = rand(0.3, 0.9);
+          if (Math.random() < 0.3) b.target = nearSeeds(); else b.peck = 0.5;
+        } else if (Math.random() < 0.6) {
           const a = Math.random() * Math.PI * 2, r = rand(0.2, 0.7);
           b.target = new THREE.Vector3(m.position.x + Math.cos(a) * r, b.groundY, m.position.z + Math.sin(a) * r);
           if (!where.ok(b.target)) b.target = null;
@@ -163,6 +221,9 @@ export function createPigeons(scene, where) {
 
   return {
     update,
+    feed,
+    /** whether seeds are on the ground right now */
+    get feeding() { return !!seeds; },
     /** for tests: how many are visible right now */
     get visible() { return birds.filter((b) => b.mesh.visible).length; },
     _birds: birds,
@@ -178,7 +239,7 @@ export function plazaPigeonSpots(fountain, obstacles) {
   const ok = (v) => {
     if (Math.abs(v.x) > 12.5 || v.z < 12 || v.z > 34) return false;
     if (v.y > 0.1) return true;   // on the rim
-    for (const o of obstacles) if (Math.hypot(v.x - o.x, v.z - o.z) < o.r + 0.1) return false;
+    for (const o of obstacles) if (!o.box && Math.hypot(v.x - o.x, v.z - o.z) < o.r + 0.1) return false;
     return true;
   };
   const spot = () => {

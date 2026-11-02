@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { M, B, canvasTex } from '../core/three-utils.js';
+import { M, B, canvasTex, mergeStatic } from '../core/three-utils.js';
+import { OUTDOOR, TRAILS, TRAIL_HALF, EVENT_FIELD, awayFromPaths } from './layout.js';
 
 /** z of the facade. Everything with z > FACADE_Z is outside. */
 export const FACADE_Z = 10.7;
@@ -16,6 +17,9 @@ export const FOUNTAIN = { x: 0, z: 22, r: 3.55 };
  *
  * In front: a tiled plaza with a two-tier fountain in the middle, benches around it and along the
  * path (people can sit on them, see emotes.js 'sit'), plane trees, cypresses and lamp posts.
+ * Around (world/layout.js): a gravel path all the way round the buildings, two trails through a
+ * wood with benches and lamps, and a big event field with a stage at the far end, for events
+ * such as 수능 or the year's end (eventField.setBanner changes its banner).
  *
  * Returns: walkable ground meshes (tap-to-walk), the door leaves (animated in main), round obstacles
  * for walking collision, the benches (sit spots) and update(dt, t) for the water.
@@ -198,8 +202,8 @@ export function buildExterior(scene, { glassTex, colliders }) {
   }
 
   /* ---------------------------------------------------------------- ground and plaza */
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(140, 110), M(0x3d5638, { shininess: 5 }));
-  ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.01, 55); scene.add(ground);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 240), M(0x3d5638, { shininess: 5 }));
+  ground.rotation.x = -Math.PI / 2; ground.position.set(5, -0.01, 40); scene.add(ground);
 
   const tileTex = canvasTex(64, 64, (g) => {
     g.fillStyle = '#6a5a49'; g.fillRect(0, 0, 64, 64);
@@ -218,11 +222,13 @@ export function buildExterior(scene, { glassTex, colliders }) {
   const path = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 16), new THREE.MeshPhongMaterial({ map: pathTex, shininess: 8 }));
   path.rotation.x = -Math.PI / 2; path.position.set(0, 0.006, 42.5); scene.add(path);
 
-  // low hedges along the plaza sides
+  // low hedges along the plaza sides, with gaps: at the front corners (to the path round the
+  // cathedral) and in the middle (to the trails)
   const hedgeM = M(0x2f5a33);
   for (const s of [-1, 1]) {
-    for (const [z0, z1] of [[12.5, 20], [24, 33.5]]) {
+    for (const [z0, z1] of [[17.5, 20], [24, 33.5]]) {
       const h = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, z1 - z0), hedgeM); h.position.set(s * 13.2, 0.35, (z0 + z1) / 2); scene.add(h);
+      obstacles.push({ box: true, x0: s * 13.2 - 0.4, x1: s * 13.2 + 0.4, z0, z1 });
     }
   }
 
@@ -233,8 +239,11 @@ export function buildExterior(scene, { glassTex, colliders }) {
   /* ---------------------------------------------------------------- benches */
   const benches = [];
   const woodM = M(0x8a5a34), ironM = M(0x2a2830);
+  // things that never move go here and are merged at the end (mergeStatic)
+  const furniture = new THREE.Group();
+  scene.add(furniture);
   function bench(x, z, rot) {
-    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot; scene.add(g);
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot; furniture.add(g);
     for (let i = 0; i < 3; i++) {
       const sl = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.05, 0.15), woodM); sl.position.set(0, 0.45, -0.17 + i * 0.17); g.add(sl);
     }
@@ -303,32 +312,219 @@ export function buildExterior(scene, { glassTex, colliders }) {
     cypress(s * 12.4, 34.3, 6);
     for (const z of [37, 41.5, 46]) cypress(s * 5.6, z, 5 + rnd() * 1.5);
   }
-  // a looser wood beyond the plaza (outside the walkable area, no collision needed)
-  for (let i = 0; i < 34; i++) {
-    const s = i % 2 ? 1 : -1;
-    const x = s * (15 + rnd() * 16), z = 14 + rnd() * 44;   // in front of the confession hall's wing
-    if (rnd() < 0.45) cypress(x, z, 5 + rnd() * 4, false); else planeTree(x, z, 0.9 + rnd() * 0.5, false);
-  }
-  for (let i = 0; i < 10; i++) planeTree((rnd() - 0.5) * 26, 52 + rnd() * 14, 1 + rnd() * 0.4, false);
+  buildWood(scene, rnd);
 
   /* ---------------------------------------------------------------- lamp posts */
   const lampHeadM = new THREE.MeshBasicMaterial({ color: 0xffd98a });
-  const lamps = [[-12.3, 22], [12.3, 22], [-8.5, 33.8], [8.5, 33.8], [-2.8, 13.2], [2.8, 13.2], [-2.6, 41.5], [2.6, 41.5], [-2.6, 48], [2.6, 48]];
-  for (const [x, z] of lamps) {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 2.8, 6), M(0x222026)); pole.position.set(x, 1.4, z); scene.add(pole);
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.2, 6), M(0x222026)); cap.position.set(x, 3.25, z); scene.add(cap);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.38, 0.3), lampHeadM); head.position.set(x, 2.98, z); scene.add(head);
-    obstacles.push({ x, z, r: 0.3 });
+  const poleM = M(0x222026);
+  function lamp(x, z, collide = true) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 2.8, 6), poleM); pole.position.set(x, 1.4, z); furniture.add(pole);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.2, 6), poleM); cap.position.set(x, 3.25, z); furniture.add(cap);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.38, 0.3), lampHeadM); head.position.set(x, 2.98, z); furniture.add(head);
+    if (collide) obstacles.push({ x, z, r: 0.3 });
   }
+  for (const [x, z] of [[-12.3, 25.2], [12.3, 25.2], [-8.5, 33.8], [8.5, 33.8], [-2.8, 13.2], [2.8, 13.2], [-2.6, 41.5], [2.6, 41.5], [-2.6, 48], [2.6, 48]]) lamp(x, z);
+
+  /* ---------------------------------------------------------------- the path round the cathedral */
+  const gravelTex = canvasTex(64, 64, (g) => {
+    g.fillStyle = '#9c8c74'; g.fillRect(0, 0, 64, 64);
+    let sd = 5;
+    const r = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; };
+    for (let i = 0; i < 260; i++) { g.fillStyle = r() < 0.5 ? '#8a7a62' : '#b2a38a'; g.fillRect(r() * 64, r() * 64, 2, 2); }
+  });
+  gravelTex.wrapS = gravelTex.wrapT = THREE.RepeatWrapping;
+  const groundMeshes = [ground, plaza, path];
+  function flat(w, d, x, z, rotY, tex, y = 0.004) {
+    const t = tex.clone(); t.needsUpdate = true; t.repeat.set(w / 2.5, d / 2.5);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshPhongMaterial({ map: t, shininess: 4 }));
+    m.rotation.set(-Math.PI / 2, 0, rotY); m.position.set(x, y, z); scene.add(m);
+    groundMeshes.push(m);
+    return m;
+  }
+  for (const r of OUTDOOR) {
+    if (r.area !== 'around') continue;
+    flat(r.x1 - r.x0, r.z1 - r.z0, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, 0, gravelTex);
+  }
+  // lamps along the ring
+  for (const [x, z] of [[-17.4, 4], [-17.4, -10], [-10, -26.4], [6, -26.4], [22, -26.4], [42, -10], [42, 4], [26, 16]]) lamp(x, z);
+
+  /* ---------------------------------------------------------------- trails through the wood */
+  TRAILS.forEach((t, ti) => {
+    for (let i = 0; i < t.length - 1; i++) {
+      const [ax, az] = t[i], [bx, bz] = t[i + 1];
+      const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
+      flat(TRAIL_HALF * 2, len, (ax + bx) / 2, (az + bz) / 2, Math.atan2(dx, dz), gravelTex, 0.003);
+      if (i > 0) {
+        const joint = new THREE.Mesh(new THREE.CircleGeometry(TRAIL_HALF, 16), new THREE.MeshPhongMaterial({ map: gravelTex, shininess: 4 }));
+        joint.rotation.x = -Math.PI / 2; joint.position.set(ax, 0.0035, az); scene.add(joint);
+      }
+      if (ti === 2) continue;   // the straight path already has its lamps and benches
+      // a bench on every other segment, at the trail's edge, facing across it; a lamp opposite
+      const nx = dz / len, nz = -dx / len, mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      const side = i % 2 ? 1 : -1;
+      if (i % 2 === 0) bench(mx + nx * side * 1.15, mz + nz * side * 1.15, Math.atan2(-nx * side, -nz * side));
+      lamp(mx - nx * side * 1.95, mz - nz * side * 1.95, false);
+    }
+  });
+
+  /* ---------------------------------------------------------------- the event field */
+  const eventField = buildEventField(scene, furniture, obstacles, groundMeshes, bench);
+  // benches, lamps and the event field's fittings never move: a few draw calls instead of ~1000
+  mergeStatic(furniture);
 
   return {
-    groundMeshes: [ground, plaza, path],
+    groundMeshes,
+    eventField,
     leafL,
     leafR,
     obstacles,
     benches,
     update(dt, t) { fountain.update(dt, t); },
   };
+}
+
+/**
+ * A wood all around: plane trees and cypresses on every free spot away from the paths, the
+ * buildings and the event field. Instanced (5 draw calls for ~200 trees), no collision needed
+ * because nobody can walk there.
+ */
+function buildWood(scene, rnd) {
+  const plane = [], cyp = [];
+  for (let tries = 0; tries < 2400 && plane.length + cyp.length < 230; tries++) {
+    const x = -55 + rnd() * 115, z = -45 + rnd() * 170;
+    if (x > -12 && x < 40 && z > -19 && z < 12) continue;    // the buildings
+    if (!awayFromPaths(x, z, 2.2)) continue;
+    if ([...plane, ...cyp].some((t) => Math.hypot(t.x - x, t.z - z) < 3.2)) continue;
+    (rnd() < 0.4 ? cyp : plane).push({ x, z, s: 0.85 + rnd() * 0.6, a: rnd() * 6 });
+  }
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+  const inst = (geo, mat, list, place) => {
+    const im = new THREE.InstancedMesh(geo, mat, list.length);
+    list.forEach((t, i) => { place(t, v, sc); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.a); im.setMatrixAt(i, m4.compose(v, q, sc)); });
+    scene.add(im);
+  };
+  inst(new THREE.CylinderGeometry(0.16, 0.24, 2, 6), M(0x5a3d26), plane, (t, p, s) => { p.set(t.x, t.s, t.z); s.setScalar(t.s); });
+  inst(new THREE.IcosahedronGeometry(1.5, 0), M(0x3f7240), plane, (t, p, s) => { p.set(t.x, 2.9 * t.s, t.z); s.setScalar(t.s); });
+  inst(new THREE.IcosahedronGeometry(1.05, 0), M(0x335f36), plane, (t, p, s) => { p.set(t.x + 0.6 * t.s, 3.6 * t.s, t.z - 0.3 * t.s); s.setScalar(t.s); });
+  inst(new THREE.ConeGeometry(0.75, 6, 7), M(0x24452c), cyp, (t, p, s) => { p.set(t.x, 3 * t.s, t.z); s.setScalar(t.s); });
+  inst(new THREE.ConeGeometry(0.6, 3.3, 7), M(0x2a5233), cyp, (t, p, s) => { p.set(t.x, 3.7 * t.s, t.z); s.setScalar(t.s); });
+}
+
+/**
+ * The event field: a big paved square with a stage at the far end, string lights all round and
+ * two notice boards at the entrance. Empty most of the time; events (수능 응원, 연말) use it.
+ * Returns { setBanner(title, sub) } to change what the stage banner says.
+ */
+function buildEventField(ground, scene, obstacles, groundMeshes, bench) {
+  const E = EVENT_FIELD;
+  const w = E.x1 - E.x0, d = E.z1 - E.z0, cx = (E.x0 + E.x1) / 2, cz = (E.z0 + E.z1) / 2;
+  const paveTex = canvasTex(128, 128, (g) => {
+    g.fillStyle = '#7c6d5c'; g.fillRect(0, 0, 128, 128);
+    g.fillStyle = '#b9aa8f'; g.fillRect(2, 2, 124, 60); g.fillRect(2, 66, 60, 60); g.fillRect(66, 66, 60, 60);
+  });
+  paveTex.wrapS = paveTex.wrapT = THREE.RepeatWrapping;
+  paveTex.repeat.set(w / 4, d / 4);
+  const pave = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshPhongMaterial({ map: paveTex, shininess: 6 }));
+  pave.rotation.x = -Math.PI / 2; pave.position.set(cx, 0.005, cz); ground.add(pave);
+  groundMeshes.push(pave);
+  // a big circle in the middle, room for a tree, a stand or a crowd
+  const ring = new THREE.Mesh(new THREE.RingGeometry(7.5, 8.3, 48), M(0x8e2a24, { shininess: 4 }));
+  ring.rotation.x = -Math.PI / 2; ring.position.set(cx, 0.009, cz - 4); scene.add(ring);
+  const ring2 = new THREE.Mesh(new THREE.RingGeometry(3.6, 3.9, 40), M(0xd4ad55, { shininess: 30 }));
+  ring2.rotation.x = -Math.PI / 2; ring2.position.set(cx, 0.009, cz - 4); scene.add(ring2);
+
+  // stage at the far end, facing the entrance
+  const stageM = M(0x4a2e1c), clothM = M(0x8e2a24);
+  const stage = new THREE.Mesh(new THREE.BoxGeometry(24, 1, 7), stageM); stage.position.set(cx, 0.5, E.stageZ + 3.5); scene.add(stage);
+  const skirt = new THREE.Mesh(new THREE.BoxGeometry(24.1, 0.6, 0.05), clothM); skirt.position.set(cx, 0.5, E.stageZ - 0.03); scene.add(skirt);
+  for (let i = 0; i < 3; i++) {
+    const step = new THREE.Mesh(new THREE.BoxGeometry(4, 0.33 * (i + 1), 0.6), stageM);
+    step.position.set(cx, 0.165 * (i + 1), E.stageZ - 1.8 + i * 0.6); scene.add(step);
+  }
+  obstacles.push({ box: true, x0: cx - 12.2, x1: cx + 12.2, z0: E.stageZ - 2.2, z1: E.stageZ + 7.2 });
+  const frameM = M(0x2a2228);
+  for (const s of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.4, 7, 0.4), frameM); post.position.set(cx + s * 10, 4.5, E.stageZ + 6); scene.add(post);
+  }
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(20.4, 0.4, 0.4), frameM); beam.position.set(cx, 8, E.stageZ + 6); scene.add(beam);
+  const bannerCanvas = document.createElement('canvas');
+  bannerCanvas.width = 1024; bannerCanvas.height = 256;
+  const bannerTex = new THREE.CanvasTexture(bannerCanvas);
+  const banner = new THREE.Mesh(new THREE.PlaneGeometry(19, 4.75), new THREE.MeshBasicMaterial({ map: bannerTex }));
+  banner.rotation.y = Math.PI; banner.position.set(cx, 5.2, E.stageZ + 5.8); scene.add(banner);
+  function setBanner(title, sub) {
+    const g = bannerCanvas.getContext('2d');
+    const gr = g.createLinearGradient(0, 0, 0, 256);
+    gr.addColorStop(0, '#2a1b3d'); gr.addColorStop(1, '#5a2b44');
+    g.fillStyle = gr; g.fillRect(0, 0, 1024, 256);
+    g.strokeStyle = '#d4ad55'; g.lineWidth = 10; g.strokeRect(10, 10, 1004, 236);
+    g.fillStyle = '#f3e7c8'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = 'bold 84px sans-serif'; g.fillText(title, 512, sub ? 104 : 128);
+    if (sub) { g.font = '40px sans-serif'; g.fillStyle = '#d4ad55'; g.fillText(sub, 512, 190); }
+    bannerTex.needsUpdate = true;
+  }
+  setBanner('이벤트 광장', '수능, 연말 같은 날에 이곳에서 행사가 열립니다');
+
+  // string lights between poles around the field
+  const poles = [];
+  for (let i = 0; i <= 6; i++) poles.push([E.x0 + 1 + (i * (w - 2)) / 6, E.z0 + 1.5]);
+  for (let z = E.z0 + 1.5 + 11; z <= E.stageZ - 3; z += 11) { poles.push([E.x1 - 1, z]); }
+  for (let z = E.stageZ - 3; z >= E.z0 + 1.5 + 11; z -= 11) { poles.push([E.x0 + 1, z]); }
+  const ordered = [];
+  // west side up, entrance row across, east side down
+  const west = poles.filter((p) => p[0] === E.x0 + 1 && p[1] > E.z0 + 1.6).sort((a, b) => b[1] - a[1]);
+  // none in the middle of the entrance, where the path comes in
+  const front = poles.filter((p) => p[1] === E.z0 + 1.5 && Math.abs(p[0] - cx) > 4).sort((a, b) => a[0] - b[0]);
+  const east = poles.filter((p) => p[0] === E.x1 - 1 && p[1] > E.z0 + 1.6).sort((a, b) => a[1] - b[1]);
+  ordered.push(...west, ...front, ...east);
+  const postM = M(0x2a2228);
+  const bulbGeo = new THREE.SphereGeometry(0.09, 6, 4);
+  const bulbs = [];
+  const colours = [0xffd98a, 0xff8a8a, 0x9ad0ff, 0xb6f0a0];
+  for (const [x, z] of ordered) {
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 4.2, 6), postM); p.position.set(x, 2.1, z); scene.add(p);
+    obstacles.push({ x, z, r: 0.3 });
+  }
+  for (let i = 0; i < ordered.length - 1; i++) {
+    const [ax, az] = ordered[i], [bx, bz] = ordered[i + 1];
+    for (let k = 1; k < 12; k++) {
+      const t = k / 12;
+      bulbs.push([ax + (bx - ax) * t, 4.1 - Math.sin(t * Math.PI) * 0.9, az + (bz - az) * t, colours[(i + k) % colours.length]]);
+    }
+  }
+  for (const c of colours) {
+    const mine = bulbs.filter((b) => b[3] === c);
+    const im = new THREE.InstancedMesh(bulbGeo, new THREE.MeshBasicMaterial({ color: c }), mine.length);
+    const m4 = new THREE.Matrix4();
+    mine.forEach((b, i) => im.setMatrixAt(i, m4.makeTranslation(b[0], b[1], b[2])));
+    scene.add(im);
+  }
+
+  // notice boards at the entrance, facing people coming in
+  const boardTex = canvasTex(400, 220, (g) => {
+    g.fillStyle = '#efe4cc'; g.fillRect(0, 0, 400, 220);
+    g.strokeStyle = '#8a6a3a'; g.lineWidth = 8; g.strokeRect(4, 4, 392, 212);
+    g.fillStyle = '#3a2414'; g.textAlign = 'center';
+    g.font = 'bold 44px sans-serif'; g.fillText('이벤트 광장', 200, 70);
+    g.font = '24px sans-serif'; g.fillText('수능 응원, 연말 카운트다운', 200, 125); g.fillText('여러 행사가 열릴 곳입니다', 200, 165);
+  });
+  for (const s of [-1, 1]) {
+    const x = cx + s * 9, z = E.z0 + 3;
+    const b = new THREE.Group(); b.position.set(x, 0, z); b.rotation.y = Math.PI - s * 0.3; scene.add(b);
+    for (const t of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.8, 0.12), M(0x4a2e1c)); post.position.set(t * 0.95, 0.9, 0); b.add(post);
+    }
+    const face = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.25, 0.08), M(0x4a2e1c)); face.position.y = 1.95; b.add(face);
+    const txt = new THREE.Mesh(new THREE.PlaneGeometry(2.05, 1.12), new THREE.MeshBasicMaterial({ map: boardTex }));
+    txt.position.set(0, 1.95, 0.045); b.add(txt);
+    obstacles.push({ x, z, r: 1.1 });
+  }
+  // benches along both long sides, facing in
+  for (const z of [72, 82, 92]) {
+    bench(E.x0 + 2.5, z, Math.PI / 2);
+    bench(E.x1 - 2.5, z, -Math.PI / 2);
+  }
+  return { setBanner };
 }
 
 /**

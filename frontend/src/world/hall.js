@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { M, B, canvasTex } from '../core/three-utils.js';
+import { M, B, canvasTex, mergeStatic } from '../core/three-utils.js';
 import { CONFESSION_HALL } from './booths.js';
 
 /**
@@ -302,6 +302,43 @@ export function buildHall(scene, glassTex) {
   outside(2 * nx, NT, 0, NT / 2, nz0, Math.PI);                               // nave, back
   outside(nz1 - nz0, NT - HT, nx, (NT + HT) / 2, (nz0 + nz1) / 2, Math.PI / 2);   // nave, right side above the hall
   outside(hz0 - nz0, HT, nx, HT / 2, (nz0 + hz0) / 2, Math.PI / 2);          // nave, right side behind the hall
+  // so the walls are not bare from the path round the cathedral: buttresses and tall arched
+  // stained glass windows along every outer wall (merged into a few draw calls)
+  const deco = new THREE.Group();
+  const archShape = new THREE.Shape();
+  archShape.moveTo(-0.6, 0); archShape.lineTo(0.6, 0); archShape.lineTo(0.6, 2.6);
+  archShape.absarc(0, 2.6, 0.6, 0, Math.PI, false); archShape.lineTo(-0.6, 0);
+  const archGeo = new THREE.ShapeGeometry(archShape, 8);
+  // ShapeGeometry uv are in shape units; fit them to 0..1 so the glass pattern shows once
+  const uvs = archGeo.attributes.uv;
+  for (let i = 0; i < uvs.count; i++) uvs.setXY(i, (uvs.getX(i) + 0.6) / 1.2, uvs.getY(i) / 3.2);
+  const frameGeo = new THREE.ShapeGeometry(archShape, 8).scale(1.25, 1.12, 1);
+  const glassOut = new THREE.MeshBasicMaterial({ map: glassTex, color: 0xb9a8d8 });
+  const frameM = M(0x8a7658, { shininess: 6 }), buttM = M(0xa8916c, { shininess: 6 });
+  /** Along a wall from (x0, z0) to (x1, z1), outward normal (nx, nz), wall height h. */
+  const dress = (x0, z0, x1, z1, ox, oz, h, every = 4.2) => {
+    const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.floor(len / every));
+    const ry = Math.atan2(ox, oz);
+    for (let i = 0; i <= n; i++) {
+      const k = i / n, x = x0 + (x1 - x0) * k, z = z0 + (z1 - z0) * k;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.6, h * 0.82, 0.5), buttM);
+      b.position.set(x + ox * 0.25, h * 0.41, z + oz * 0.25); b.rotation.y = ry; deco.add(b);
+      obstacles.push({ x: x + ox * 0.3, z: z + oz * 0.3, r: 0.4 });
+      if (i === n) continue;
+      const m = (i + 0.5) / n, wx = x0 + (x1 - x0) * m, wz = z0 + (z1 - z0) * m;
+      const y = Math.max(1.6, h * 0.3), sc = Math.min(1, (h - y - 0.6) / 3.2);
+      const f = new THREE.Mesh(frameGeo, frameM); f.position.set(wx + ox * 0.02, y - 0.15, wz + oz * 0.02); f.rotation.y = ry; f.scale.setScalar(sc); deco.add(f);
+      const g = new THREE.Mesh(archGeo, glassOut); g.position.set(wx + ox * 0.04, y, wz + oz * 0.04); g.rotation.y = ry; g.scale.setScalar(sc); deco.add(g);
+    }
+  };
+  dress(-nx, nz1 - 1.2, -nx, nz0 + 0.3, -1, 0, NT);              // nave, left side
+  dress(-nx + 0.3, nz0, nx - 0.3, nz0, 0, -1, NT, 5.5);          // nave, back
+  dress(nx, nz0 + 0.3, nx, hz0 - 0.3, 1, 0, NT);                 // nave, right side behind the hall
+  dress(hx0 + 0.5, hz0, hx1 - 0.3, hz0, 0, -1, HT);              // hall, back
+  dress(hx1, hz0 + 0.3, hx1, hz1 - 0.3, 1, 0, HT);               // hall, far end
+  dress(hx0 + 0.6, hz1, hx1 - 0.3, hz1, 0, 1, HT);               // hall, toward the yard
+  scene.add(deco);
+  mergeStatic(deco);
   const roofShape = new THREE.Shape(); roofShape.moveTo(-nx - 0.3, 0); roofShape.lineTo(nx + 0.3, 0); roofShape.lineTo(0, 5); roofShape.closePath();
   const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(roofShape, { depth: nz1 - nz0, bevelEnabled: false }), M(0x7a5a48));
   roof.position.set(0, NT, nz0); scene.add(roof);

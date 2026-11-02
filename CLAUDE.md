@@ -36,7 +36,7 @@
 ```
 frontend/   Vite 5.4.21 + three.js 0.128.0 (색감 때문에 고정)
   src/main.js          상태 전이(intro, hall, opening, room, leaving), 프레임 루프
-  src/world/           앞마당(분수대 광장, 벤치, 비둘기), 성당 정면(가우디풍), 본당(hall.js: 장의자, 촛불, 봉헌함, 성수대)과 고해소 방(21칸, 신께 알리기 함), 캐릭터, 고해소 내부와 성호경
+  src/world/           앞마당(분수대 광장, 벤치, 비둘기와 모이 주기), 성당 둘레길, 숲 산책로, 이벤트 광장(무대, setBanner로 수능 연말 행사 현수막), layout.js(바깥 좌표), 성당 정면(가우디풍), 본당(hall.js: 장의자, 촛불, 봉헌함, 성수대)과 고해소 방(21칸, 신께 알리기 함), 캐릭터, 고해소 내부와 성호경
   src/controls/        keyboard(e.code 기준), camera-rig(궤도, 벽 충돌, 1인칭), navigation
   src/answer/          답변 엔진: 위기 키워드 > 금지어 > 카테고리 매칭 > 템플릿
   src/net/room-client.js     RoomClient 계약 + 로컬 시뮬레이션

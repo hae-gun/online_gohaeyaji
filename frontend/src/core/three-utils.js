@@ -36,3 +36,55 @@ export function makeGlassTexture() {
     g.beginPath(); g.arc(w / 2, h * 0.42, 62, 0, Math.PI * 2); g.stroke();
   });
 }
+
+/**
+ * Merges every mesh under `root` that looks the same (same kind of material, colour, texture
+ * and settings) into one mesh, so a hundred benches and lamps cost a handful of draw calls
+ * instead of a thousand. Only for things that never move. `root` is emptied and filled with
+ * the merged meshes (instanced meshes are kept as they are).
+ */
+export function mergeStatic(root) {
+  root.updateMatrixWorld(true);
+  const groups = new Map();
+  const keep = [];
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  root.traverse((o) => {
+    if (o.isInstancedMesh || (o.isMesh && Array.isArray(o.material))) { keep.push(o); return; }
+    if (!o.isMesh) return;
+    const m = o.material;
+    const key = [m.type, m.color && m.color.getHex(), m.map && m.map.uuid, m.flatShading, m.shininess,
+      m.transparent, m.opacity, m.side, m.emissive && m.emissive.getHex(), m.fog].join('|');
+    let g = groups.get(key);
+    if (!g) groups.set(key, (g = { material: m, parts: [] }));
+    const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone())
+      .applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+    g.parts.push(geo);
+  });
+  keep.forEach((o) => root.attach(o));   // instanced meshes stay as they are
+  [...root.children].forEach((c) => { if (!keep.includes(c)) root.remove(c); });
+  for (const { material, parts } of groups.values()) {
+    const merged = mergeParts(parts);
+    parts.forEach((p) => p.dispose());
+    root.add(new THREE.Mesh(merged, material));
+  }
+}
+
+/** Joins non-indexed geometries; keeps position, normal and uv (uv filled with 0 when missing). */
+function mergeParts(parts) {
+  const count = parts.reduce((n, p) => n + p.attributes.position.count, 0);
+  const pos = new Float32Array(count * 3), nor = new Float32Array(count * 3), uv = new Float32Array(count * 2);
+  let k = 0;
+  for (const p of parts) {
+    const n = p.attributes.position.count;
+    pos.set(p.attributes.position.array, k * 3);
+    if (p.attributes.normal) nor.set(p.attributes.normal.array, k * 3);
+    if (p.attributes.uv) uv.set(p.attributes.uv.array, k * 2);
+    k += n;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.computeBoundingSphere();
+  return g;
+}
