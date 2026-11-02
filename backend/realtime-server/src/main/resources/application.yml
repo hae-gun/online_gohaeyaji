@@ -67,4 +67,4 @@ gohaeyaji:
   # private blocked word list (git-ignored), same file the browser uses; relative to the working directory.
   # The default works for ./gradlew bootRun from backend/realtime-server. In Docker, mount the file and set the variable.
   blocked-words-file: ${BLOCKED_WORDS_FILE:../../frontend/public/data/blocked.json}
-  allowed-origins: ${ALLOWED_ORIGINS:https://hae-gun.github.io,http://localhost:5173}
+  allowed-origins: ${ALLOWED_ORIGINS:https://gohaeyaji.com,https://www.gohaeyaji.com,https://hae-gun.github.io,http://localhost:5173}

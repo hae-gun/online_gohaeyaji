@@ -12,11 +12,11 @@
 | 프레임 | 텍스트 프레임, UTF-8 JSON 한 개 |
 | 공통 필드 | 모든 메시지에 `type`. 응답이 필요한 요청에는 `reqId` (클라이언트가 만든 문자열) |
 | 최대 메시지 크기 | 2 KB. 넘으면 연결 종료 `4005` |
-| 허용 Origin | `https://hae-gun.github.io`, `http://localhost:5173`. 그 외는 핸드셰이크 거절 |
+| 허용 Origin | `https://gohaeyaji.com`, `https://www.gohaeyaji.com`, `https://hae-gun.github.io`(도메인 이전 기간), `http://localhost:5173`. 그 외는 핸드셰이크 거절 |
 | 인증 | 없음. 익명 세션만 사용 |
 | IP당 동시 연결 | 최대 20개. 넘으면 `4004` (학교, 회사처럼 IP 하나를 여럿이 쓰는 환경 고려) |
 
-> Origin은 경로를 포함하지 않으므로 `hae-gun.github.io` 아래의 다른 Pages 사이트도 통과합니다. 정식 도메인을 쓰게 되면 목록에 추가하고 github.io는 제거합니다.
+> Origin은 경로를 포함하지 않으므로 `hae-gun.github.io` 아래의 다른 Pages 사이트도 통과합니다. 프론트가 `gohaeyaji.com`으로 옮겨 가고 예전 주소가 새 도메인으로 넘어가는 것을 확인하면 github.io는 목록에서 뺍니다.
 
 ## 2. 채널 정책
 
@@ -597,7 +597,7 @@
 | P3 | 그린 얼굴 | 32x32(v0.6), 눈코입 색 다섯 가지, 다른 사람에게도 보임, 보는 사람이 끄거나 그림별로 숨길 수 있음, 3명이 신고하면 24시간 금지, 브라우저에 최대 12개 보관 (15장) |
 | P4 | 동작 | 기도, 성호경, 무릎 꿇고 만세, 꾸벅꾸벅 네 가지, 하나씩, 동작 중 이동 가능, 다른 사람도 봄. 앉기(`sit`)는 걸을 때까지 유지되는 상태이고 앉은 채로 동작 가능 (16장) |
 | P2 | 이름 | 무작위 세례명, 직접 변경 가능, 서버에서 금지어와 사칭 검사, 3m 안에서만 표시 (14장) |
-| D13 | 허용 Origin | `https://hae-gun.github.io`, `http://localhost:5173` |
+| D13 | 허용 Origin | `https://gohaeyaji.com`, `https://www.gohaeyaji.com`, `https://hae-gun.github.io`(이전 기간), `http://localhost:5173` |
 
 ## 미결정 항목
 
