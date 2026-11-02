@@ -60,20 +60,59 @@ function headShape(g, spec, skin, y, face, faceSize) {
   return { head, front };
 }
 
-function mittens(g, sleeve, skin, shoulderX, shoulderY, ARM) {
+const UP = new THREE.Vector3(0, 1, 0);
+const UNIT_TUBE = new THREE.CylinderGeometry(1, 1, 1, 16, 1, true);   // scaled into each arm segment
+const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+
+/**
+ * Bendy two-part arms with round mitten hands.
+ *
+ * Animations only move the invisible pivot at the shoulder (rotation and scale.y, see emotes.js and
+ * the sign of the cross in confessional.js): its -y axis points at where the hand goes and scale.y
+ * says how far, so the short arms can still reach the forehead. The visible arm is rebuilt from
+ * that every frame: shoulder, an elbow, and the hand at the target. The elbow swings forward the
+ * more the hand goes up or across the body, so the arm goes around the big head and round belly
+ * instead of through them, and outward when the hand goes out to the side (hands up). The hand is
+ * never stretched.
+ */
+function mittens(g, sleeve, skin, shoulderX, shoulderY, ARM, thick = 0.09) {
   const arms = {};
+  const sm = M(sleeve);
+  const S = new THREE.Vector3(), H = new THREE.Vector3(), E = new THREE.Vector3(), tmp = new THREE.Vector3();
+  const place = (mesh, A, B) => {
+    tmp.subVectors(B, A);
+    const len = Math.max(0.001, tmp.length());
+    mesh.position.addVectors(A, B).multiplyScalar(0.5);
+    mesh.quaternion.setFromUnitVectors(UP, tmp.divideScalar(len));
+    mesh.scale.set(thick, len, thick);
+    mesh.updateMatrixWorld();
+  };
   for (const s of [-1, 1]) {
     const pivot = new THREE.Group();
     pivot.position.set(s * shoulderX, shoulderY, 0);
-    const sm = M(sleeve);
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.105, ARM, 16), sm);
-    arm.position.y = -ARM / 2;
-    pivot.add(arm);
-    pivot.add(new THREE.Mesh(ball(0.09), sm));   // round shoulder
-    const hand = new THREE.Mesh(ball(0.13), skin);   // chubby mitten hands
-    hand.position.y = -ARM;
-    pivot.add(hand);
     g.add(pivot);
+    const shoulder = new THREE.Mesh(ball(thick), sm); shoulder.position.copy(pivot.position);
+    const upper = new THREE.Mesh(UNIT_TUBE, sm), fore = new THREE.Mesh(UNIT_TUBE, sm);
+    const elbow = new THREE.Mesh(ball(thick), sm);
+    const hand = new THREE.Mesh(ball(0.12), skin);
+    g.add(shoulder, upper, fore, elbow, hand);
+    const sync = () => {
+      S.copy(pivot.position);
+      H.set(0, -ARM * pivot.scale.y, 0).applyQuaternion(pivot.quaternion).add(S);
+      const up = clamp((H.y - (S.y - ARM)) / ARM, 0, 1.5) / 1.5;          // 0 hanging .. 1 well above the shoulder
+      const across = clamp(((H.x - S.x) * -s) / shoulderX, 0, 2) / 2;    // 0 at the side .. 1 past the middle
+      const outside = clamp(((H.x - S.x) * s) / 0.2, 0, 1);              // hand out to the side
+      const fwd = (0.05 + 0.3 * up + 0.28 * across) * (1 - 0.8 * outside);
+      const out = 0.04 + 0.25 * outside * up;
+      E.addVectors(S, H).multiplyScalar(0.5);
+      E.x += s * out; E.y -= 0.05 * up; E.z += fwd;
+      place(upper, S, E);
+      place(fore, E, H);
+      elbow.position.copy(E); elbow.updateMatrixWorld();
+      hand.position.copy(H); hand.updateMatrixWorld();
+    };
+    // whichever part draws first rebuilds the whole arm for this frame
+    for (const m of [upper, fore, elbow, hand]) { m.frustumCulled = false; m.onBeforeRender = sync; }
     arms[s < 0 ? 'R' : 'L'] = pivot;   // figure faces +z, so its right hand is on -x
   }
   return arms;
@@ -203,7 +242,6 @@ function makeKid(o) {
     const p = new THREE.Group(); p.position.set(s * 0.13, 0.3, 0);
     const pm = M(o.pants);
     const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.24, 16), pm); leg.position.y = -0.14; p.add(leg);
-    const knee = new THREE.Mesh(ball(0.085), pm); p.add(knee);
     // round bean shoes
     const shoe = new THREE.Mesh(ball(0.1), M(0x2f2c33)); shoe.scale.set(0.95, 0.6, 1.4); shoe.position.set(0, -0.26, 0.04); p.add(shoe);
     g.add(p); legs.push(p);
