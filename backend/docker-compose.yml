@@ -2,14 +2,21 @@
 # Everything in Docker: docker compose up --build
 #
 # The same file is meant to run on the deploy VM later; Caddy (HTTPS) will be added then.
+#
+# Ports are published on 127.0.0.1 only. Docker writes its own iptables rules, so a port published
+# on 0.0.0.0 is open to the internet even when firewalld (or ufw) blocks it. Redis has no password
+# here, so it must never be reachable from outside; the server reaches it over the compose network
+# as redis:6379. The realtime server is reached from outside only through Caddy (wss on 443).
+# To try it from your own machine before Caddy is in place: ssh -L 8080:127.0.0.1:8080 <server>
 
 services:
   redis:
     image: redis:7-alpine
     # booth locks and channel counts are short-lived state, so no persistence
     command: ["redis-server", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -27,8 +34,9 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     volumes:
       - ../frontend/public/data/blocked.json:/data/blocked.json:ro
+    restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
       redis:
         condition: service_healthy
