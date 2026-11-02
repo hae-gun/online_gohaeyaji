@@ -47,9 +47,11 @@ ssh -i ~/.ssh/<서버키> rocky@<APP_IP> gohae-deploy
 |---|---|
 | 새 커밋 없음 | 아무것도 안 함 |
 | `backend/`, `infra/app/` 외의 변경만 있음 | 코드만 갱신, 재기동 안 함 |
-| 백엔드 변경 | 빌드 → 교체 → 응답 확인 |
+| 백엔드 변경 | 빌드 → 교체 → `/actuator/health`가 UP인지 확인 (Redis 연결까지) |
+| `infra/app/nginx/` 변경 | Nginx 재시작 후 `nginx -t` 설정 검사 |
 | 실패 | 이전 커밋으로 롤백, 같은 커밋은 다시 시도 안 함 |
 | 강제로 다시 배포 | `FORCE=1 gohae-deploy` |
+| `.env` 변경 (git 밖) | 자동 반영 안 됨. 서버에서 해당 폴더로 가서 `docker compose up -d` |
 
 기록: 서버의 `~/gohae/deploy.log`
 

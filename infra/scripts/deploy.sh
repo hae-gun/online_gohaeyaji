@@ -14,7 +14,7 @@ main() {
   repo_dir="${REPO_DIR:-$(cd "$(dirname "$self")/../.." && pwd)}"
 
   local branch="${BRANCH:-main}"
-  local health_url="${HEALTH_URL:-http://127.0.0.1:8080/ws}"
+  local health_url="${HEALTH_URL:-http://127.0.0.1:8080/actuator/health}"
   local state_dir="${STATE_DIR:-$HOME/gohae}"
   local log_file="$state_dir/deploy.log"
   local failed_file="$state_dir/.deploy-failed"
@@ -70,15 +70,20 @@ main() {
     # Nginx 등 앞단은 .env를 만든 뒤(도메인 설정 후)부터 함께 갱신
     if [[ -f "$app_dir/.env" ]]; then
       (cd "$app_dir" && docker compose up -d --remove-orphans >>"$log_file" 2>&1) || return 1
+      # Nginx 설정은 파일로 연결돼 있어서 내용만 바뀌면 compose가 컨테이너를 다시 만들지 않는다.
+      # 템플릿은 시작할 때 읽히므로, 바뀌었으면 재시작하고 설정 검사까지 통과해야 성공
+      if ! git diff --quiet "$old" "$new" -- infra/app/nginx/; then
+        (cd "$app_dir" && docker compose restart nginx >>"$log_file" 2>&1 \
+          && docker compose exec -T nginx nginx -t >>"$log_file" 2>&1) || return 1
+        log "Nginx 설정 갱신"
+      fi
     fi
   }
 
   healthy() {
-    # HTTP 응답 코드가 하나라도 오면 떠 있는 것 (WebSocket 엔드포인트라 4xx가 정상)
-    local code
+    # Spring이 떠 있고 Redis에도 붙었을 때만 성공 (/actuator/health 가 UP)
     for _ in $(seq 1 30); do
-      code=$(curl -s -o /dev/null -w '%{http_code}' "$health_url" || true)
-      [[ "$code" != "000" ]] && return 0
+      curl -s -m 3 "$health_url" 2>/dev/null | grep -q '"status":"UP"' && return 0
       sleep 2
     done
     return 1
