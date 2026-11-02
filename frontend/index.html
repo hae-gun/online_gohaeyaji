@@ -48,7 +48,7 @@
       <div class="bubble" id="bubble" hidden><span class="who">신부</span><span id="bubbleText"></span></div>
     </div>
     <div class="roomFoot">
-      <div class="penance" id="penance" hidden><small>오늘의 보속</small><p id="penanceText"></p></div>
+      <div class="penance" id="penance" hidden><small>오늘의 보속</small><p id="penanceText"></p><button class="cardBtn" id="cardBtn" type="button">보속 카드 만들기</button></div>
       <button class="fbBtn" id="fbBtn" type="button" hidden>답이 엉뚱해요</button>
       <div class="chat">
         <div class="idleCounter" id="idleCounter" role="timer" aria-live="polite" hidden></div>
@@ -125,6 +125,19 @@
       <div class="row">
         <button id="faceCancel" type="button">취소</button>
         <button class="primary" id="faceSave" type="button">이 얼굴 쓰기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="cardPanel" hidden>
+    <div class="card cardView" role="dialog" aria-labelledby="cardTitle">
+      <h2 id="cardTitle">보속 카드</h2>
+      <img id="cardImg" alt="오늘의 보속 카드">
+      <p class="rule">고해 내용은 카드에 들어가지 않습니다. 죄목은 신부님이 알아들은 낱말만 적힙니다.</p>
+      <div class="row">
+        <button id="cardClose" type="button">닫기</button>
+        <button id="cardSave" type="button">이미지 저장</button>
+        <button class="primary" id="cardShare" type="button" hidden>공유하기</button>
       </div>
     </div>
   </div>

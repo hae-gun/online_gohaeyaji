@@ -175,3 +175,10 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 #fbText{font:inherit;font-size:15px;line-height:1.6;color:var(--ink);background:#14101a;border:1px solid var(--line);border-radius:16px;padding:10px 12px;resize:vertical}
 .fbLabel{color:var(--muted);font-size:12px;margin-bottom:-8px}
 .card .fbAnswer{color:var(--ink);font-size:13.5px;border-left:3px solid var(--line);padding-left:10px;max-height:120px;overflow-y:auto}
+
+/* 보속 카드 */
+.penance .cardBtn{display:block;margin:10px auto 0;font-size:13px;padding:6px 14px;border-color:var(--gold);color:var(--gold);background:rgba(18,14,22,.55)}
+#roomUi.legend .penance .cardBtn{border-color:#f3d27a;color:#f3d27a}
+.cardView{width:min(420px,100%);max-height:calc(100dvh - 32px);display:flex;flex-direction:column;gap:10px}
+.cardView img{display:block;width:auto;max-width:100%;max-height:calc(100dvh - 230px);aspect-ratio:9/16;margin:0 auto;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);object-fit:contain}
+.cardView .row{flex-wrap:wrap}

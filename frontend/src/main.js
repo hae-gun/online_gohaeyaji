@@ -25,6 +25,7 @@ import { maskContact } from './net/feedback.js';
 import { EMOTES, createEmotePlayer } from './world/emotes.js';
 import { history } from './storage/history.js';
 import { $, toast, fade, createBubble, initHistoryPanel } from './ui/hud.js';
+import { drawPenanceCard, createCardPanel } from './ui/penance-card.js';
 
 /*
  * Flow:  intro -> hall (yard, nave, confession hall) -> opening (door animation) -> room -> hall
@@ -613,6 +614,7 @@ function enterRoom() {
   $('#roomName').textContent = `${current.id + 1}번 고해소, ${priest ? priest.name : '신부님'}`;
   $('#bubble').hidden = true;
   $('#penance').hidden = true;
+  lastCard = null;
   setInputEnabled(false);
   $('#confess').value = '';
   $('#guide').textContent = '신부님이 기도를 시작합니다';
@@ -711,6 +713,46 @@ $('#fbForm').addEventListener('submit', async (e) => {
   toast('보내 주셔서 감사합니다. 신부님이 더 잘 알아듣도록 고치겠습니다');
 });
 
+/* ---------- 보속 카드 ---------- */
+// The address printed on the card: the page people should land on (VITE_SITE_URL, or where this page is)
+const SITE = (import.meta.env.VITE_SITE_URL || `${location.host}${location.pathname}`).replace(/^https?:\/\//, '').replace(/\/(index\.html)?$/, '');
+let lastCard = null;
+const cardPanel = createCardPanel({
+  onOpen: () => idle.pause(),
+  onClose: () => { if (state === 'room') idle.start(); },
+});
+/** The priest as he is on screen right now, without the speech bubble (that is HTML, not in the canvas). */
+function snapshotPriest() {
+  try {
+    renderer.render(confessional.scene, confessional.camera);
+    // copied in the same task as the render, so the WebGL buffer is still there
+    const c = document.createElement('canvas');
+    c.width = renderer.domElement.width; c.height = renderer.domElement.height;
+    c.getContext('2d').drawImage(renderer.domElement, 0, 0);
+    return c;
+  } catch (_) { return null; }
+}
+$('#cardBtn').onclick = async () => {
+  if (!lastCard || state !== 'room') return;
+  const btn = $('#cardBtn');
+  btn.disabled = true;
+  try {
+    const canvas = await drawPenanceCard({
+      ...lastCard,
+      priestImage: snapshotPriest(),
+      priestName: priest ? priest.name : '신부님',
+      name: rooms.myName || '익명의 고해자',
+      face: rooms.myFace,
+      site: SITE,
+    });
+    await cardPanel.show(canvas);
+  } catch (_) {
+    toast('카드를 만들지 못했습니다');
+  } finally {
+    btn.disabled = false;
+  }
+};
+
 function setInputEnabled(on) {
   $('#confess').disabled = !on;
   $('#sendBtn').disabled = !on;
@@ -743,8 +785,12 @@ $('#chatForm').addEventListener('submit', (e) => {
       $('#penance small').textContent = r.persona === 'baek' ? '전설의 보속' : '오늘의 보속';
       $('#penance').hidden = false;
       history.add({ t: Date.now(), q: text, c: r.category, p: r.penance, pr: r.persona });
+      // for the card: how many times this sin was confessed in this browser, this one included
+      const nth = history.load().filter((h) => h.c === r.category).length;
+      lastCard = { sin: r.keyword || r.category, penance: r.penance, legend: !!(priest && priest.chance), nth, when: new Date() };
     } else {
       $('#penance').hidden = true;
+      lastCard = null;
     }
     // "답이 엉뚱해요": only where a real answer was given (never for crisis replies), and only with a server
     if ((r.kind === 'answer' || r.kind === 'chat') && rooms.sendFeedback) {
