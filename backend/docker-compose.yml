@@ -13,7 +13,9 @@ services:
   redis:
     image: redis:7-alpine
     # booth locks and channel counts are short-lived state, so no persistence
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # at most 256 MB; when full, new writes fail instead of silently dropping keys (a dropped
+    # booth lock would let two people into one booth)
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:6379:6379"
@@ -25,6 +27,9 @@ services:
 
   realtime-server:
     build: ./realtime-server
+    # the JVM takes 75% of this for its heap (Dockerfile: MaxRAMPercentage=75), so about 960 MB.
+    # Without a limit it would size itself from the whole machine and could crowd out Redis and Nginx
+    mem_limit: 1280m
     environment:
       REDIS_HOST: redis
       ALLOWED_ORIGINS: https://hae-gun.github.io,http://localhost:5173
