@@ -39,8 +39,8 @@ export function buildConfessional() {
     const b = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.016, 0.02), lat); b.position.set(0, y, pz); scene.add(b);
   }
   const sill = new THREE.Mesh(new THREE.BoxGeometry(2, 0.08, 0.4), M(0x6a4428)); sill.position.set(0, 1.42, pz + 0.1); scene.add(sill);
-  const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.4, 6), M(0xf3ead6)); candle.position.set(0.9, 1.75, -1.8); scene.add(candle);
-  const flame = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), B(0xffc864)); flame.scale.y = 1.8; flame.position.set(0.9, 2.02, -1.8); scene.add(flame);
+  const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.4, 16), M(0xf3ead6)); candle.position.set(0.9, 1.75, -1.8); scene.add(candle);
+  const flame = new THREE.Mesh(new THREE.SphereGeometry(0.05, 20, 14), B(0xffc864)); flame.scale.y = 1.8; flame.position.set(0.9, 2.02, -1.8); scene.add(flame);
   const stand = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.55, 0.4), wood); stand.position.set(0.9, 0.77, -1.8); scene.add(stand);
 
   // one figure per persona; only the priest of the current booth is shown

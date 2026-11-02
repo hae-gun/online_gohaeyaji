@@ -65,7 +65,7 @@ export function buildBooths(scene, colliders) {
 
     const hinge = new THREE.Group(); hinge.position.set(1.12, 0, -0.6); g.add(hinge);
     const door = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.5, 1.2), doorM); door.position.set(0.04, 1.25, 0.6); door.userData.booth = i; hinge.add(door);
-    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 5), goldM); knob.position.set(0.12, 1.2, 1.05); hinge.add(knob);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.06, 20, 14), goldM); knob.position.set(0.12, 1.2, 1.05); hinge.add(knob);
     const grille = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.6), M(0x3a2416)); grille.position.set(0.05, 1.85, 0.6); hinge.add(grille);
 
     const ledMat = new THREE.MeshBasicMaterial({ color: LED_OFF });

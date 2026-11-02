@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 
 /**
- * Chunky 90s shading: flat facets with a plastic shine.
+ * Soft toy shading: smooth surfaces with a gentle shine, so round things look round.
  * Every lit surface in the world goes through this helper so the look stays consistent.
  */
 export const M = (color, opts = {}) =>
-  new THREE.MeshPhongMaterial({ color, flatShading: true, shininess: 38, specular: 0x333333, ...opts });
+  new THREE.MeshPhongMaterial({ color, shininess: 22, specular: 0x262626, ...opts });
 
 /** Unlit material for things that glow or must keep their exact color (eyes, LEDs, lamps). */
 export const B = (color) => new THREE.MeshBasicMaterial({ color });

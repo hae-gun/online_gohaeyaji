@@ -1,50 +1,61 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { M, B } from '../core/three-utils.js';
-import { createPixelFace } from './pixel-face.js';
+import { createPixelFace, faceCap } from './pixel-face.js';
 
 /**
- * Cute and a bit botched ("밤티"): short chibi bodies from a handful of low-poly shapes, big round
- * heads, and a flat pixel face stuck on the front (pixel-face.js). No model or image files.
- * Things are slightly off on purpose: crooked collar, stole strips of different lengths.
+ * Round and squishy chibi figures: big round heads, short bean bodies, mitten hands, all smooth
+ * shapes with no visible facets. The face is painted round (pixel-face.js) and wraps onto the
+ * front of the head. No model or image files.
+ * Things are still slightly off on purpose: crooked collar, stole strips of different lengths.
  *
  * The priest's clothes stay correct whatever the body looks like: black cassock, white roman
  * collar, purple stole (what a priest wears for confession). The silliness is in the shapes,
  * never in the vestments.
  *
  * Priest looks (o.look):
- *   jin  serious:  egg head, one antenna hair, big round glasses
- *   eom  scolding: tofu box head, caterpillar monobrow, droopy moustache, the shortest of all
- *   yu   humorous: steamed-bun body, broccoli curls, heavy blush, D-shaped grin
- *   baek hidden legend (1%): white topknot, droopy white brows, long white beard, gold-edged stole
+ *   jin  serious:  egg head, one antenna hair with a ball on top, big round glasses
+ *   eom  scolding: soft tofu head (rounded box), caterpillar monobrow, droopy moustache, the shortest
+ *   yu   humorous: steamed-bun body, curly hair, heavy blush, D-shaped grin
+ *   baek hidden legend (1%): white topknot, droopy white brows, long fluffy white beard, gold-edged stole
  *
  * The figure faces +z. userData:
  *   legs, arms (R/L from the figure's own view), head, ARM (arm length), face (pixel face: set(state)),
  *   pose (points the sign of the cross aims for, in the figure's own space).
  */
 const LOOKS = {
-  jin:  { skin: 0xe8b994, robe: [0.26, 0.5, 1.0], head: { r: 0.44, scale: [0.95, 1.12, 0.95] }, side: 0xb9b4ad, antenna: 0x3a3530 },
-  eom:  { skin: 0xdca088, robe: [0.24, 0.44, 0.8], head: { box: [0.74, 0.66, 0.66] }, side: 0xefebe3, steam: true },
-  yu:   { skin: 0xf2c6a0, robe: [0.36, 0.58, 0.95], head: { r: 0.46, scale: [1.12, 0.95, 1] }, curls: 0x3a2416 },
-  baek: { skin: 0xf0cbae, robe: [0.28, 0.54, 1.05], head: { r: 0.44, scale: [1, 1.04, 1] }, side: 0xf4f1ea, beard: 0xf4f1ea, trim: 0xe8c45a, bun: 0xf4f1ea },
+  jin:  { skin: 0xf0c3a0, robe: [0.26, 0.5, 1.0], head: { r: 0.44, scale: [0.95, 1.12, 0.95] }, side: 0xb9b4ad, antenna: 0x3a3530 },
+  eom:  { skin: 0xe6ab92, robe: [0.24, 0.44, 0.8], head: { box: [0.74, 0.66, 0.66] }, side: 0xefebe3, steam: true },
+  yu:   { skin: 0xf6cfaa, robe: [0.36, 0.58, 0.95], head: { r: 0.46, scale: [1.12, 0.95, 1] }, curls: 0x4a2e1c },
+  baek: { skin: 0xf4d3b8, robe: [0.28, 0.54, 1.05], head: { r: 0.44, scale: [1, 1.04, 1] }, side: 0xf4f1ea, beard: 0xf8f6f0, trim: 0xe8c45a, bun: 0xf4f1ea },
 };
 const KID_FACES = ['derpy', 'plain', 'sleepy', 'shock'];
 
-const ROBE = 0x1b181e;
+const ROBE = 0x302a38;              // still reads black, just a softer black
+const ROUND = 28;                     // segments around anything round
+const ball = (r) => new THREE.SphereGeometry(r, 20, 14);
+const soft = (w, h, d, r) => new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2, h / 2, d / 2) * 0.999);
 
-function headShape(g, spec, skin, y) {
+/** Head at height y. Round heads get the face wrapped on the front; the tofu head gets it flat. */
+function headShape(g, spec, skin, y, face, faceSize) {
   const head = new THREE.Group();
   head.position.y = y;
   g.add(head);
   let front;
   if (spec.box) {
     const [w, h, d] = spec.box;
-    head.add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), skin));
+    head.add(new THREE.Mesh(soft(w, h, d, 0.2), skin));
     front = d / 2 + 0.005;
+    face.mesh.position.set(0, -0.01, front);
+    head.add(face.mesh);
   } else {
-    const sk = new THREE.Mesh(new THREE.SphereGeometry(spec.r, 7, 5), skin);
+    const sk = new THREE.Mesh(new THREE.SphereGeometry(spec.r, 36, 28), skin);
     sk.scale.set(...spec.scale);
     head.add(sk);
     front = spec.r * spec.scale[2] * 0.93;
+    face.mesh.geometry.dispose();
+    face.mesh.geometry = faceCap(spec.r, faceSize);
+    sk.add(face.mesh);   // inherits the head's squash
   }
   return { head, front };
 }
@@ -54,10 +65,12 @@ function mittens(g, sleeve, skin, shoulderX, shoulderY, ARM) {
   for (const s of [-1, 1]) {
     const pivot = new THREE.Group();
     pivot.position.set(s * shoulderX, shoulderY, 0);
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.1, ARM, 5), M(sleeve));
+    const sm = M(sleeve);
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.105, ARM, 16), sm);
     arm.position.y = -ARM / 2;
     pivot.add(arm);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 5, 4), skin);
+    pivot.add(new THREE.Mesh(ball(0.09), sm));   // round shoulder
+    const hand = new THREE.Mesh(ball(0.13), skin);   // chubby mitten hands
     hand.position.y = -ARM;
     pivot.add(hand);
     g.add(pivot);
@@ -73,36 +86,38 @@ function makePriest(o) {
   const skin = M(look.skin);
   const [top, bottom, h] = look.robe;
 
-  // bell-shaped cassock: a lathe profile with few segments so the facets show
-  const profile = [[bottom, 0], [bottom * 0.96, h * 0.22], [bottom * 0.74, h * 0.6], [top * 1.08, h * 0.9], [top, h], [0.001, h]]
+  // bell-shaped cassock with a rounded hem and soft shoulders (LatheGeometry wants top to bottom
+  // for outward-facing sides, hence the reverse below)
+  const profile = [[0.001, 0], [bottom * 0.9, 0], [bottom, h * 0.04], [bottom * 0.97, h * 0.2], [bottom * 0.8, h * 0.5],
+    [top * 1.12, h * 0.82], [top * 1.04, h * 0.95], [top * 0.75, h * 1.0], [0.001, h]]
     .map(([r, y]) => new THREE.Vector2(r, y));
-  // LatheGeometry wants the profile from top to bottom for outward-facing sides
-  g.add(new THREE.Mesh(new THREE.LatheGeometry([...profile].reverse(), 7), M(ROBE)));
+  g.add(new THREE.Mesh(new THREE.LatheGeometry([...profile].reverse(), ROUND), M(ROBE)));
+  const side = profile.slice(1, -1);
   const radiusAt = (y) => {
-    for (let i = 0; i < profile.length - 2; i++) {
-      const a = profile[i], b = profile[i + 1];
+    for (let i = 0; i < side.length - 1; i++) {
+      const a = side[i], b = side[i + 1];
       if (y >= a.y && y <= b.y) return a.x + ((y - a.y) / (b.y - a.y)) * (b.x - a.x);
     }
     return top;
   };
-  const frontAt = (y) => radiusAt(y) * Math.cos(Math.PI / 7) + 0.02;
+  const frontAt = (y) => radiusAt(y) + 0.02;
 
-  const collar = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.06, 0.04), B(0xffffff));
-  collar.position.set(0.012, h - 0.03, frontAt(h - 0.03) + 0.01);
+  const collar = new THREE.Mesh(soft(0.14, 0.06, 0.04, 0.02), B(0xffffff));
+  collar.position.set(0.012, h - 0.05, frontAt(h - 0.05) + 0.01);
   collar.rotation.z = 0.09;   // a little crooked
   g.add(collar);
 
   // stole: two purple strips down the front, one longer than the other
   [[-1, 0.62], [1, 0.54]].forEach(([s, frac]) => {
-    const y1 = h - 0.06, y2 = h * (1 - frac);
+    const y1 = h - 0.08, y2 = h * (1 - frac);
     const z1 = frontAt(y1), z2 = frontAt(y2);
     const len = Math.hypot(y1 - y2, z2 - z1);
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.08, len, 0.025), M(0x8a5cc0, { shininess: 70 }));
+    const strip = new THREE.Mesh(soft(0.085, len, 0.03, 0.014), M(0x9467cc, { shininess: 50 }));
     strip.position.set(s * 0.085, (y1 + y2) / 2, (z1 + z2) / 2);
     strip.rotation.set(-Math.atan2(z2 - z1, y1 - y2), 0, s * 0.07);
     if (look.trim) {
       for (const e of [-1, 1]) {
-        const edge = new THREE.Mesh(new THREE.BoxGeometry(0.014, len, 0.03), B(look.trim));
+        const edge = new THREE.Mesh(soft(0.016, len, 0.034, 0.007), B(look.trim));
         edge.position.x = e * 0.038;
         strip.add(edge);
       }
@@ -112,51 +127,51 @@ function makePriest(o) {
 
   const headR = look.head.box ? look.head.box[1] / 2 : look.head.r * look.head.scale[1];
   const headY = h + headR * 0.82;
-  const { head, front } = headShape(g, look.head, skin, headY);
   const face = createPixelFace(id, look.head.box ? 0.7 : look.head.r * 1.55);
-  face.mesh.position.set(0, look.head.box ? -0.01 : -0.02, front);
-  head.add(face.mesh);
+  const { head, front } = headShape(g, look.head, skin, headY, face, look.head.r * 1.55);
 
   const halfW = look.head.box ? look.head.box[0] / 2 : look.head.r * look.head.scale[0];
   if (look.side) {
     for (const s of [-1, 1]) {
-      const tuft = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 0.32), M(look.side));
-      tuft.position.set(s * (halfW + 0.01), 0.02, -0.05);
+      const tuft = new THREE.Mesh(ball(0.1), M(look.side));
+      tuft.scale.set(0.8, 1.15, 1.5);
+      tuft.position.set(s * (halfW - 0.01), 0.02, -0.05);
       head.add(tuft);
     }
   }
   if (look.antenna) {
-    const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 4), B(look.antenna));
+    const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.3, 10), M(look.antenna));
     ant.position.set(0.04, headR + 0.12, 0); ant.rotation.z = -0.25; head.add(ant);
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.035, 4, 3), B(look.antenna));
-    tip.position.set(0.08, headR + 0.27, 0); head.add(tip);
+    const tip = new THREE.Mesh(ball(0.055), M(look.antenna));
+    tip.position.set(0.08, headR + 0.28, 0); head.add(tip);
   }
   if (look.curls) {
     const hm = M(look.curls);
     for (let i = 0; i < 11; i++) {
       const a = (i / 11) * Math.PI * 2, r = i % 2 ? 0.26 : 0.34;
-      const c = new THREE.Mesh(new THREE.SphereGeometry(0.13, 5, 4), hm);
-      c.position.set(Math.cos(a) * r, 0.36 + (i % 3) * 0.04, Math.sin(a) * r * 0.8 - 0.1);
+      const c = new THREE.Mesh(ball(0.14), hm);
+      c.position.set(Math.cos(a) * r, 0.34 + (i % 3) * 0.04, Math.sin(a) * r * 0.8 - 0.1);
       head.add(c);
     }
-    const crown = new THREE.Mesh(new THREE.SphereGeometry(0.18, 5, 4), hm);
-    crown.position.set(0.02, 0.5, -0.08); head.add(crown);
+    const crown = new THREE.Mesh(ball(0.2), hm);
+    crown.position.set(0.02, 0.48, -0.08); head.add(crown);
   }
   if (look.bun) {
     // a little white topknot on an otherwise bald head
-    const bun = new THREE.Mesh(new THREE.SphereGeometry(0.1, 5, 4), M(look.bun));
+    const bun = new THREE.Mesh(ball(0.11), M(look.bun));
     bun.position.set(-0.03, headR + 0.04, -0.06); head.add(bun);
   }
   if (look.beard) {
-    // long blocky beard from the chin almost to the waist
+    // a fluffy beard: a soft cloud under the mouth tapering to a round point near the waist
     const bm = M(look.beard);
-    const chin = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.2, 0.22), bm); chin.position.set(0, -headR * 0.72, front - 0.12); head.add(chin);
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.55, 5), bm); tip.rotation.x = Math.PI; tip.position.set(0.02, -headR * 0.72 - 0.36, front - 0.1); head.add(tip);
+    const chin = new THREE.Mesh(ball(0.25), bm); chin.scale.set(1, 0.6, 0.55); chin.position.set(0, -headR * 0.68, front - 0.14); head.add(chin);
+    const pts = [[0.001, -0.62], [0.08, -0.56], [0.16, -0.4], [0.21, -0.18], [0.2, 0], [0.001, 0.02]].map(([r, y]) => new THREE.Vector2(r, y));
+    const tip = new THREE.Mesh(new THREE.LatheGeometry([...pts].reverse(), ROUND), bm); tip.scale.z = 0.6; tip.position.set(0.02, -headR * 0.72, front - 0.14); head.add(tip);
   }
   if (look.steam) {
     // he is always slightly steaming
     [[0.18, 0.5, 0.1], [0.3, 0.64, 0.075], [0.12, 0.76, 0.055]].forEach(([x, y, r]) => {
-      const p = new THREE.Mesh(new THREE.SphereGeometry(r, 5, 4), B(0xf4f1ea)); p.position.set(x, y, 0); head.add(p);
+      const p = new THREE.Mesh(ball(r), B(0xf4f1ea)); p.position.set(x, y, 0); head.add(p);
     });
   }
 
@@ -182,26 +197,30 @@ function makePriest(o) {
 
 function makeKid(o) {
   const g = new THREE.Group();
-  const skin = M(o.skin || 0xefc39b);
+  const skin = M(o.skin || 0xf3c9a4);
   const legs = [];
   for (const s of [-1, 1]) {
     const p = new THREE.Group(); p.position.set(s * 0.13, 0.3, 0);
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.24, 5), M(o.pants)); leg.position.y = -0.14; p.add(leg);
-    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.09, 0.26), M(0x2b2b2e)); shoe.position.set(0, -0.26, 0.04); p.add(shoe);
+    const pm = M(o.pants);
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.24, 16), pm); leg.position.y = -0.14; p.add(leg);
+    const knee = new THREE.Mesh(ball(0.085), pm); p.add(knee);
+    // round bean shoes
+    const shoe = new THREE.Mesh(ball(0.1), M(0x2f2c33)); shoe.scale.set(0.95, 0.6, 1.4); shoe.position.set(0, -0.26, 0.04); p.add(shoe);
     g.add(p); legs.push(p);
   }
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.33, 0.5, 6), M(o.shirt)); body.position.y = 0.54; g.add(body);
+  // round bean body: wider at the bottom, rounded at both ends
+  const bodyPts = [[0.001, 0.29], [0.24, 0.31], [0.33, 0.4], [0.34, 0.56], [0.28, 0.74], [0.16, 0.8], [0.001, 0.81]]
+    .map(([r, y]) => new THREE.Vector2(r, y));
+  g.add(new THREE.Mesh(new THREE.LatheGeometry([...bodyPts].reverse(), ROUND), M(o.shirt)));
   const arms = mittens(g, o.shirt, skin, 0.3, 0.74, 0.3);
 
   const r = 0.42;
-  const { head, front } = headShape(g, { r, scale: [1.05, 0.98, 1] }, skin, 1.16);
-  // uneven hair cap, tipped a little to one side
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(r + 0.02, 7, 5, 0, Math.PI * 2, 0, Math.PI * 0.38), M(o.hair || 0x3b2618));
-  hair.position.y = 0.02; hair.rotation.set(-0.35, 0, 0.15); head.add(hair);
   const variant = o.face || KID_FACES[Math.abs(o.seed || 0) % KID_FACES.length];
   const face = createPixelFace('kid', r * 1.55, variant);
-  face.mesh.position.set(0, -0.02, front);
-  head.add(face.mesh);
+  const { head, front } = headShape(g, { r, scale: [1.05, 0.98, 1] }, skin, 1.16, face, r * 1.55);
+  // round hair cap, tipped a little to one side
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(r + 0.03, 36, 18, 0, Math.PI * 2, 0, Math.PI * 0.4), M(o.hair || 0x3b2618));
+  hair.position.y = 0.02; hair.rotation.set(-0.35, 0, 0.15); head.add(hair);
 
   // points the emotes reach for (emotes.js), in the kid's own space
   const v = (x, y, z) => new THREE.Vector3(x, y, z);

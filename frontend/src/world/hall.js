@@ -76,7 +76,7 @@ export function buildHall(scene, glassTex) {
   box(0.6, NAVE_H, wallZ1 - D.z1, wallM, D.x, NAVE_H / 2, (D.z1 + wallZ1) / 2, true);
   box(0.6, NAVE_H - 3.6, D.z1 - D.z0, wallM, D.x, 3.6 + (NAVE_H - 3.6) / 2, (D.z0 + D.z1) / 2, true);
   for (const s of [-1, 1]) {
-    const arch = add(new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.12, 5, 12, Math.PI), goldM));
+    const arch = add(new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.12, 10, 28, Math.PI), goldM));
     arch.rotation.y = Math.PI / 2; arch.position.set(D.x + s * 0.31, 2.1, (D.z0 + D.z1) / 2); arch.scale.set(1, 1, 1);
   }
 
@@ -117,11 +117,11 @@ export function buildHall(scene, glassTex) {
   for (const s of [-1, 1]) {
     for (const z of [8, 1.6, -4.6, -10.4]) {
       const x = s * 7.6;
-      const trunk = add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 6.2, 8), columnM)); trunk.position.set(x, 3.1, z);
-      const knot = add(new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), columnM)); knot.position.set(x, 6.2, z); knot.scale.y = 0.7;
+      const trunk = add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 6.2, 16), columnM)); trunk.position.set(x, 3.1, z);
+      const knot = add(new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 14), columnM)); knot.position.set(x, 6.2, z); knot.scale.y = 0.7;
       for (let k = 0; k < 4; k++) {
         const a = (k / 4) * Math.PI * 2 + 0.4;
-        const br = add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.16, 3.4, 6), columnM));
+        const br = add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.16, 3.4, 16), columnM));
         br.position.set(x + Math.cos(a) * 0.8, 7.6, z + Math.sin(a) * 0.8);
         br.rotation.set(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5);
       }
@@ -163,18 +163,18 @@ export function buildHall(scene, glassTex) {
   box(0.3, 3.6, 0.2, goldM, 0, 4.8, N.z0 + 0.15);
   box(2.0, 0.3, 0.2, goldM, 0, 5.8, N.z0 + 0.15);
   const canopy = new THREE.Group(); canopy.position.set(0, 7.0, -14.6); scene.add(canopy);
-  const can = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 2.1, 0.5, 6, 1, true), M(0xe8dcc0, { side: THREE.DoubleSide })); canopy.add(can);
-  const canTop = new THREE.Mesh(new THREE.ConeGeometry(1.7, 0.6, 6), M(0xd4ad55)); canTop.position.y = 0.55; canopy.add(canTop);
+  const can = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 2.1, 0.5, 16, 1, true), M(0xe8dcc0, { side: THREE.DoubleSide })); canopy.add(can);
+  const canTop = new THREE.Mesh(new THREE.ConeGeometry(1.7, 0.6, 16), M(0xd4ad55)); canTop.position.y = 0.55; canopy.add(canTop);
   const bulbM = B(0xffe6a0);
   for (let k = 0; k < 12; k++) {
     const a = (k / 12) * Math.PI * 2;
-    const b = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 4), bulbM); b.position.set(Math.cos(a) * 2.05, -0.3, Math.sin(a) * 2.05); canopy.add(b);
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.07, 20, 14), bulbM); b.position.set(Math.cos(a) * 2.05, -0.3, Math.sin(a) * 2.05); canopy.add(b);
   }
   for (const a of [0.5, 2.6, 4.7]) {
-    const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.6, 4), B(0x221a14)); cord.position.set(Math.cos(a) * 1.4, 1.1, Math.sin(a) * 1.4); canopy.add(cord);
+    const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.6, 16), B(0x221a14)); cord.position.set(Math.cos(a) * 1.4, 1.1, Math.sin(a) * 1.4); canopy.add(cord);
   }
   const altarL = new THREE.PointLight(0xffd59a, 0.9, 14); altarL.position.set(0, 5, -13); scene.add(altarL);
-  const rose = new THREE.Mesh(new THREE.CircleGeometry(1.4, 18), new THREE.MeshBasicMaterial({ map: glassTex }));
+  const rose = new THREE.Mesh(new THREE.CircleGeometry(1.4, 28), new THREE.MeshBasicMaterial({ map: glassTex }));
   rose.position.set(0, 7.6, N.z0 + 0.02); scene.add(rose);
 
   // holy water fonts by the door: a shell on a short pillar
@@ -182,9 +182,9 @@ export function buildHall(scene, glassTex) {
   for (const s of [-1, 1]) {
     const x = s * 2.5, z = 9.0;
     box(0.3, 0.9, 0.3, M(0xbcae96), x, 0.45, z);
-    const shell = add(new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), M(0xe9e2d6, { side: THREE.DoubleSide })));
+    const shell = add(new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 14, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), M(0xe9e2d6, { side: THREE.DoubleSide })));
     shell.position.set(x, 1.05, z);
-    const water = add(new THREE.Mesh(new THREE.CircleGeometry(0.36, 12), M(0x7fb4e6, { shininess: 120 })));
+    const water = add(new THREE.Mesh(new THREE.CircleGeometry(0.36, 28), M(0x7fb4e6, { shininess: 120 })));
     water.rotation.x = -Math.PI / 2; water.position.set(x, 0.98, z);
     obstacles.push({ x, z, r: 0.42 });
     fonts.push(new THREE.Vector3(x, 0, z));
@@ -203,8 +203,8 @@ export function buildHall(scene, glassTex) {
   for (let row = 0; row < 3; row++) {
     for (let k = 0; k < 6; k++) {
       const x = -1.05 + k * 0.42, y = 0.79 + row * 0.22, z = 0.35 - row * 0.3;
-      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.14, 8), cupM); cup.position.set(x, y + 0.07, z); rack.add(cup);
-      const wax = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.1, 8), waxM); wax.position.set(x, y + 0.08, z); rack.add(wax);
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.14, 16), cupM); cup.position.set(x, y + 0.07, z); rack.add(cup);
+      const wax = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.1, 16), waxM); wax.position.set(x, y + 0.08, z); rack.add(wax);
       const flame = new THREE.Sprite(flameMaterial()); flame.scale.set(0.12, 0.2, 1); flame.position.set(x, y + 0.24, z); flame.visible = false; rack.add(flame);
       candles.push({ flame, until: 0, born: 0, phase: Math.random() * 6 });
     }
@@ -218,12 +218,12 @@ export function buildHall(scene, glassTex) {
 
   // offering box on a stand, right of the candles
   const offer = new THREE.Group(); offer.position.set(-3.2, 0, -10.0); scene.add(offer);
-  const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 0.85, 6), darkWoodM); stand.position.y = 0.42; offer.add(stand);
+  const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 0.85, 16), darkWoodM); stand.position.y = 0.42; offer.add(stand);
   const chest = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.45, 0.42), woodM); chest.position.y = 1.07; offer.add(chest);
   const slot = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 0.05), B(0x110c08)); slot.position.y = 1.3; offer.add(slot);
   const offerLabel = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.18), new THREE.MeshBasicMaterial({ map: sign('봉헌함', null, 150, 54) }));
   offerLabel.position.set(0, 1.07, 0.215); offer.add(offerLabel);
-  const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.015, 10), M(0xe8c35a, { shininess: 120 }));
+  const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.015, 16), M(0xe8c35a, { shininess: 120 }));
   coin.rotation.x = Math.PI / 2; coin.visible = false; offer.add(coin);
   let coinT = -1;
   obstacles.push({ x: -3.2, z: -10.0, r: 0.4 });
@@ -247,13 +247,13 @@ export function buildHall(scene, glassTex) {
   box(hw + 0.8, 0.3, hd + 0.8, M(0x2f2533), hcx, HALL_H + 0.15, hcz, true);
   for (let x = H.x0 + 4; x < H.x1 - 2; x += 6) {
     for (let z = H.z0 + 5; z < H.z1 - 3; z += 6.5) {
-      const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.2, 4), B(0x221a14)); cord.position.set(x, HALL_H - 0.6, z); scene.add(cord);
-      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), B(0xffe1a0)); lamp.position.set(x, HALL_H - 1.25, z); scene.add(lamp);
+      const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.2, 16), B(0x221a14)); cord.position.set(x, HALL_H - 0.6, z); scene.add(cord);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 14), B(0xffe1a0)); lamp.position.set(x, HALL_H - 1.25, z); scene.add(lamp);
     }
   }
   // a row of small round windows over the front booths
   for (let k = -3; k <= 3; k++) {
-    const w = new THREE.Mesh(new THREE.CircleGeometry(0.45, 12), new THREE.MeshBasicMaterial({ map: glassTex }));
+    const w = new THREE.Mesh(new THREE.CircleGeometry(0.45, 28), new THREE.MeshBasicMaterial({ map: glassTex }));
     w.rotation.y = -Math.PI / 2; w.position.set(H.x1 - 0.01, 5.3, hcz + k * 2.9); scene.add(w);
   }
   const pinkL = new THREE.PointLight(0xff6aa8, 0.8, 18); pinkL.position.set(H.x1 - 3, 4.5, hcz - 6); scene.add(pinkL);
@@ -262,7 +262,7 @@ export function buildHall(scene, glassTex) {
   // "신께 알리기": a box with a slot on a stone pedestal, a beam of light falling on it from above
   const ix = H.x0 + 3.4 + 2.9 * 3.5, iz = hcz;
   const inq = new THREE.Group(); inq.position.set(ix, 0, iz); scene.add(inq);
-  const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.75, 0.9, 10), M(0xc9bca4)); ped.position.y = 0.45; inq.add(ped);
+  const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.75, 0.9, 16), M(0xc9bca4)); ped.position.y = 0.45; inq.add(ped);
   const ballot = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.6, 0.9), M(0x7a4d2c)); ballot.position.y = 1.2; inq.add(ballot);
   const lid = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.08, 0.98), goldM); lid.position.y = 1.54; inq.add(lid);
   const islot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.06), B(0x110c08)); islot.position.y = 1.585; inq.add(islot);
@@ -276,7 +276,7 @@ export function buildHall(scene, glassTex) {
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.3, HALL_H, 16, 1, true),
     new THREE.MeshBasicMaterial({ color: 0xfff1c0, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
   beam.position.y = HALL_H / 2; inq.add(beam);
-  const skylight = new THREE.Mesh(new THREE.CircleGeometry(0.75, 16), B(0xfff6d8)); skylight.rotation.x = Math.PI / 2; skylight.position.y = HALL_H - 0.01; inq.add(skylight);
+  const skylight = new THREE.Mesh(new THREE.CircleGeometry(0.75, 28), B(0xfff6d8)); skylight.rotation.x = Math.PI / 2; skylight.position.y = HALL_H - 0.01; inq.add(skylight);
   const letter = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.2), new THREE.MeshBasicMaterial({ color: 0xfffbef, side: THREE.DoubleSide, transparent: true }));
   letter.visible = false; inq.add(letter);
   let letterT = -1;

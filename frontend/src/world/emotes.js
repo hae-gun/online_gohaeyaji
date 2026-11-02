@@ -66,7 +66,6 @@ function zzzSprite() {
   c.strokeText('z', 30, 18); c.fillText('z', 30, 18);
   c.strokeText('z', 46, 10); c.fillText('z', 46, 10);
   const tex = new THREE.CanvasTexture(cv);
-  tex.magFilter = THREE.NearestFilter;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
   sp.scale.set(0.5, 0.25, 1);
   sp.visible = false;

@@ -3,6 +3,7 @@ import {
   FACE_SIZE, PALETTE, PALETTE_NAMES, EMPTY_FACE, STARTER_FACE, PICKED_CHARS, MAX_PICKED, DEFAULT_PICKED,
   paintFace, normalizeFace, storedFace, splitFace, joinFace,
 } from '../net/faces.js';
+import { smoothFace } from '../world/pixel-face.js';
 
 /**
  * "얼굴 그리기": a 32x32 dot grid over a blank skin-coloured head. Click or drag to place dots,
@@ -20,6 +21,9 @@ export function createFaceEditor({ getFace, apply }) {
   const grid = $('#faceGrid');
   const ctx = grid.getContext('2d');
   const preview = $('#facePreview').getContext('2d');
+  // the preview shows the face painted round, as it looks in the game
+  const smallGrid = document.createElement('canvas'); smallGrid.width = smallGrid.height = FACE_SIZE;
+  const smallRound = document.createElement('canvas'); smallRound.width = smallRound.height = 256;
   const errorEl = $('#faceError');
   const galleryEl = $('#faceGallery');
   const CELL = grid.width / FACE_SIZE;
@@ -142,7 +146,10 @@ export function createFaceEditor({ getFace, apply }) {
     const pv = preview.canvas;
     preview.fillStyle = '#1d1823'; preview.fillRect(0, 0, pv.width, pv.height);
     preview.fillStyle = SKIN; preview.beginPath(); preview.arc(pv.width / 2, pv.height / 2, pv.width / 2 - 1, 0, Math.PI * 2); preview.fill();
-    paintFace(preview, face, pv.width / FACE_SIZE);
+    smallGrid.getContext('2d').clearRect(0, 0, FACE_SIZE, FACE_SIZE);
+    paintFace(smallGrid.getContext('2d'), face, 1);
+    smoothFace(smallGrid, smallRound);
+    preview.drawImage(smallRound, 0, 0, pv.width, pv.height);
   }
 
   function cellAt(e) {

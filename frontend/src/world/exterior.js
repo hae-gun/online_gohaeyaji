@@ -87,7 +87,7 @@ export function buildExterior(scene, { glassTex, colliders }) {
     const n = 7;
     for (let i = 0; i < n; i++) {
       const k = i / (n - 1);
-      const s = add(new THREE.Mesh(new THREE.SphereGeometry(r0 * (1 - k * 0.45), 7, 5), stoneM));
+      const s = add(new THREE.Mesh(new THREE.SphereGeometry(r0 * (1 - k * 0.45), 20, 14), stoneM));
       s.scale.y = 1.35;
       s.position.set(x, 0.35 + k * (height - 0.5), z);
     }
@@ -95,7 +95,7 @@ export function buildExterior(scene, { glassTex, colliders }) {
   }
   // portal arch: half torus, stretched up into a pointed shape
   function arch(x, y, r, z) {
-    const a = add(new THREE.Mesh(new THREE.TorusGeometry(r, 0.2, 5, 12, Math.PI), darkStoneM));
+    const a = add(new THREE.Mesh(new THREE.TorusGeometry(r, 0.2, 10, 28, Math.PI), darkStoneM));
     a.position.set(x, y, z);
     a.scale.y = 1.5;
   }
@@ -104,22 +104,22 @@ export function buildExterior(scene, { glassTex, colliders }) {
   meltingColumn(-2.05, FZ + 0.72, 4.4, 0.38);
   meltingColumn(2.05, FZ + 0.72, 4.4, 0.38);
   arch(0, 4.3, 2.05, FZ + 0.62);
-  const tymp = add(new THREE.Mesh(new THREE.CircleGeometry(1.55, 14, 0, Math.PI), M(0x5a3d26)));
+  const tymp = add(new THREE.Mesh(new THREE.CircleGeometry(1.55, 28, 0, Math.PI), M(0x5a3d26)));
   tymp.position.set(0, 4.3, FZ + 0.51);
   gable(0, 12.4, 7, 10, FZ);
   // the green cypress on top of the central gable, with white doves on it
   const cypressM = M(0x3f7a4a, { shininess: 20 });
   [[0, 22.6, 1.3, 2.6], [0, 24.4, 1.0, 2.2], [0, 25.9, 0.7, 1.8]].forEach(([x, y, r, h]) => {
-    const c = add(new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), cypressM)); c.position.set(x, y, FZ);
+    const c = add(new THREE.Mesh(new THREE.ConeGeometry(r, h, 16), cypressM)); c.position.set(x, y, FZ);
   });
   [[-0.7, 23.2, 0.6], [0.8, 23.9, 0.5], [-0.4, 25.2, 0.4], [0.35, 26.2, 0.35]].forEach(([x, y, z]) => {
-    const d = add(new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 4), B(0xf4f1ea))); d.scale.set(1, 0.8, 1.4); d.position.set(x, y, FZ + z);
+    const d = add(new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 14), B(0xf4f1ea))); d.scale.set(1, 0.8, 1.4); d.position.set(x, y, FZ + z);
   });
   // rose window over the door, a smaller one up in the gable
-  const rose = add(new THREE.Mesh(new THREE.CircleGeometry(1.7, 18), new THREE.MeshBasicMaterial({ map: glassTex })));
+  const rose = add(new THREE.Mesh(new THREE.CircleGeometry(1.7, 28), new THREE.MeshBasicMaterial({ map: glassTex })));
   rose.position.set(0, 9.6, FZ + 0.52);
-  const roseRim = add(new THREE.Mesh(new THREE.TorusGeometry(1.75, 0.16, 5, 18), darkStoneM)); roseRim.position.set(0, 9.6, FZ + 0.53);
-  const rose2 = add(new THREE.Mesh(new THREE.CircleGeometry(0.85, 14), new THREE.MeshBasicMaterial({ map: glassTex })));
+  const roseRim = add(new THREE.Mesh(new THREE.TorusGeometry(1.75, 0.16, 10, 28), darkStoneM)); roseRim.position.set(0, 9.6, FZ + 0.53);
+  const rose2 = add(new THREE.Mesh(new THREE.CircleGeometry(0.85, 28), new THREE.MeshBasicMaterial({ map: glassTex })));
   rose2.position.set(0, 16.4, FZ + 0.32);
 
   // side portals (closed, decorative)
@@ -153,7 +153,7 @@ export function buildExterior(scene, { glassTex, colliders }) {
       // fat at the bottom, slim at the top, rounded like a cob
       pts.push(new THREE.Vector2(Math.max(0.02, r * (1 - Math.pow(k, 1.8))), base + k * (top - base)));
     }
-    const t = add(new THREE.Mesh(new THREE.LatheGeometry(pts.reverse(), 10), stoneM), true);
+    const t = add(new THREE.Mesh(new THREE.LatheGeometry(pts.reverse(), 20), stoneM), true);
     t.position.set(x, 0, z);
     const radiusAt = (y) => r * (1 - Math.pow((y - base) / (top - base), 1.8));
     for (let y = base + 3, a = 0; y < top - 3; y += 0.55, a += 0.95) {
@@ -163,11 +163,11 @@ export function buildExterior(scene, { glassTex, colliders }) {
         new THREE.Quaternion().setFromEuler(new THREE.Euler(0, a, 0)),
         new THREE.Vector3(1, 1, 1)));
     }
-    const tip = add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 0), mosaicM)); tip.position.set(x, top + 0.3, z);
-    const crown = add(new THREE.Mesh(new THREE.ConeGeometry(0.32, 1.1, 6), mosaicM)); crown.position.set(x, top + 1.1, z);
+    const tip = add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 2), mosaicM)); tip.position.set(x, top + 0.3, z);
+    const crown = add(new THREE.Mesh(new THREE.ConeGeometry(0.32, 1.1, 16), mosaicM)); crown.position.set(x, top + 1.1, z);
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2;
-      const ball = add(new THREE.Mesh(new THREE.SphereGeometry(0.13, 5, 4), B(0xf4f1ea)));
+      const ball = add(new THREE.Mesh(new THREE.SphereGeometry(0.13, 20, 14), B(0xf4f1ea)));
       ball.position.set(x + Math.sin(a) * 0.55, top + 0.75, z + Math.cos(a) * 0.55);
     }
   }
@@ -198,7 +198,7 @@ export function buildExterior(scene, { glassTex, colliders }) {
   const dl = new THREE.Mesh(new THREE.BoxGeometry(1.5, 4, 0.12), mainDoorM); dl.position.set(0.75, 2, 0); leafL.add(dl);
   const dr = new THREE.Mesh(new THREE.BoxGeometry(1.5, 4, 0.12), mainDoorM); dr.position.set(-0.75, 2, 0); leafR.add(dr);
   for (const [leaf, x] of [[leafL, 1.3], [leafR, -1.3]]) {
-    const k = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 5), goldM); k.position.set(x, 1.9, 0.12); leaf.add(k);
+    const k = new THREE.Mesh(new THREE.SphereGeometry(0.08, 20, 14), goldM); k.position.set(x, 1.9, 0.12); leaf.add(k);
   }
 
   /* ---------------------------------------------------------------- ground and plaza */
@@ -294,16 +294,16 @@ export function buildExterior(scene, { glassTex, colliders }) {
   const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   // plane tree: short trunk, lumpy round crown
   function planeTree(x, z, size = 1, collide = true) {
-    const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * size, 0.24 * size, 2 * size, 6), trunkM); tr.position.set(x, size, z); scene.add(tr);
+    const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * size, 0.24 * size, 2 * size, 16), trunkM); tr.position.set(x, size, z); scene.add(tr);
     const cm = crownMs[Math.floor(rnd() * crownMs.length)];
-    const c = new THREE.Mesh(new THREE.IcosahedronGeometry(1.5 * size, 0), cm); c.position.set(x, 2.9 * size, z); c.rotation.y = rnd() * 3; scene.add(c);
-    const c2 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05 * size, 0), cm); c2.position.set(x + 0.6 * size, 3.6 * size, z - 0.3 * size); scene.add(c2);
+    const c = new THREE.Mesh(new THREE.IcosahedronGeometry(1.5 * size, 2), cm); c.position.set(x, 2.9 * size, z); c.rotation.y = rnd() * 3; scene.add(c);
+    const c2 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05 * size, 2), cm); c2.position.set(x + 0.6 * size, 3.6 * size, z - 0.3 * size); scene.add(c2);
     if (collide) obstacles.push({ x, z, r: 0.5 });
   }
   // cypress: tall, dark and slim, very Mediterranean
   function cypress(x, z, h = 6, collide = true) {
-    const c = new THREE.Mesh(new THREE.ConeGeometry(0.75, h, 7), M(0x24452c)); c.position.set(x, h / 2, z); scene.add(c);
-    const c2 = new THREE.Mesh(new THREE.ConeGeometry(0.6, h * 0.55, 7), M(0x2a5233)); c2.position.set(x, h * 0.62, z); scene.add(c2);
+    const c = new THREE.Mesh(new THREE.ConeGeometry(0.75, h, 16), M(0x24452c)); c.position.set(x, h / 2, z); scene.add(c);
+    const c2 = new THREE.Mesh(new THREE.ConeGeometry(0.6, h * 0.55, 16), M(0x2a5233)); c2.position.set(x, h * 0.62, z); scene.add(c2);
     if (collide) obstacles.push({ x, z, r: 0.6 });
   }
   for (const s of [-1, 1]) {
@@ -318,8 +318,8 @@ export function buildExterior(scene, { glassTex, colliders }) {
   const lampHeadM = new THREE.MeshBasicMaterial({ color: 0xffd98a });
   const poleM = M(0x222026);
   function lamp(x, z, collide = true) {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 2.8, 6), poleM); pole.position.set(x, 1.4, z); furniture.add(pole);
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.2, 6), poleM); cap.position.set(x, 3.25, z); furniture.add(cap);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 2.8, 16), poleM); pole.position.set(x, 1.4, z); furniture.add(pole);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.2, 16), poleM); cap.position.set(x, 3.25, z); furniture.add(cap);
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.38, 0.3), lampHeadM); head.position.set(x, 2.98, z); furniture.add(head);
     if (collide) obstacles.push({ x, z, r: 0.3 });
   }
@@ -355,7 +355,7 @@ export function buildExterior(scene, { glassTex, colliders }) {
       const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
       flat(TRAIL_HALF * 2, len, (ax + bx) / 2, (az + bz) / 2, Math.atan2(dx, dz), gravelTex, 0.003);
       if (i > 0) {
-        const joint = new THREE.Mesh(new THREE.CircleGeometry(TRAIL_HALF, 16), new THREE.MeshPhongMaterial({ map: gravelTex, shininess: 4 }));
+        const joint = new THREE.Mesh(new THREE.CircleGeometry(TRAIL_HALF, 28), new THREE.MeshPhongMaterial({ map: gravelTex, shininess: 4 }));
         joint.rotation.x = -Math.PI / 2; joint.position.set(ax, 0.0035, az); scene.add(joint);
       }
       if (ti === 2) continue;   // the straight path already has its lamps and benches
@@ -403,11 +403,11 @@ function buildWood(scene, rnd) {
     list.forEach((t, i) => { place(t, v, sc); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.a); im.setMatrixAt(i, m4.compose(v, q, sc)); });
     scene.add(im);
   };
-  inst(new THREE.CylinderGeometry(0.16, 0.24, 2, 6), M(0x5a3d26), plane, (t, p, s) => { p.set(t.x, t.s, t.z); s.setScalar(t.s); });
-  inst(new THREE.IcosahedronGeometry(1.5, 0), M(0x3f7240), plane, (t, p, s) => { p.set(t.x, 2.9 * t.s, t.z); s.setScalar(t.s); });
-  inst(new THREE.IcosahedronGeometry(1.05, 0), M(0x335f36), plane, (t, p, s) => { p.set(t.x + 0.6 * t.s, 3.6 * t.s, t.z - 0.3 * t.s); s.setScalar(t.s); });
-  inst(new THREE.ConeGeometry(0.75, 6, 7), M(0x24452c), cyp, (t, p, s) => { p.set(t.x, 3 * t.s, t.z); s.setScalar(t.s); });
-  inst(new THREE.ConeGeometry(0.6, 3.3, 7), M(0x2a5233), cyp, (t, p, s) => { p.set(t.x, 3.7 * t.s, t.z); s.setScalar(t.s); });
+  inst(new THREE.CylinderGeometry(0.16, 0.24, 2, 16), M(0x5a3d26), plane, (t, p, s) => { p.set(t.x, t.s, t.z); s.setScalar(t.s); });
+  inst(new THREE.IcosahedronGeometry(1.5, 2), M(0x3f7240), plane, (t, p, s) => { p.set(t.x, 2.9 * t.s, t.z); s.setScalar(t.s); });
+  inst(new THREE.IcosahedronGeometry(1.05, 2), M(0x335f36), plane, (t, p, s) => { p.set(t.x + 0.6 * t.s, 3.6 * t.s, t.z - 0.3 * t.s); s.setScalar(t.s); });
+  inst(new THREE.ConeGeometry(0.75, 6, 16), M(0x24452c), cyp, (t, p, s) => { p.set(t.x, 3 * t.s, t.z); s.setScalar(t.s); });
+  inst(new THREE.ConeGeometry(0.6, 3.3, 16), M(0x2a5233), cyp, (t, p, s) => { p.set(t.x, 3.7 * t.s, t.z); s.setScalar(t.s); });
 }
 
 /**
@@ -478,11 +478,11 @@ function buildEventField(ground, scene, obstacles, groundMeshes, bench) {
   const east = poles.filter((p) => p[0] === E.x1 - 1 && p[1] > E.z0 + 1.6).sort((a, b) => a[1] - b[1]);
   ordered.push(...west, ...front, ...east);
   const postM = M(0x2a2228);
-  const bulbGeo = new THREE.SphereGeometry(0.09, 6, 4);
+  const bulbGeo = new THREE.SphereGeometry(0.09, 20, 14);
   const bulbs = [];
   const colours = [0xffd98a, 0xff8a8a, 0x9ad0ff, 0xb6f0a0];
   for (const [x, z] of ordered) {
-    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 4.2, 6), postM); p.position.set(x, 2.1, z); scene.add(p);
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 4.2, 16), postM); p.position.set(x, 2.1, z); scene.add(p);
     obstacles.push({ x, z, r: 0.3 });
   }
   for (let i = 0; i < ordered.length - 1; i++) {
@@ -537,12 +537,12 @@ function buildFountain(scene, stoneM, darkStoneM) {
   const g = new THREE.Group(); g.position.set(X, 0, Z); scene.add(g);
 
   const basin = new THREE.Mesh(new THREE.CylinderGeometry(3.15, 3.3, 0.65, 28), stoneM); basin.position.y = 0.325; g.add(basin);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(3.05, 0.17, 6, 28), darkStoneM); rim.rotation.x = -Math.PI / 2; rim.position.y = 0.66; g.add(rim);
-  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.55, 1.6, 10), stoneM); pedestal.position.y = 1.4; g.add(pedestal);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(3.05, 0.17, 10, 28), darkStoneM); rim.rotation.x = -Math.PI / 2; rim.position.y = 0.66; g.add(rim);
+  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.55, 1.6, 16), stoneM); pedestal.position.y = 1.4; g.add(pedestal);
   const bowl = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 0.45, 0.42, 16), stoneM); bowl.position.y = 2.26; g.add(bowl);
-  const bowlRim = new THREE.Mesh(new THREE.TorusGeometry(1.27, 0.08, 5, 16), darkStoneM); bowlRim.rotation.x = -Math.PI / 2; bowlRim.position.y = 2.5; g.add(bowlRim);
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.18, 0.6, 8), stoneM); stem.position.y = 2.75; g.add(stem);
-  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), darkStoneM); knob.position.y = 3.1; g.add(knob);
+  const bowlRim = new THREE.Mesh(new THREE.TorusGeometry(1.27, 0.08, 10, 28), darkStoneM); bowlRim.rotation.x = -Math.PI / 2; bowlRim.position.y = 2.5; g.add(bowlRim);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.18, 0.6, 16), stoneM); stem.position.y = 2.75; g.add(stem);
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.17, 20, 14), darkStoneM); knob.position.y = 3.1; g.add(knob);
 
   // water surfaces: a rippling texture that drifts
   const waterTex = canvasTex(128, 128, (c) => {
@@ -553,7 +553,7 @@ function buildFountain(scene, stoneM, darkStoneM) {
   waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping;
   const waterM = new THREE.MeshPhongMaterial({ map: waterTex, color: 0x9cc8ee, emissive: 0x16385a, shininess: 120, specular: 0xffffff, transparent: true, opacity: 0.92 });
   const water = new THREE.Mesh(new THREE.CircleGeometry(2.95, 28), waterM); water.rotation.x = -Math.PI / 2; water.position.y = 0.67; g.add(water);
-  const upper = new THREE.Mesh(new THREE.CircleGeometry(1.18, 16), waterM); upper.rotation.x = -Math.PI / 2; upper.position.y = 2.49; g.add(upper);
+  const upper = new THREE.Mesh(new THREE.CircleGeometry(1.18, 28), waterM); upper.rotation.x = -Math.PI / 2; upper.position.y = 2.49; g.add(upper);
 
   // rings spreading on the basin
   const rings = [];

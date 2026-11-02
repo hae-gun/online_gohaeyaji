@@ -26,18 +26,18 @@ const fold = (u) => u.wings.forEach((w) => { w.rotation.set(0, w.userData.side *
 function makePigeon() {
   const g = new THREE.Group();
   const grey = M(0x8f95a3), dark = M(0x5b6170), neck = M(0x5f8a7a, { shininess: 80 });
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.13, 7, 5), grey);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.13, 20, 14), grey);
   body.scale.set(0.85, 0.8, 1.35); body.position.y = 0.15; g.add(body);
   const tail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.025, 0.14), dark);
   tail.position.set(0, 0.17, -0.2); tail.rotation.x = -0.25; g.add(tail);
   // head on a pivot so it can bob back and forth
   const head = new THREE.Group(); head.position.set(0, 0.24, 0.12); g.add(head);
-  const nk = new THREE.Mesh(new THREE.SphereGeometry(0.065, 6, 4), neck); nk.position.set(0, -0.02, 0); head.add(nk);
-  const hd = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 4), grey); hd.position.set(0, 0.04, 0.03); head.add(hd);
-  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.05, 4), M(0xe0b35a));
+  const nk = new THREE.Mesh(new THREE.SphereGeometry(0.065, 20, 14), neck); nk.position.set(0, -0.02, 0); head.add(nk);
+  const hd = new THREE.Mesh(new THREE.SphereGeometry(0.055, 20, 14), grey); hd.position.set(0, 0.04, 0.03); head.add(hd);
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.05, 16), M(0xe0b35a));
   beak.rotation.x = Math.PI / 2; beak.position.set(0, 0.035, 0.1); head.add(beak);
   for (const s of [-1, 1]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.012, 4, 3), M(0xe2582c)); eye.position.set(s * 0.04, 0.055, 0.06); head.add(eye);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.012, 20, 14), M(0xe2582c)); eye.position.set(s * 0.04, 0.055, 0.06); head.add(eye);
   }
   const wings = [];
   for (const s of [-1, 1]) {
@@ -48,7 +48,7 @@ function makePigeon() {
     wings.push(pivot);
   }
   for (const s of [-1, 1]) {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.07, 3), M(0xd0605a)); leg.position.set(s * 0.04, 0.035, 0.02); g.add(leg);
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.07, 16), M(0xd0605a)); leg.position.set(s * 0.04, 0.035, 0.02); g.add(leg);
   }
   g.userData = { head, wings, body };
   return g;
@@ -72,7 +72,7 @@ export function createPigeons(scene, where) {
 
   // the seeds: one patch at a time, a few dozen grains on the ground that fade as they are eaten
   let seeds = null;   // { x, z, until }
-  const grainGeo = new THREE.SphereGeometry(0.018, 4, 3);
+  const grainGeo = new THREE.SphereGeometry(0.018, 20, 14);
   const grainMat = new THREE.MeshPhongMaterial({ color: 0xd9b56a, transparent: true });
   const GRAINS = 40;
   const grains = new THREE.InstancedMesh(grainGeo, grainMat, GRAINS);
