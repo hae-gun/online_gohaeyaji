@@ -125,12 +125,12 @@ function makePriest(o) {
   const skin = M(look.skin);
   const [top, bottom, h] = look.robe;
 
-  // bell-shaped cassock with a rounded hem and soft shoulders (LatheGeometry wants top to bottom
-  // for outward-facing sides, hence the reverse below)
+  // bell-shaped cassock with a rounded hem and soft shoulders. Lathe profiles here go bottom to
+  // top, which makes the surface face outward; reversed, it is hollow and you see through it
   const profile = [[0.001, 0], [bottom * 0.9, 0], [bottom, h * 0.04], [bottom * 0.97, h * 0.2], [bottom * 0.8, h * 0.5],
     [top * 1.12, h * 0.82], [top * 1.04, h * 0.95], [top * 0.75, h * 1.0], [0.001, h]]
     .map(([r, y]) => new THREE.Vector2(r, y));
-  g.add(new THREE.Mesh(new THREE.LatheGeometry([...profile].reverse(), ROUND), M(ROBE)));
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(profile, ROUND), M(ROBE)));
   const side = profile.slice(1, -1);
   const radiusAt = (y) => {
     for (let i = 0; i < side.length - 1; i++) {
@@ -205,7 +205,7 @@ function makePriest(o) {
     const bm = M(look.beard);
     const chin = new THREE.Mesh(ball(0.25), bm); chin.scale.set(1, 0.6, 0.55); chin.position.set(0, -headR * 0.68, front - 0.14); head.add(chin);
     const pts = [[0.001, -0.62], [0.08, -0.56], [0.16, -0.4], [0.21, -0.18], [0.2, 0], [0.001, 0.02]].map(([r, y]) => new THREE.Vector2(r, y));
-    const tip = new THREE.Mesh(new THREE.LatheGeometry([...pts].reverse(), ROUND), bm); tip.scale.z = 0.6; tip.position.set(0.02, -headR * 0.72, front - 0.14); head.add(tip);
+    const tip = new THREE.Mesh(new THREE.LatheGeometry(pts, ROUND), bm); tip.scale.z = 0.6; tip.position.set(0.02, -headR * 0.72, front - 0.14); head.add(tip);
   }
   if (look.steam) {
     // he is always slightly steaming
@@ -249,7 +249,7 @@ function makeKid(o) {
   // round bean body: wider at the bottom, rounded at both ends
   const bodyPts = [[0.001, 0.29], [0.24, 0.31], [0.33, 0.4], [0.34, 0.56], [0.28, 0.74], [0.16, 0.8], [0.001, 0.81]]
     .map(([r, y]) => new THREE.Vector2(r, y));
-  g.add(new THREE.Mesh(new THREE.LatheGeometry([...bodyPts].reverse(), ROUND), M(o.shirt)));
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(bodyPts, ROUND), M(o.shirt)));
   const arms = mittens(g, o.shirt, skin, 0.3, 0.74, 0.3);
 
   const r = 0.42;
