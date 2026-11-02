@@ -463,7 +463,7 @@ function buildEventField(ground, scene, obstacles, groundMeshes, bench) {
     if (sub) { g.font = '40px sans-serif'; g.fillStyle = '#d4ad55'; g.fillText(sub, 512, 190); }
     bannerTex.needsUpdate = true;
   }
-  setBanner('이벤트 광장', '수능, 연말 같은 날에 이곳에서 행사가 열립니다');
+  setBanner('이벤트 광장', '행사가 있는 날 이곳에서 함께 모입니다');
 
   // string lights between poles around the field
   const poles = [];
@@ -506,7 +506,7 @@ function buildEventField(ground, scene, obstacles, groundMeshes, bench) {
     g.strokeStyle = '#8a6a3a'; g.lineWidth = 8; g.strokeRect(4, 4, 392, 212);
     g.fillStyle = '#3a2414'; g.textAlign = 'center';
     g.font = 'bold 44px sans-serif'; g.fillText('이벤트 광장', 200, 70);
-    g.font = '24px sans-serif'; g.fillText('수능 응원, 연말 카운트다운', 200, 125); g.fillText('여러 행사가 열릴 곳입니다', 200, 165);
+    g.font = '24px sans-serif'; g.fillText('행사가 있는 날', 200, 125); g.fillText('이곳에서 함께 모입니다', 200, 165);
   });
   for (const s of [-1, 1]) {
     const x = cx + s * 9, z = E.z0 + 3;
