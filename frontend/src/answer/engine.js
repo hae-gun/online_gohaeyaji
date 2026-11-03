@@ -133,16 +133,16 @@ export function createAnswerEngine({ answers, safety, blocked }, random = Math.r
 
   /** keys are "match" or "match|display": match '숏츠' but say '쇼츠'. Most hits wins, ties go to the earlier entry. */
   function bestMatch(text, entries) {
-    let best = null, bestHits = 0, keyword = '';
+    let best = null, bestHits = 0, keyword = '', keyIndex = -1;
     for (const c of entries) {
-      let hits = 0, first = '';
-      for (const key of c.keys) {
+      let hits = 0, first = '', firstAt = -1;
+      c.keys.forEach((key, i) => {
         const [match, display] = key.split('|');
-        if (text.includes(match)) { hits++; if (!first) first = display || match; }
-      }
-      if (hits > bestHits) { bestHits = hits; best = c; keyword = first; }
+        if (text.includes(match)) { hits++; if (!first) { first = display || match; firstAt = i; } }
+      });
+      if (hits > bestHits) { bestHits = hits; best = c; keyword = first; keyIndex = firstAt; }
     }
-    return { best, keyword };
+    return { best, keyword, keyIndex };
   }
 
   /**
@@ -151,7 +151,8 @@ export function createAnswerEngine({ answers, safety, blocked }, random = Math.r
    * @param {string} [personaId] which priest is in this booth ('jin' | 'eom' | 'yu')
    * caution: true when a risky word was seen; the answer is then the plain generic one.
    * @returns {{kind:'safety'|'blocked'|'tooShort'|'chat'|'answer', line:string, persona:string, type?:string, caution?:boolean,
-   *   category?:string, keyword?:string, penance?:string, penanceAt?:number, closingAt?:number}}
+   *   category?:string, keyword?:string, penance?:string, penanceAt?:number, closingAt?:number,
+   *   ref?:{c:string, p:string, pi:number, ki:number}}}
    *   penanceAt/closingAt are character offsets in line, for timing the priest's face.
    */
   function answer(input, personaId) {
@@ -165,7 +166,7 @@ export function createAnswerEngine({ answers, safety, blocked }, random = Math.r
 
     // a hint of something serious: no joke category, only gentle small talk, else the plain answer
     const careful = cautious(text);
-    const { best, keyword } = careful ? { best: null, keyword: '' } : bestMatch(text, categories);
+    const { best, keyword, keyIndex } = careful ? { best: null, keyword: '', keyIndex: -1 } : bestMatch(text, categories);
     if (!best) {
       // not a confession: talk back like a person instead of handing out a random penance
       const chat = bestMatch(text, careful ? chatter.filter((c) => cautionChat.has(c.id)) : chatter).best;
@@ -184,11 +185,15 @@ export function createAnswerEngine({ answers, safety, blocked }, random = Math.r
     if (!k && empathy.includes('{k')) {
       empathy = empathies.find((t) => !t.includes('{k')) || listFor(generic.empathy, p.id)[0];
     }
-    const penance = fillKeyword(pick(section('penance')), k);
+    const penances = section('penance');
+    const pi = Math.floor(random() * penances.length);
+    const penance = fillKeyword(penances[pi], k);
     const head = `${fillKeyword(empathy, k)} ${p.lead} `;
     const line = `${head}${penance} ${pick(section('closing'))}`;
     return {
       kind: 'answer', line, category: c.id, keyword: k, penance, persona: p.id, ...(careful ? { caution: true } : {}),
+      // where the penance came from, so a shared card can rebuild it from the same data (card/)
+      ref: { c: c.id, p: p.id, pi, ki: keyword ? keyIndex : -1 },
       penanceAt: head.length - p.lead.length - 1, closingAt: head.length + penance.length,
     };
   }
@@ -197,5 +202,22 @@ export function createAnswerEngine({ answers, safety, blocked }, random = Math.r
   const regulars = personas.filter((p) => !p.chance);
   const personaForBooth = (boothIndex) => regulars[boothIndex % regulars.length];
 
-  return { answer, personas, personaForBooth };
+  /**
+   * The penance a shared card points at (ref from answer()), rebuilt from the data, or null when
+   * the data no longer has it. Only dictionary words ever come out, never text from the link.
+   */
+  function penanceOf(ref) {
+    if (!ref) return null;
+    const c = categories.find((x) => x.id === ref.c) || (generic && generic.id === ref.c ? generic : null);
+    const p = personas.find((x) => x.id === ref.p);
+    if (!c || !p) return null;
+    const list = (p.lines && p.lines.penance) || listFor(c.penance, p.id);
+    const t = list[ref.pi | 0];
+    if (typeof t !== 'string' || !t) return null;
+    const key = ref.ki >= 0 && c.keys ? c.keys[ref.ki | 0] : null;
+    const k = key ? (key.split('|')[1] || key.split('|')[0]) : (c.word || '');
+    return { penance: fillKeyword(t, k), keyword: k, persona: p, category: c };
+  }
+
+  return { answer, personas, personaForBooth, penanceOf };
 }
