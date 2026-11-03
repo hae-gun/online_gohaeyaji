@@ -1,5 +1,8 @@
+import { createMusicBox } from './music-box.js';
+
 /**
- * Synthesized ambience (bells and birds) with Web Audio, so there are no sound files yet.
+ * Synthesized ambience (bells and birds, and a music box in the nave) with Web Audio, so there
+ * are no sound files yet.
  * Browsers only allow audio after a user gesture, so start() is called from the entry button.
  *
  * Volume follows where the player is: yard is loudest, inside the cathedral a little quieter,
@@ -9,6 +12,7 @@ const LEVEL = { yard: 0.6, hall: 0.4, room: 0.05 };
 
 export function createAmbient() {
   let ac = null, master = null, muted = false, place = 'yard';
+  let box = null, music = false;   // the nave's music box (music-box.js)
 
   function apply() {
     if (!master) return;
@@ -57,7 +61,10 @@ export function createAmbient() {
       const loopBirds = () => { birds(); setTimeout(loopBirds, 2500 + Math.random() * 4500); };
       setTimeout(loopBell, 600);
       setTimeout(loopBirds, 1500);
+      try { box = createMusicBox(ac); box.setMuted(muted); box.setOn(music); } catch (_) { box = null; }
     },
+    /** The music box plays while true (in the nave) and fades out when false. */
+    setMusic(on) { music = on; if (box) box.setOn(on); },
     /**
      * Rings the bell n times, straight to the speakers so it is heard even inside the quiet
      * booth. Used when the legendary priest appears.
@@ -96,6 +103,6 @@ export function createAmbient() {
     },
     /** @param {'yard'|'hall'|'room'} p */
     setPlace(p) { place = p; apply(); },
-    setMuted(m) { muted = m; apply(); },
+    setMuted(m) { muted = m; apply(); if (box) box.setMuted(m); },
   };
 }

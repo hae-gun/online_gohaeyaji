@@ -601,6 +601,7 @@ function enterRoom() {
   state = 'room';
   myEmote.stop();   // nobody sees me inside; the gesture ends at the door
   ambient.setPlace('room');
+  ambient.setMusic(false);
   $('#hallUi').hidden = true;
   $('#roomUi').hidden = false;
   // drawn on entry, not tied to the door: 1/3 each, or a rare priest's own chance (pick-persona.js)
@@ -937,6 +938,8 @@ function updatePlayer(dt) {
 }
 
 function updateSurroundings(dt) {
+  // the music box plays in the nave only (not in the confession hall, not inside a booth)
+  ambient.setMusic(state === 'hall' && place === 'nave');
   // main doors open for whoever is near
   const near = Math.hypot(player.position.x, player.position.z - FACADE_Z) < 4.5 ? 1 : 0;
   outside.leafL.rotation.y += (near * 1.35 - outside.leafL.rotation.y) * Math.min(1, dt * 5);
