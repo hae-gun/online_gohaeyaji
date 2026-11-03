@@ -129,16 +129,16 @@ export function buildHall(scene, glassTex) {
     }
   }
 
-  // pews: two blocks, facing the altar; three seats each
-  for (let r = 0; r < 9; r++) {
-    const zr = 6.6 - r * 1.7;
+  // pews: two blocks of ten rows facing the altar, five seats each: 100 seats, one channel full
+  for (let r = 0; r < 10; r++) {
+    const zr = 6.6 - r * 1.55;
     for (const s of [-1, 1]) {
       const xa = s * 1.3, xb = s * 6.6, cx = (xa + xb) / 2, len = Math.abs(xb - xa);
       box(len, 0.08, 0.45, woodM, cx, 0.45, zr + 0.02);
       box(len, 0.5, 0.07, woodM, cx, 0.78, zr + 0.28);
       for (const e of [xa, xb]) box(0.08, 0.95, 0.6, darkWoodM, e, 0.47, zr + 0.05);
       obstacles.push({ box: true, x0: Math.min(xa, xb) - 0.05, x1: Math.max(xa, xb) + 0.05, z0: zr + 0.08, z1: zr + 0.34 });
-      for (const k of [0.17, 0.5, 0.83]) {
+      for (const k of [0.1, 0.3, 0.5, 0.7, 0.9]) {
         const x = xa + (xb - xa) * k;
         seats.push({ seat: new THREE.Vector3(x, 0, zr - 0.02), rot: Math.PI, front: new THREE.Vector3(x, 0, zr - 0.7) });
       }
