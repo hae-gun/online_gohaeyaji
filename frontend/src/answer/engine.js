@@ -2,7 +2,8 @@ import { fillKeyword } from './korean.js';
 
 /**
  * Prototype of the server-side answer engine. Same three steps the backend will run:
- *  1. safety filter: crisis words turn the joke off and show where to get help
+ *  1. safety filter: a crisis (self-harm, sexual violence, abuse, bullying, eating, pregnancy,
+ *     addiction, harming others) turns the joke off and shows that type's own help message
  *  2. category match: keyword dictionary (the backend swaps this for morphological analysis)
  *  3. template assembly: empathy + penance + closing line, keyword and particles filled in
  *
@@ -17,15 +18,16 @@ import { fillKeyword } from './korean.js';
  *
  * Data files (public/data). Real files are git-ignored, *.sample.json ship with the repo:
  *   answers.json  answer templates        (fallback: answers.sample.json)
- *   safety.json   crisis keywords         (fallback: safety.sample.json)
+ *   safety.json   crisis types and rules  (fallback: safety.sample.json)
  *   blocked.json  profanity, abuse        (fallback: blocked.sample.json)
  */
 
 // Minimal crisis net that stays on even if every data file fails to load.
-// The full list lives in safety.json, outside the repo.
+// The full rules live in safety.json, outside the repo.
 const BUILTIN_SAFETY = {
-  keywords: ['죽고 싶', '자살', '자해'],
-  message: '이 이야기는 농담으로 답할 수 없습니다. 지금 많이 힘드시다면 혼자 견디지 마시고 자살예방상담전화 109에 연락해 주세요. 24시간 누군가 듣고 있습니다. 청소년이라면 청소년상담 1388도 있습니다.',
+  id: 'selfharm',
+  message: '이 말만큼은 농담으로 받을 수 없습니다. 혹시 지금 정말 힘드시다면 혼자 견디지 마시고 자살예방상담전화 109에 전화해 주세요. 24시간 누군가 듣고 있습니다. 청소년이라면 청소년상담 1388도 있습니다.',
+  rules: [{ any: ['죽고싶', '자해', '살기싫'] }, { any: ['자살'], unless: ['자살골'] }],
 };
 // used when the data file has no persona list (e.g. answers.sample.json)
 const DEFAULT_PERSONAS = [
@@ -56,11 +58,49 @@ async function firstJson(urls) {
 }
 
 /** Lowercased, spaces and common filler symbols removed, so "씨 발" or "ㅅ.ㅂ" still match. */
-const squash = (s) => s.toLowerCase().replace(/[\s.,_\-*~!?^@#]+/g, '');
+const squash = (s) => s.toLowerCase().replace(/[\s.,_\-*~!?^@#'"()\[\]…]+/g, '');
+
+/**
+ * Crisis types from safety.json. v2: { types: [{ id, message, rules: [{ any, all, re, unless }] }] },
+ * checked top to bottom, first match wins. A rule matches when every condition it has holds:
+ *   any    one of these words appears
+ *   all    one word from each group appears ("dad" + "hit me", but not "I hit my alarm")
+ *   re     one of these regexes matches the text (spaces collapsed to one)
+ *   unless none of these words appears ("마약김밥" is food, "모기를 죽였" is not a threat)
+ * Words are compared with spaces and symbols removed, so "자 살" is still caught.
+ * v1 files ({ keywords, message }) become a single type.
+ */
+function compileSafety(safety) {
+  const words = (l) => (l || []).map(squash).filter(Boolean);
+  const raw = safety && Array.isArray(safety.types) ? safety.types
+    : safety && Array.isArray(safety.keywords) ? [{ id: 'general', message: safety.message, rules: [{ any: safety.keywords }] }]
+    : [];
+  const types = [...raw, BUILTIN_SAFETY].map((t) => ({
+    id: t.id,
+    message: t.message || BUILTIN_SAFETY.message,
+    rules: (t.rules || []).map((r) => ({
+      any: words(r.any),
+      all: (r.all || []).map(words).filter((g) => g.length),
+      re: (r.re || []).map((x) => new RegExp(x)),
+      unless: words(r.unless),
+    })),
+  }));
+  const ruleHits = (r, flat, spaced) => {
+    if (!r.any.length && !r.all.length && !r.re.length) return false;
+    if (r.any.length && !r.any.some((w) => flat.includes(w))) return false;
+    if (r.all.length && !r.all.every((g) => g.some((w) => flat.includes(w)))) return false;
+    if (r.re.length && !r.re.some((x) => x.test(spaced))) return false;
+    return !r.unless.some((w) => flat.includes(w));
+  };
+  /** @returns the first crisis type the text falls under, or null */
+  return (text) => {
+    const flat = squash(text), spaced = text.replace(/\s+/g, ' ');
+    return types.find((t) => t.rules.some((r) => ruleHits(r, flat, spaced))) || null;
+  };
+}
 
 export function createAnswerEngine({ answers, safety, blocked }, random = Math.random) {
-  const safetyWords = [...new Set([...BUILTIN_SAFETY.keywords, ...((safety && safety.keywords) || [])])];
-  const safetyMessage = (safety && safety.message) || BUILTIN_SAFETY.message;
+  const crisisOf = compileSafety(safety);
   const blockedWords = ((blocked && blocked.words) || []).map(squash).filter(Boolean);
   const blockedMessage = (blocked && blocked.message) || DEFAULT_BLOCKED_MESSAGE;
   const categories = answers.categories || [];
@@ -94,14 +134,15 @@ export function createAnswerEngine({ answers, safety, blocked }, random = Math.r
    * Order matters: a crisis message wins even when it contains profanity.
    * @param {string} input
    * @param {string} [personaId] which priest is in this booth ('jin' | 'eom' | 'yu')
-   * @returns {{kind:'safety'|'blocked'|'tooShort'|'chat'|'answer', line:string, persona:string,
+   * @returns {{kind:'safety'|'blocked'|'tooShort'|'chat'|'answer', line:string, persona:string, type?:string,
    *   category?:string, keyword?:string, penance?:string, penanceAt?:number, closingAt?:number}}
    *   penanceAt/closingAt are character offsets in line, for timing the priest's face.
    */
   function answer(input, personaId) {
     const p = personaOf(personaId);
     const text = input.trim();
-    if (safetyWords.some((w) => text.includes(w))) return { kind: 'safety', line: safetyMessage, persona: p.id };
+    const crisis = crisisOf(text);
+    if (crisis) return { kind: 'safety', type: crisis.id, line: crisis.message, persona: p.id };
     const flat = squash(text);
     if (blockedWords.some((w) => flat.includes(w))) return { kind: 'blocked', line: blockedMessage, persona: p.id };
     if (text.length < 3) return { kind: 'tooShort', line: p.tooShort || answers.messages.tooShort, persona: p.id };
