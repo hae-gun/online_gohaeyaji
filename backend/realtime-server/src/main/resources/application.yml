@@ -25,8 +25,8 @@ management:
 gohaeyaji:
   protocol-version: 1
   booth-count: 21           # 7 on each of three walls (left, front, right)
-  channel-capacity: 60
-  channel-soft-limit: 48          # 80% of capacity; new sessions go to the next channel beyond this
+  channel-capacity: 100
+  channel-soft-limit: 80          # 80% of capacity; new sessions go to the next channel beyond this
   channel-empty-remove-ms: 300000 # a channel other than 1 that stays empty this long is closed (number reused)
   channel-switch-min-gap-ms: 3000 # one channel switch per 3 s per person
   heartbeat-ms: 10000

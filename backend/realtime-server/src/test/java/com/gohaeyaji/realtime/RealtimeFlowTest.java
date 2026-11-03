@@ -188,7 +188,7 @@ class RealtimeFlowTest {
     void newChannelOpensAtEightyPercent() throws Exception {
         List<TestClient> clients = new ArrayList<>();
         try {
-            for (int i = 0; i < 48; i++) {
+            for (int i = 0; i < 80; i++) {   // channel-soft-limit
                 TestClient c = TestClient.connect(port);
                 assertThat(c.hello().path("channelNo").asInt()).isEqualTo(1);
                 clients.add(c);
@@ -220,7 +220,7 @@ class RealtimeFlowTest {
             a.send("{\"type\":\"channels\",\"reqId\":\"l1\"}");
             JsonNode list = a.await("channelList");
             assertThat(list.path("current").asInt()).isEqualTo(1);
-            assertThat(list.path("capacity").asInt()).isEqualTo(60);
+            assertThat(list.path("capacity").asInt()).isEqualTo(100);
             assertThat(list.path("channels").toString()).contains("\"no\":2");
 
             a.send("{\"type\":\"switchChannel\",\"reqId\":\"s0\",\"channelNo\":9}");
@@ -251,7 +251,7 @@ class RealtimeFlowTest {
         redisTemplate.opsForZSet().add("gy:channels", "1", 1);
         redisTemplate.opsForZSet().add("gy:channels", "2", 2);
         redisTemplate.opsForZSet().add("gy:servers", "srv-other", System.currentTimeMillis() + 60_000);
-        redisTemplate.opsForHash().put("gy:ch:2:members", "srv-other", "60");
+        redisTemplate.opsForHash().put("gy:ch:2:members", "srv-other", "100");
         try (TestClient a = TestClient.connect(port)) {
             a.hello();
             a.send("{\"type\":\"switchChannel\",\"reqId\":\"s1\",\"channelNo\":2}");
@@ -748,9 +748,9 @@ class RealtimeFlowTest {
 
     @Test
     void countsOfADeadServerDoNotFillChannels() throws Exception {
-        // a server that crashed with 48 people in channel 1 and never came back
+        // a server that crashed with 80 people in channel 1 and never came back
         redisTemplate.opsForZSet().add("gy:channels", "1", 1);
-        redisTemplate.opsForHash().put("gy:ch:1:members", "srv-dead", "48");
+        redisTemplate.opsForHash().put("gy:ch:1:members", "srv-dead", "80");
         redisTemplate.opsForZSet().add("gy:servers", "srv-dead", System.currentTimeMillis() - 60_000);
         try (TestClient c = TestClient.connect(port)) {
             assertThat(c.hello().path("channelNo").asInt()).isEqualTo(1);   // not pushed to channel 2

@@ -60,7 +60,8 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
 
     private static final Logger log = LoggerFactory.getLogger(RealtimeWebSocketHandler.class);
     private static final int SEND_TIME_LIMIT_MS = 5_000;
-    private static final int SEND_BUFFER_LIMIT_BYTES = 64 * 1024;
+    // the welcome of a full channel lists 100 people, each possibly with a drawn face (~1.1 KB): ~110 KB
+    private static final int SEND_BUFFER_LIMIT_BYTES = 192 * 1024;
 
     private final RealtimeProperties props;
     private final SessionRegistry registry;

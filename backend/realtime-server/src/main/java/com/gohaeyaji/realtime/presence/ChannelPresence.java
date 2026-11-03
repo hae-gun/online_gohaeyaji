@@ -11,7 +11,7 @@ import java.util.Set;
  * Positions of the players of one channel connected to this server.
  *
  * Moves arrive from many socket threads; the broadcaster drains the changes every
- * presenceMs. Both sides go through this object's monitor, which is cheap at 60 players.
+ * presenceMs. Both sides go through this object's monitor, which is cheap at 100 players.
  */
 final class ChannelPresence {
 

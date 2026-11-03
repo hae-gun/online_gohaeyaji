@@ -42,7 +42,7 @@ src/main/java/com/gohaeyaji/realtime/
 └── maintenance/   SessionSweeper(하트비트 끊김, hello 없음, 무입력 안전망)
 
 src/main/resources/redis/   원자적으로 처리해야 하는 모든 상태 변경 (Lua)
-├── assign_channel.lua      앞 채널부터, 48명(80%) 넘으면 다음 채널 생성
+├── assign_channel.lua      앞 채널부터, 80명(80%) 넘으면 다음 채널 생성
 ├── leave_channel.lua       인원 감소 (0 미만 방지)
 ├── claim_booth.lua         SET NX + TTL, 성공 시 채널 seq 증가
 ├── renew_booth.lua         내 잠금일 때만 연장
@@ -62,7 +62,7 @@ src/main/resources/redis/   원자적으로 처리해야 하는 모든 상태 �
 
 ## 검증
 
-- Lua 스크립트: 실제 Redis에서 200명이 같은 방을 동시에 잡는 시도를 20회 반복해 매번 1명만 성공, 1000명 동시 접속 시 한 채널 최대 48명 확인
+- Lua 스크립트: 실제 Redis에서 200명이 같은 방을 동시에 잡는 시도를 20회 반복해 매번 1명만 성공, 1000명 동시 접속 시 한 채널 최대 48명 확인(당시 정원 60)
 - `RealtimeFlowTest`: 실제 WebSocket + Redis 컨테이너로 접속, 동시 입장 경합, 해제와 끊김 시 LED 꺼짐 전파, 80% 채널 분리, 버전 불일치 종료 확인
 
 ## 진행 상황

@@ -9,8 +9,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Batching: instead of forwarding every move to everyone at once
- * (60 players x 5 moves/s x 59 receivers = 17,700 messages/s per channel),
- * send one message per channel per tick with everyone who moved (300 messages/s).
+ * (100 players x 5 moves/s x 99 receivers = 49,500 messages/s per channel),
+ * send one message per channel per tick with everyone who moved (500 messages/s).
  */
 @Component
 public class PresenceBroadcaster {
