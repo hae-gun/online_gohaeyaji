@@ -20,10 +20,10 @@ export const OUTDOOR = [
   { area: 'yard', x0: -12.8, x1: 12.8, z0: 11.5, z1: 49 },        // fountain plaza and the path south
   { area: 'around', x0: -18, x1: -12.8, z0: 11.6, z1: 16.5 },     // front corner, west
   { area: 'around', x0: 12.8, x1: 42.5, z0: 11.6, z1: 16.5 },     // along the confession hall's front
-  { area: 'around', x0: -18, x1: -10.8, z0: -27, z1: 16.5 },      // west side of the nave
-  { area: 'around', x0: -18, x1: 42.5, z0: -27, z1: -20.3 },      // behind the nave
-  { area: 'around', x0: 9.8, x1: 42.5, z0: -27, z1: -17.2 },      // behind the confession hall
-  { area: 'around', x0: 38.3, x1: 42.5, z0: -27, z1: 16.5 },      // east end of the hall
+  { area: 'around', x0: -18, x1: -10.8, z0: -33, z1: 16.5 },      // west side of the nave
+  { area: 'around', x0: -18, x1: 42.5, z0: -33, z1: -26.3 },      // behind the nave
+  { area: 'around', x0: 9.8, x1: 42.5, z0: -33, z1: -17.2 },      // behind the confession hall
+  { area: 'around', x0: 38.3, x1: 42.5, z0: -33, z1: 16.5 },      // east end of the hall
   { area: 'event', x0: -36, x1: 36, z0: 62, z1: 108 },            // the big event field
 ];
 

@@ -346,7 +346,7 @@ export function buildExterior(scene, { glassTex, colliders }) {
     flat(r.x1 - r.x0, r.z1 - r.z0, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, 0, gravelTex);
   }
   // lamps along the ring
-  for (const [x, z] of [[-17.4, 4], [-17.4, -10], [-10, -26.4], [6, -26.4], [22, -26.4], [42, -10], [42, 4], [26, 16]]) lamp(x, z);
+  for (const [x, z] of [[-17.4, 4], [-17.4, -10], [-17.4, -24], [-10, -32.4], [6, -32.4], [22, -32.4], [42, -24], [42, -10], [42, 4], [26, 16]]) lamp(x, z);
 
   /* ---------------------------------------------------------------- trails through the wood */
   TRAILS.forEach((t, ti) => {
@@ -392,7 +392,7 @@ function buildWood(scene, rnd) {
   const plane = [], cyp = [];
   for (let tries = 0; tries < 2400 && plane.length + cyp.length < 230; tries++) {
     const x = -55 + rnd() * 115, z = -45 + rnd() * 170;
-    if (x > -12 && x < 40 && z > -19 && z < 12) continue;    // the buildings
+    if (x > -12 && x < 40 && z > -26 && z < 12) continue;    // the buildings
     if (!awayFromPaths(x, z, 2.2)) continue;
     if ([...plane, ...cyp].some((t) => Math.hypot(t.x - x, t.z - z) < 3.2)) continue;
     (rnd() < 0.4 ? cyp : plane).push({ x, z, s: 0.85 + rnd() * 0.6, a: rnd() * 6 });

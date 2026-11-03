@@ -16,7 +16,8 @@ import { CONFESSION_HALL } from './booths.js';
  * Returns floors for tap-to-walk, colliders for the camera, obstacles and seats for walking
  * and sitting, the places people can use (candles, fonts, offering box, inquiry box) and update().
  */
-export const NAVE = { x0: -8.5, x1: 8.5, z0: -18.5, z1: 10.2, rail: -11.3 };
+// 34.7 m long: twelve rows of pews (120 seats, a full channel of 100 sits comfortably) before the rail
+export const NAVE = { x0: -8.5, x1: 8.5, z0: -24.5, z1: 10.2, rail: -17.3 };
 export const SIDE_DOOR = { x: 8.8, z0: 3.6, z1: 6.6 };
 const NAVE_H = 9;
 const HALL_H = 6.5;
@@ -56,7 +57,7 @@ export function buildHall(scene, glassTex) {
     g.fillStyle = '#c7b796'; g.fillRect(66, 2, 60, 60); g.fillRect(2, 66, 60, 60);
   });
   tileTex.wrapS = tileTex.wrapT = THREE.RepeatWrapping;
-  tileTex.repeat.set(8.5, 14.5);
+  tileTex.repeat.set((N.x1 - N.x0) / 2, (N.z1 - N.z0) / 2);
   tileTex.magFilter = THREE.NearestFilter;
   const naveFloor = new THREE.Mesh(new THREE.PlaneGeometry(N.x1 - N.x0, N.z1 - N.z0), new THREE.MeshPhongMaterial({ map: tileTex, shininess: 30 }));
   naveFloor.rotation.x = -Math.PI / 2;
@@ -101,21 +102,22 @@ export function buildHall(scene, glassTex) {
   backPlate.rotation.y = Math.PI / 2; backPlate.position.set(D.x + 0.32, 4.1, (D.z0 + D.z1) / 2); scene.add(backPlate);
 
   // tall coloured windows: blue on the left, warm on the right, as in Barcelona
-  for (const z of [5, -1.5, -7.5]) {
+  for (const z of [5, -1.5, -8, -14.5]) {
     const w = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 4.6), new THREE.MeshBasicMaterial({ map: glassTex, color: 0x9ab8ff }));
     w.rotation.y = Math.PI / 2; w.position.set(N.x0 + 0.01, 4.8, z); scene.add(w);
   }
-  for (const z of [-1.5, -7.5]) {
+  for (const z of [-1.5, -8, -14.5]) {
     const w = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 4.6), new THREE.MeshBasicMaterial({ map: glassTex, color: 0xffc58a }));
     w.rotation.y = -Math.PI / 2; w.position.set(D.x - 0.31, 4.8, z); scene.add(w);
   }
   const blueL = new THREE.PointLight(0x6f9bff, 0.7, 16); blueL.position.set(-6, 6, 0); scene.add(blueL);
   const warmL = new THREE.PointLight(0xffa860, 0.7, 16); warmL.position.set(6, 6, -3); scene.add(warmL);
+  const midL = new THREE.PointLight(0xfff0d8, 0.6, 16); midL.position.set(0, 6.5, -12); scene.add(midL);
 
   // tree columns: a trunk that branches near the ceiling
   const columnM = M(0xd8cdb8, { shininess: 10 });
   for (const s of [-1, 1]) {
-    for (const z of [8, 1.6, -4.6, -10.4]) {
+    for (const z of [8, 2.4, -3.2, -8.8, -14.4]) {
       const x = s * 7.6;
       const trunk = add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 6.2, 16), columnM)); trunk.position.set(x, 3.1, z);
       const knot = add(new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 14), columnM)); knot.position.set(x, 6.2, z); knot.scale.y = 0.7;
@@ -129,16 +131,18 @@ export function buildHall(scene, glassTex) {
     }
   }
 
-  // pews: two blocks of ten rows facing the altar, five seats each: 100 seats, one channel full
-  for (let r = 0; r < 10; r++) {
-    const zr = 6.6 - r * 1.55;
+  // pews: two blocks of twelve rows facing the altar, five seats each: 120 seats, so a full
+  // channel of 100 still finds places side by side
+  for (let r = 0; r < 12; r++) {
+    const zr = 6.6 - r * 1.8;
     for (const s of [-1, 1]) {
       const xa = s * 1.3, xb = s * 6.6, cx = (xa + xb) / 2, len = Math.abs(xb - xa);
       box(len, 0.08, 0.45, woodM, cx, 0.45, zr + 0.02);
       box(len, 0.5, 0.07, woodM, cx, 0.78, zr + 0.28);
       for (const e of [xa, xb]) box(0.08, 0.95, 0.6, darkWoodM, e, 0.47, zr + 0.05);
       obstacles.push({ box: true, x0: Math.min(xa, xb) - 0.05, x1: Math.max(xa, xb) + 0.05, z0: zr + 0.08, z1: zr + 0.34 });
-      for (const k of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+      for (let i = 0; i < 5; i++) {
+        const k = (i + 0.5) / 5;
         const x = xa + (xb - xa) * k;
         seats.push({ seat: new THREE.Vector3(x, 0, zr - 0.02), rot: Math.PI, front: new THREE.Vector3(x, 0, zr - 0.7) });
       }
@@ -150,19 +154,20 @@ export function buildHall(scene, glassTex) {
   for (let x = -7.8; x <= 7.81; x += 0.6) box(0.07, 0.8, 0.07, goldM, x, 0.4, N.rail);
   box(15.7, 0.08, 0.16, darkWoodM, 0, 0.84, N.rail);
   obstacles.push({ box: true, x0: N.x0, x1: N.x1, z0: N.z0, z1: N.rail + 0.3 });
-  box(3.2, 1.05, 1.2, M(0xe9e2d0), 0, 0.3 + 0.52, -14.6);
-  box(3.3, 0.06, 1.25, M(0xf7f2e6), 0, 0.3 + 1.07, -14.6);
-  box(3.32, 0.35, 0.02, M(0xb02a24), 0, 0.3 + 0.9, -13.97);
+  const AZ = N.rail - 3.3;   // the altar, 3.3 m behind the rail
+  box(3.2, 1.05, 1.2, M(0xe9e2d0), 0, 0.3 + 0.52, AZ);
+  box(3.3, 0.06, 1.25, M(0xf7f2e6), 0, 0.3 + 1.07, AZ);
+  box(3.32, 0.35, 0.02, M(0xb02a24), 0, 0.3 + 0.9, AZ + 0.63);
   const altarFlames = [];
   for (const x of [-1.2, 1.2]) {
-    box(0.1, 0.5, 0.1, M(0xfaf6ea), x, 1.65, -14.6);
-    const f = new THREE.Sprite(flameMaterial()); f.scale.set(0.16, 0.26, 1); f.position.set(x, 2.0, -14.6); scene.add(f);
+    box(0.1, 0.5, 0.1, M(0xfaf6ea), x, 1.65, AZ);
+    const f = new THREE.Sprite(flameMaterial()); f.scale.set(0.16, 0.26, 1); f.position.set(x, 2.0, AZ); scene.add(f);
     altarFlames.push(f);
   }
   // the cross on the back wall, under a hanging hexagonal canopy with little bulbs
   box(0.3, 3.6, 0.2, goldM, 0, 4.8, N.z0 + 0.15);
   box(2.0, 0.3, 0.2, goldM, 0, 5.8, N.z0 + 0.15);
-  const canopy = new THREE.Group(); canopy.position.set(0, 7.0, -14.6); scene.add(canopy);
+  const canopy = new THREE.Group(); canopy.position.set(0, 7.0, AZ); scene.add(canopy);
   const can = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 2.1, 0.5, 16, 1, true), M(0xe8dcc0, { side: THREE.DoubleSide })); canopy.add(can);
   const canTop = new THREE.Mesh(new THREE.ConeGeometry(1.7, 0.6, 16), M(0xd4ad55)); canTop.position.y = 0.55; canopy.add(canTop);
   const bulbM = B(0xffe6a0);
@@ -173,7 +178,7 @@ export function buildHall(scene, glassTex) {
   for (const a of [0.5, 2.6, 4.7]) {
     const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.6, 16), B(0x221a14)); cord.position.set(Math.cos(a) * 1.4, 1.1, Math.sin(a) * 1.4); canopy.add(cord);
   }
-  const altarL = new THREE.PointLight(0xffd59a, 0.9, 14); altarL.position.set(0, 5, -13); scene.add(altarL);
+  const altarL = new THREE.PointLight(0xffd59a, 0.9, 14); altarL.position.set(0, 5, AZ + 1.6); scene.add(altarL);
   const rose = new THREE.Mesh(new THREE.CircleGeometry(1.4, 28), new THREE.MeshBasicMaterial({ map: glassTex }));
   rose.position.set(0, 7.6, N.z0 + 0.02); scene.add(rose);
 
@@ -191,7 +196,8 @@ export function buildHall(scene, glassTex) {
   }
 
   // votive candles: a rack of 18 in three steps, at the left in front of the rail
-  const rack = new THREE.Group(); rack.position.set(-5.4, 0, -10.2); scene.add(rack);
+  const RZ = N.rail + 1.1;   // candles and offering box stand just in front of the rail
+  const rack = new THREE.Group(); rack.position.set(-5.4, 0, RZ); scene.add(rack);
   const rackM = M(0x2a2228);
   for (let row = 0; row < 3; row++) {
     const step = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.08, 0.32), rackM);
@@ -211,13 +217,13 @@ export function buildHall(scene, glassTex) {
   }
   // a few already burning
   [2, 7, 11].forEach((i) => { candles[i].until = Infinity; candles[i].flame.visible = true; });
-  const candleL = new THREE.PointLight(0xffb060, 0.3, 7); candleL.position.set(-5.4, 1.8, -9.4); scene.add(candleL);
+  const candleL = new THREE.PointLight(0xffb060, 0.3, 7); candleL.position.set(-5.4, 1.8, RZ + 0.8); scene.add(candleL);
   const icon = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.4), new THREE.MeshBasicMaterial({ map: glassTex, color: 0xffe2b0 }));
-  icon.rotation.y = Math.PI / 2; icon.position.set(N.x0 + 0.02, 2.6, -10.2); scene.add(icon);
-  obstacles.push({ box: true, x0: -6.8, x1: -4.0, z0: -10.75, z1: -9.65 });
+  icon.rotation.y = Math.PI / 2; icon.position.set(N.x0 + 0.02, 2.6, RZ); scene.add(icon);
+  obstacles.push({ box: true, x0: -6.8, x1: -4.0, z0: RZ - 0.55, z1: RZ + 0.55 });
 
   // offering box on a stand, right of the candles
-  const offer = new THREE.Group(); offer.position.set(-3.2, 0, -10.0); scene.add(offer);
+  const offer = new THREE.Group(); offer.position.set(-3.2, 0, RZ + 0.2); scene.add(offer);
   const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 0.85, 16), darkWoodM); stand.position.y = 0.42; offer.add(stand);
   const chest = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.45, 0.42), woodM); chest.position.y = 1.07; offer.add(chest);
   const slot = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 0.05), B(0x110c08)); slot.position.y = 1.3; offer.add(slot);
@@ -226,7 +232,7 @@ export function buildHall(scene, glassTex) {
   const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.015, 16), M(0xe8c35a, { shininess: 120 }));
   coin.rotation.x = Math.PI / 2; coin.visible = false; offer.add(coin);
   let coinT = -1;
-  obstacles.push({ x: -3.2, z: -10.0, r: 0.4 });
+  obstacles.push({ x: -3.2, z: RZ + 0.2, r: 0.4 });
 
   /* ================================================================ confession hall */
   const H = CONFESSION_HALL;
@@ -351,9 +357,9 @@ export function buildHall(scene, glassTex) {
     obstacles,
     seats,
     places: {
-      candles: new THREE.Vector3(-5.4, 0, -9.0),
+      candles: new THREE.Vector3(-5.4, 0, N.rail + 2.3),
       fonts,
-      offering: new THREE.Vector3(-3.2, 0, -9.3),
+      offering: new THREE.Vector3(-3.2, 0, N.rail + 2.0),
       inquiry: new THREE.Vector3(ix, 0, iz),
     },
     /** Lights a free candle for three minutes. @returns false if all are burning */
