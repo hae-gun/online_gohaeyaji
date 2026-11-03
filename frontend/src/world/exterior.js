@@ -176,7 +176,7 @@ export function buildExterior(scene, { glassTex, colliders }) {
   tower(-7.6, FZ - 0.35, 9, 31, 1.15);
   tower(7.6, FZ - 0.35, 9, 31, 1.15);
   // the tallest spire, further back over the nave, with the gold cross
-  tower(0, 3, 9.5, 47, 2.4);   // starts above the nave ceiling
+  tower(0, 3, 13.5, 47, 2.4);   // starts above the nave ceiling (hall.js NAVE_H)
   const crossV = add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.6, 0.3), goldM)); crossV.position.set(0, 49.8, 3);
   const crossH = add(new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.3, 0.3), goldM)); crossH.position.set(0, 50.3, 3);
   const slitMesh = new THREE.InstancedMesh(slit, slitM, slits.length);
@@ -202,8 +202,8 @@ export function buildExterior(scene, { glassTex, colliders }) {
   }
 
   /* ---------------------------------------------------------------- ground and plaza */
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 240), M(0x3d5638, { shininess: 5 }));
-  ground.rotation.x = -Math.PI / 2; ground.position.set(5, -0.01, 40); scene.add(ground);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 280), M(0x3d5638, { shininess: 5 }));
+  ground.rotation.x = -Math.PI / 2; ground.position.set(5, -0.01, 30); scene.add(ground);
 
   const tileTex = canvasTex(64, 64, (g) => {
     g.fillStyle = '#6a5a49'; g.fillRect(0, 0, 64, 64);
@@ -346,7 +346,7 @@ export function buildExterior(scene, { glassTex, colliders }) {
     flat(r.x1 - r.x0, r.z1 - r.z0, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, 0, gravelTex);
   }
   // lamps along the ring
-  for (const [x, z] of [[-17.4, 4], [-17.4, -10], [-17.4, -24], [-10, -32.4], [6, -32.4], [22, -32.4], [42, -24], [42, -10], [42, 4], [26, 16]]) lamp(x, z);
+  for (const [x, z] of [[-24.4, 4], [-24.4, -12], [-24.4, -28], [-24.4, -44], [-24.4, -60], [-10, -66.4], [6, -66.4], [22, -66.4], [38, -66.4], [50.4, -50], [50.4, -34], [50.4, -18], [50.4, -4], [50.4, 10], [32, 16]]) lamp(x, z);
 
   /* ---------------------------------------------------------------- trails through the wood */
   TRAILS.forEach((t, ti) => {
@@ -390,9 +390,9 @@ export function buildExterior(scene, { glassTex, colliders }) {
  */
 function buildWood(scene, rnd) {
   const plane = [], cyp = [];
-  for (let tries = 0; tries < 2400 && plane.length + cyp.length < 230; tries++) {
-    const x = -55 + rnd() * 115, z = -45 + rnd() * 170;
-    if (x > -12 && x < 40 && z > -26 && z < 12) continue;    // the buildings
+  for (let tries = 0; tries < 3200 && plane.length + cyp.length < 280; tries++) {
+    const x = -60 + rnd() * 125, z = -80 + rnd() * 205;
+    if (x > -20 && x < 48 && z > -61 && z < 12) continue;    // the buildings
     if (!awayFromPaths(x, z, 2.2)) continue;
     if ([...plane, ...cyp].some((t) => Math.hypot(t.x - x, t.z - z) < 3.2)) continue;
     (rnd() < 0.4 ? cyp : plane).push({ x, z, s: 0.85 + rnd() * 0.6, a: rnd() * 6 });

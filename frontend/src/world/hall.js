@@ -16,10 +16,12 @@ import { CONFESSION_HALL } from './booths.js';
  * Returns floors for tap-to-walk, colliders for the camera, obstacles and seats for walking
  * and sitting, the places people can use (candles, fonts, offering box, inquiry box) and update().
  */
-// 34.7 m long: twelve rows of pews (120 seats, a full channel of 100 sits comfortably) before the rail
-export const NAVE = { x0: -8.5, x1: 8.5, z0: -24.5, z1: 10.2, rail: -17.3 };
-export const SIDE_DOOR = { x: 8.8, z0: 3.6, z1: 6.6 };
-const NAVE_H = 9;
+// a big nave: 34 m wide, 69 m long, 13 m high (about four times the first one), the facade in
+// the middle of its front, the confession hall through a side door on the right
+export const NAVE = { x0: -17, x1: 17, z0: -58.8, z1: 10.2, rail: -46 };
+export const SIDE_DOOR = { x: 17.3, z0: 3.6, z1: 6.6 };
+const NAVE_H = 13;
+const FACADE_HALF = 10;   // the facade (exterior.js) covers x -10..10 of the front
 const HALL_H = 6.5;
 
 export function buildHall(scene, glassTex) {
@@ -64,13 +66,19 @@ export function buildHall(scene, glassTex) {
   naveFloor.position.set(0, 0, (N.z0 + N.z1) / 2);
   scene.add(naveFloor);
   // red carpet down the middle
-  const carpet = new THREE.Mesh(new THREE.PlaneGeometry(1.8, N.z1 - N.rail - 0.4), M(0x8e2a24, { shininess: 4 }));
+  const carpet = new THREE.Mesh(new THREE.PlaneGeometry(3, N.z1 - N.rail - 0.4), M(0x8e2a24, { shininess: 4 }));
   carpet.rotation.x = -Math.PI / 2; carpet.position.set(0, 0.01, (N.z1 + N.rail) / 2); scene.add(carpet);
 
   // walls and ceiling (the facade closes the front)
   box(0.4, NAVE_H, N.z1 - N.z0 + 0.4, wallM, N.x0 - 0.2, NAVE_H / 2, (N.z0 + N.z1) / 2, true);
-  box(17.8, NAVE_H, 0.4, wallM, 0, NAVE_H / 2, N.z0 - 0.2, true);
-  box(17.8, 0.4, N.z1 - N.z0 + 0.4, M(0x2f2533), 0, NAVE_H + 0.2, (N.z0 + N.z1) / 2, true);
+  const NW = N.x1 - N.x0;
+  box(NW + 0.8, NAVE_H, 0.4, wallM, 0, NAVE_H / 2, N.z0 - 0.2, true);
+  box(NW + 0.8, 0.4, N.z1 - N.z0 + 0.4, M(0x2f2533), 0, NAVE_H + 0.2, (N.z0 + N.z1) / 2, true);
+  // the front beside the facade: the nave is wider than the facade
+  for (const s of [-1, 1]) {
+    const w = N.x1 - FACADE_HALF + 0.4;
+    box(w, NAVE_H, 0.4, wallM, s * (FACADE_HALF + w / 2 - 0.2), NAVE_H / 2, N.z1 + 0.2, true);
+  }
   // right wall, shared with the confession hall, open at the side door
   const D = SIDE_DOOR, wallZ1 = CONFESSION_HALL.z1 + 0.4;
   box(0.6, NAVE_H, D.z0 - N.z0, wallM, D.x, NAVE_H / 2, (N.z0 + D.z0) / 2, true);
@@ -82,7 +90,7 @@ export function buildHall(scene, glassTex) {
   }
 
   // the way to the booths: a sign right of the entrance, and plates over the side door
-  const way = new THREE.Group(); way.position.set(4.6, 0, 8.3); way.rotation.y = -0.25; scene.add(way);
+  const way = new THREE.Group(); way.position.set(6.5, 0, 8.3); way.rotation.y = -0.4; scene.add(way);
   const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.5, 0.1), darkWoodM); post.position.y = 0.75; way.add(post);
   const wayTex = canvasTex(320, 120, (g) => {
     g.fillStyle = '#efe4cc'; g.fillRect(0, 0, 320, 120);
@@ -95,64 +103,82 @@ export function buildHall(scene, glassTex) {
   const wayBoard = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.64, 0.06),
     [darkWoodM, darkWoodM, darkWoodM, darkWoodM, new THREE.MeshBasicMaterial({ map: wayTex }), darkWoodM]);
   wayBoard.position.y = 1.75; way.add(wayBoard);
-  obstacles.push({ x: 4.6, z: 8.3, r: 0.35 });
+  obstacles.push({ x: 6.5, z: 8.3, r: 0.35 });
   const overDoor = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.5), new THREE.MeshBasicMaterial({ map: sign('고해소 →', null, 240, 50) }));
   overDoor.rotation.y = -Math.PI / 2; overDoor.position.set(D.x - 0.32, 4.1, (D.z0 + D.z1) / 2); scene.add(overDoor);
   const backPlate = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.5), new THREE.MeshBasicMaterial({ map: sign('← 본당', null, 240, 50) }));
   backPlate.rotation.y = Math.PI / 2; backPlate.position.set(D.x + 0.32, 4.1, (D.z0 + D.z1) / 2); scene.add(backPlate);
 
-  // tall coloured windows: blue on the left, warm on the right, as in Barcelona
-  for (const z of [5, -1.5, -8, -14.5]) {
-    const w = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 4.6), new THREE.MeshBasicMaterial({ map: glassTex, color: 0x9ab8ff }));
-    w.rotation.y = Math.PI / 2; w.position.set(N.x0 + 0.01, 4.8, z); scene.add(w);
+  // things that never move here (windows, columns, pews) are merged into a few draw calls
+  const still = new THREE.Group();
+  scene.add(still);
+
+  // tall coloured windows between the columns: blue on the left, warm on the right, as in Barcelona
+  const BAY = 6.4;
+  const bays = [];
+  for (let z = 8; z > N.rail + 1; z -= BAY) bays.push(z);
+  const blueGlass = new THREE.MeshBasicMaterial({ map: glassTex, color: 0x9ab8ff });
+  const warmGlass = new THREE.MeshBasicMaterial({ map: glassTex, color: 0xffc58a });
+  for (const zc of bays.slice(0, -1)) {
+    const z = zc - BAY / 2;
+    const l = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 7.4), blueGlass);
+    l.rotation.y = Math.PI / 2; l.position.set(N.x0 + 0.01, 6.4, z); still.add(l);
+    if (z < D.z0 - 1.5 || z > D.z1 + 1.5) {
+      const r = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 7.4), warmGlass);
+      r.rotation.y = -Math.PI / 2; r.position.set(D.x - 0.31, 6.4, z); still.add(r);
+    }
   }
-  for (const z of [-1.5, -8, -14.5]) {
-    const w = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 4.6), new THREE.MeshBasicMaterial({ map: glassTex, color: 0xffc58a }));
-    w.rotation.y = -Math.PI / 2; w.position.set(D.x - 0.31, 4.8, z); scene.add(w);
-  }
-  const blueL = new THREE.PointLight(0x6f9bff, 0.7, 16); blueL.position.set(-6, 6, 0); scene.add(blueL);
-  const warmL = new THREE.PointLight(0xffa860, 0.7, 16); warmL.position.set(6, 6, -3); scene.add(warmL);
-  const midL = new THREE.PointLight(0xfff0d8, 0.6, 16); midL.position.set(0, 6.5, -12); scene.add(midL);
+  // light along the nave
+  [[-9, 0, 0x6f9bff], [9, -6, 0xffa860], [0, -18, 0xfff0d8], [-9, -30, 0x6f9bff], [9, -38, 0xffa860]].forEach(([x, z, c]) => {
+    const l = new THREE.PointLight(c, 0.7, 26); l.position.set(x, 9, z); scene.add(l);
+  });
 
   // tree columns: a trunk that branches near the ceiling
   const columnM = M(0xd8cdb8, { shininess: 10 });
+  const TRUNK = NAVE_H - 3.2;
   for (const s of [-1, 1]) {
-    for (const z of [8, 2.4, -3.2, -8.8, -14.4]) {
-      const x = s * 7.6;
-      const trunk = add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 6.2, 16), columnM)); trunk.position.set(x, 3.1, z);
-      const knot = add(new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 14), columnM)); knot.position.set(x, 6.2, z); knot.scale.y = 0.7;
+    for (const z of bays) {
+      const x = s * (N.x1 - 1.6);
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.46, TRUNK, 16), columnM); trunk.position.set(x, TRUNK / 2, z); still.add(trunk);
+      const knot = new THREE.Mesh(new THREE.SphereGeometry(0.56, 20, 14), columnM); knot.position.set(x, TRUNK, z); knot.scale.y = 0.7; still.add(knot);
       for (let k = 0; k < 4; k++) {
         const a = (k / 4) * Math.PI * 2 + 0.4;
-        const br = add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.16, 3.4, 16), columnM));
-        br.position.set(x + Math.cos(a) * 0.8, 7.6, z + Math.sin(a) * 0.8);
-        br.rotation.set(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5);
+        const br = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.2, 4.4, 16), columnM);
+        br.position.set(x + Math.cos(a) * 1.0, TRUNK + 1.8, z + Math.sin(a) * 1.0);
+        br.rotation.set(Math.sin(a) * 0.55, 0, -Math.cos(a) * 0.55);
+        still.add(br);
       }
-      obstacles.push({ x, z, r: 0.45 });
+      obstacles.push({ x, z, r: 0.6 });
     }
   }
 
-  // pews: two blocks of twelve rows facing the altar, five seats each: 120 seats, so a full
-  // channel of 100 still finds places side by side
-  for (let r = 0; r < 12; r++) {
-    const zr = 6.6 - r * 1.8;
+  // pews: two blocks facing the altar, eight seats each, as many rows as fit before the candles
+  for (let r = 0; ; r++) {
+    const zr = 6.6 - r * 1.9;
+    if (zr < N.rail + 13) break;
     for (const s of [-1, 1]) {
-      const xa = s * 1.3, xb = s * 6.6, cx = (xa + xb) / 2, len = Math.abs(xb - xa);
-      box(len, 0.08, 0.45, woodM, cx, 0.45, zr + 0.02);
-      box(len, 0.5, 0.07, woodM, cx, 0.78, zr + 0.28);
-      for (const e of [xa, xb]) box(0.08, 0.95, 0.6, darkWoodM, e, 0.47, zr + 0.05);
+      const xa = s * 2.2, xb = s * 11.4, cx = (xa + xb) / 2, len = Math.abs(xb - xa);
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(len, 0.08, 0.45), woodM); seat.position.set(cx, 0.45, zr + 0.02); still.add(seat);
+      const back = new THREE.Mesh(new THREE.BoxGeometry(len, 0.5, 0.07), woodM); back.position.set(cx, 0.78, zr + 0.28); still.add(back);
+      for (const e of [xa, xb]) {
+        const end = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.95, 0.6), darkWoodM); end.position.set(e, 0.47, zr + 0.05); still.add(end);
+      }
       obstacles.push({ box: true, x0: Math.min(xa, xb) - 0.05, x1: Math.max(xa, xb) + 0.05, z0: zr + 0.08, z1: zr + 0.34 });
-      for (let i = 0; i < 5; i++) {
-        const k = (i + 0.5) / 5;
+      for (let i = 0; i < 8; i++) {
+        const k = (i + 0.5) / 8;
         const x = xa + (xb - xa) * k;
         seats.push({ seat: new THREE.Vector3(x, 0, zr - 0.02), rot: Math.PI, front: new THREE.Vector3(x, 0, zr - 0.7) });
       }
     }
   }
+  mergeStatic(still);
 
   // sanctuary: raised floor behind a rail, altar, canopy and cross
-  box(17, 0.3, N.rail - N.z0, M(0xb9a27a, { shininess: 10 }), 0, 0.15, (N.rail + N.z0) / 2);
-  for (let x = -7.8; x <= 7.81; x += 0.6) box(0.07, 0.8, 0.07, goldM, x, 0.4, N.rail);
-  box(15.7, 0.08, 0.16, darkWoodM, 0, 0.84, N.rail);
+  box(NW, 0.3, N.rail - N.z0, M(0xb9a27a, { shininess: 10 }), 0, 0.15, (N.rail + N.z0) / 2);
+  const railPosts = new THREE.Group(); scene.add(railPosts);
+  for (let x = N.x0 + 0.7; x <= N.x1 - 0.69; x += 0.6) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.8, 0.07), goldM); p.position.set(x, 0.4, N.rail); railPosts.add(p); }
+  mergeStatic(railPosts);
+  box(NW - 1.3, 0.08, 0.16, darkWoodM, 0, 0.84, N.rail);
   obstacles.push({ box: true, x0: N.x0, x1: N.x1, z0: N.z0, z1: N.rail + 0.3 });
   const AZ = N.rail - 3.3;   // the altar, 3.3 m behind the rail
   box(3.2, 1.05, 1.2, M(0xe9e2d0), 0, 0.3 + 0.52, AZ);
@@ -165,9 +191,9 @@ export function buildHall(scene, glassTex) {
     altarFlames.push(f);
   }
   // the cross on the back wall, under a hanging hexagonal canopy with little bulbs
-  box(0.3, 3.6, 0.2, goldM, 0, 4.8, N.z0 + 0.15);
-  box(2.0, 0.3, 0.2, goldM, 0, 5.8, N.z0 + 0.15);
-  const canopy = new THREE.Group(); canopy.position.set(0, 7.0, AZ); scene.add(canopy);
+  box(0.4, 5.4, 0.25, goldM, 0, 5.6, N.z0 + 0.15);
+  box(3.0, 0.4, 0.25, goldM, 0, 7.1, N.z0 + 0.15);
+  const canopy = new THREE.Group(); canopy.position.set(0, 8.5, AZ); canopy.scale.setScalar(1.4); scene.add(canopy);
   const can = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 2.1, 0.5, 16, 1, true), M(0xe8dcc0, { side: THREE.DoubleSide })); canopy.add(can);
   const canTop = new THREE.Mesh(new THREE.ConeGeometry(1.7, 0.6, 16), M(0xd4ad55)); canTop.position.y = 0.55; canopy.add(canTop);
   const bulbM = B(0xffe6a0);
@@ -180,12 +206,12 @@ export function buildHall(scene, glassTex) {
   }
   const altarL = new THREE.PointLight(0xffd59a, 0.9, 14); altarL.position.set(0, 5, AZ + 1.6); scene.add(altarL);
   const rose = new THREE.Mesh(new THREE.CircleGeometry(1.4, 28), new THREE.MeshBasicMaterial({ map: glassTex }));
-  rose.position.set(0, 7.6, N.z0 + 0.02); scene.add(rose);
+  rose.position.set(0, 10.4, N.z0 + 0.02); rose.scale.setScalar(1.3); scene.add(rose);
 
   // holy water fonts by the door: a shell on a short pillar
   const fonts = [];
   for (const s of [-1, 1]) {
-    const x = s * 2.5, z = 9.0;
+    const x = s * 3.2, z = 9.0;
     box(0.3, 0.9, 0.3, M(0xbcae96), x, 0.45, z);
     const shell = add(new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 14, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), M(0xe9e2d6, { side: THREE.DoubleSide })));
     shell.position.set(x, 1.05, z);
@@ -306,6 +332,9 @@ export function buildHall(scene, glassTex) {
   const nx = D.x + 0.3, nz0 = N.z0 - 0.6, nz1 = N.z1 - 0.1;
   outside(nz1 - nz0, NT, -nx, NT / 2, (nz0 + nz1) / 2, -Math.PI / 2);         // nave, left side
   outside(2 * nx, NT, 0, NT / 2, nz0, Math.PI);                               // nave, back
+  for (const s of [-1, 1]) {                                                   // nave front beside the facade
+    outside(nx - FACADE_HALF, NT, s * (nx + FACADE_HALF) / 2, NT / 2, N.z1 + 0.45, 0);
+  }
   outside(nz1 - nz0, NT - HT, nx, (NT + HT) / 2, (nz0 + nz1) / 2, Math.PI / 2);   // nave, right side above the hall
   outside(hz0 - nz0, HT, nx, HT / 2, (nz0 + hz0) / 2, Math.PI / 2);          // nave, right side behind the hall
   // so the walls are not bare from the path round the cathedral: buttresses and tall arched
@@ -337,9 +366,10 @@ export function buildHall(scene, glassTex) {
       const g = new THREE.Mesh(archGeo, glassOut); g.position.set(wx + ox * 0.04, y, wz + oz * 0.04); g.rotation.y = ry; g.scale.setScalar(sc); deco.add(g);
     }
   };
-  dress(-nx, nz1 - 1.2, -nx, nz0 + 0.3, -1, 0, NT);              // nave, left side
-  dress(-nx + 0.3, nz0, nx - 0.3, nz0, 0, -1, NT, 5.5);          // nave, back
-  dress(nx, nz0 + 0.3, nx, hz0 - 0.3, 1, 0, NT);                 // nave, right side behind the hall
+  dress(-nx, nz1 - 1.2, -nx, nz0 + 0.3, -1, 0, NT, 6.4);         // nave, left side
+  for (const s of [-1, 1]) dress(s * (FACADE_HALF + 1), N.z1 + 0.45, s * (nx - 0.3), N.z1 + 0.45, 0, 1, NT, 3.4);   // front beside the facade
+  dress(-nx + 0.3, nz0, nx - 0.3, nz0, 0, -1, NT, 5.7);          // nave, back
+  dress(nx, nz0 + 0.3, nx, hz0 - 0.3, 1, 0, NT, 6.4);            // nave, right side behind the hall
   dress(hx0 + 0.5, hz0, hx1 - 0.3, hz0, 0, -1, HT);              // hall, back
   dress(hx1, hz0 + 0.3, hx1, hz1 - 0.3, 1, 0, HT);               // hall, far end
   dress(hx0 + 0.6, hz1, hx1 - 0.3, hz1, 0, 1, HT);               // hall, toward the yard

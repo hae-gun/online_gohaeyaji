@@ -8,7 +8,7 @@ export const BOOTH_COUNT = 21;
  * Coming in through the side door you face +x: seven booths on the left wall (z0), seven on the
  * front wall (x1) and seven on the right wall (z1).
  */
-export const CONFESSION_HALL = { x0: 9.1, x1: 36.6, z0: -15.4, z1: 10.1 };
+export const CONFESSION_HALL = { x0: 17.6, x1: 45.1, z0: -15.4, z1: 10.1 };   // right of the nave's side door
 const PER_WALL = 7;
 const STEP = 2.9;       // booth to booth along a wall
 const DEPTH = 2.2;      // booth body, wall to door
