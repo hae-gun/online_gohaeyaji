@@ -95,6 +95,8 @@ jobs:
       - run: npm run build
         env:
           VITE_REALTIME_URL: wss://api.gohaeyaji.com/ws
+          # the address printed on the 보속 카드 (src/ui/penance-card.js)
+          VITE_SITE_URL: gohaeyaji.com
 
       - uses: actions/upload-pages-artifact@v3
         with:

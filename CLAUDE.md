@@ -8,7 +8,7 @@
 
 - 영감: 산사(sansatemple.com, 온라인 절)가 2026년 10월 인스타그램에서 바이럴
 - 레포: https://github.com/hae-gun/online_gohaeyaji
-- 프론트 배포: https://hae-gun.github.io/online_gohaeyaji/ (GitHub Pages, GitHub Actions)
+- 프론트 배포: https://gohaeyaji.com (GitHub Pages 커스텀 도메인, GitHub Actions. 예전 주소 hae-gun.github.io/online_gohaeyaji 는 새 도메인으로 넘어감)
 - 로컬 경로: `~/project/gohaeyaji`
 
 ## 작업 규칙
@@ -73,7 +73,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 - 메시지: hello/welcome, ping/pong(10초), claim/claimResult, release/released, activity, booth(변경분, seq), snapshot, resync, error. 줄서기 메시지(queueJoin, queueCall 등)는 정의만 됨
 - 채널: 고해소 21칸(v0.8, 왼쪽 앞 오른쪽 벽에 7칸씩), 정원 60명, 48명(80%) 차면 다음 채널 생성, 앞 채널부터 채움, 남은 12자리는 재접속용
 - 타이머: 하트비트 끊김 30초, 방 임대 30초(ping마다 연장), 재접속 유예 15초, 무입력 90초(20초 남으면 노란색, 10초 남으면 빨간색 카운터, 성호경과 답변 대기 중 멈춤), 서버 안전망 100초, 줄 호출 예약 20초
-- 탭마다 별도 세션(한 세션 방 1개, 줄 1자리). IP당 연결 20개. 메시지 2KB. 허용 Origin: https://hae-gun.github.io, http://localhost:5173
+- 탭마다 별도 세션(한 세션 방 1개, 줄 1자리). IP당 연결 20개. 메시지 2KB. 허용 Origin: https://gohaeyaji.com, https://www.gohaeyaji.com, https://hae-gun.github.io(이전 기간), http://localhost:5173
 - 종료 코드: 4001 버전 불일치, 4002 하트비트, 4004 IP 초과, 4005 크기, 4006 남용, 4008 만석
 - 위치 동기화(v0.3): `move`(움직일 때만 초당 최대 5회, 서버는 150ms 미만 간격 버림), `presence`(서버가 200ms마다 채널 단위로 `[pid,x,z,ry]` 묶음 전송), `welcome.you.pid`, `welcome.players`, `booth.pid`. 식별은 세션 ID 대신 채널별 pid(Redis INCR), 색은 pid로 결정, 첫 move 전에는 안 보임, 위치는 서버 메모리만(서버 여러 대 확장은 6단계)
 - 이름(v0.4): `hello.name`(기억한 이름), `welcome.you.name`, `welcome.names`(`[pid, 이름]`), `presence.named`(들어오거나 바꾼 사람만), `rename`/`renameResult`(INVALID, BLOCKED, RESERVED, TOO_SOON). 서버 `NameService`, 세례명 목록 `saint-names.txt`, 금지어 파일은 `gohaeyaji.blocked-words-file`(기본 `../../frontend/public/data/blocked.json`, Docker는 `BLOCKED_WORDS_FILE`로 마운트)

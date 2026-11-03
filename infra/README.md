@@ -102,9 +102,31 @@ ssh -i ~/.ssh/<서버키> rocky@<APP_IP> gohae-deploy
 7. 프론트의 서버 주소를 `wss://api.도메인/ws`로 바꿔 배포
 
 **Spring에 반영할 것**
-- 허용 Origin: `https://hae-gun.github.io` (경로 없이). 커스텀 도메인으로 프론트를 옮기면 그 주소도 추가
+- 허용 Origin: `https://gohaeyaji.com`, `https://www.gohaeyaji.com`, 그리고 이전 기간 동안 `https://hae-gun.github.io` (경로 없이). `backend/docker-compose.yml`의 `ALLOWED_ORIGINS`
 - 클라이언트 IP: `X-Real-IP` 헤더로 읽기. 안 그러면 모든 유저가 Nginx IP 하나로 보여서 IP당 20개 제한에 전부 걸린다
 - 지표: `micrometer-registry-prometheus` 의존성 + `management.endpoints.web.exposure.include=health,prometheus`. 관리 포트를 따로 두면 `app/nginx/default.conf.template`의 `/actuator/prometheus` 프록시 대상도 바꿀 것
+
+## 3-1. 프론트 도메인 (gohaeyaji.com → GitHub Pages)
+
+프론트는 GitHub Pages 그대로 두고 도메인만 붙인다. 순서가 중요하다: **서버의 허용 Origin에 새 도메인이 먼저 들어가 있어야** 새 주소로 연 화면이 서버에 붙는다.
+
+1. 백엔드에 새 Origin 반영 (`backend/docker-compose.yml`의 `ALLOWED_ORIGINS`) 후 `gohae-deploy`
+2. Cloudflare DNS (프록시는 끄고 **DNS only**, 회색 구름. 켜 두면 GitHub이 인증서를 못 받는다)
+
+   | 종류 | 이름 | 값 |
+   |---|---|---|
+   | A | `@` | `185.199.108.153` |
+   | A | `@` | `185.199.109.153` |
+   | A | `@` | `185.199.110.153` |
+   | A | `@` | `185.199.111.153` |
+   | CNAME | `www` | `hae-gun.github.io` |
+
+   `api` A 레코드(app 서버)는 그대로 둔다.
+3. GitHub 저장소 Settings > Pages > Custom domain 에 `gohaeyaji.com` 저장. DNS 확인이 끝나면(몇 분에서 길면 한 시간) **Enforce HTTPS** 체크
+4. (권장) 계정 Settings > Pages 에서 `gohaeyaji.com` 도메인 소유 확인(TXT 레코드). 남이 같은 도메인을 자기 Pages에 붙이는 것을 막는다
+5. 프론트 push (보속 카드 주소 `VITE_SITE_URL=gohaeyaji.com`)
+6. 확인: `https://gohaeyaji.com` 접속, `https://hae-gun.github.io/online_gohaeyaji/`가 새 주소로 넘어가는지, 개발자 도구에서 `wss://api.gohaeyaji.com/ws`가 101인지
+7. 넘어가는 것을 확인하고 며칠 지나면 `ALLOWED_ORIGINS`에서 `https://hae-gun.github.io`를 뺀다
 
 ## 4. 모니터링 (ops 서버)
 

@@ -9,7 +9,7 @@ An online confessional for the promises you broke today.
 - 밤새 쇼츠를 봤다면: "오늘 밤은 휴대폰을 팔이 닿지 않는 곳에 두고 주무십시오."
 - 배달을 또 시켰다면: "배달비가 음식값을 넘는 순간, 그것은 식사가 아니라 기부입니다."
 
-**바로가기:** https://hae-gun.github.io/online_gohaeyaji/
+**바로가기:** https://gohaeyaji.com
 
 > 이 서비스는 실제 고해성사가 아닌 패러디입니다. 웃음의 대상은 언제나 고해하는 사람의 일상이며, 천주교의 성사와 신앙을 존중합니다.
 
