@@ -306,26 +306,73 @@ function makePriest(o) {
   return g;
 }
 
-/** White lace for the 미사보 (chapel veil): a white sheet with a pattern of small holes. */
+/**
+ * Lace for the 미사보 (chapel veil), as Korean parishioners wear it: a long, sheer lace mantilla.
+ * Thin net with many holes, so hair and clothes show through, flowers scattered over it, and a
+ * scalloped hem at the bottom of the texture (v = 0). Drawn once, shared by every 자매님.
+ */
 let laceTex = null;
 function lace() {
   if (laceTex) return laceTex;
+  const W = 256, H = 512;
   const c = document.createElement('canvas');
-  c.width = c.height = 64;
+  c.width = W; c.height = H;
   const g = c.getContext('2d');
-  g.fillStyle = '#fbf8f2'; g.fillRect(0, 0, 64, 64);
+  // a light net all over: the sheer part of the lace
+  g.fillStyle = 'rgba(255,255,255,0.55)'; g.fillRect(0, 0, W, H);
   g.globalCompositeOperation = 'destination-out';
-  // small flowers of holes, as in the lace of a 미사보
-  for (const [cx, cy] of [[16, 16], [48, 48]]) {
+  for (let y = 0; y < H; y += 8) for (let x = (y / 8) % 2 ? 4 : 0; x < W; x += 8) { g.beginPath(); g.arc(x, y, 2.4, 0, Math.PI * 2); g.fill(); }
+  g.globalCompositeOperation = 'source-over';
+  // denser flowers and vines scattered over the net
+  g.strokeStyle = 'rgba(255,255,255,0.95)'; g.fillStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 2;
+  let seed = 11;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let i = 0; i < 46; i++) {
+    const x = rnd() * W, y = 60 + rnd() * (H - 70), rr = 7 + rnd() * 6;
     for (let k = 0; k < 6; k++) {
-      const a = (k / 6) * Math.PI * 2;
-      g.beginPath(); g.arc(cx + Math.cos(a) * 6, cy + Math.sin(a) * 6, 2.2, 0, Math.PI * 2); g.fill();
+      const t = (k / 6) * Math.PI * 2;
+      g.beginPath(); g.ellipse(x + Math.cos(t) * rr * 0.7, y + Math.sin(t) * rr * 0.7, rr * 0.45, rr * 0.25, t, 0, Math.PI * 2); g.fill();
     }
+    g.beginPath(); g.arc(x, y, rr * 0.25, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.moveTo(x, y - rr); g.quadraticCurveTo(x + rr * 1.5, y - rr * 2.2, x + rr * 0.4, y - rr * 3.4); g.stroke();
   }
+  // scalloped hem along the top rows of the canvas (v = 0 with flipY off): arches, nothing beyond
+  const hem = 46;
+  g.fillStyle = 'rgba(255,255,255,0.95)';
+  for (let x = 0; x <= W; x += 32) { g.beginPath(); g.arc(x + 16, hem, 16, Math.PI, Math.PI * 2); g.fill(); }
+  g.fillRect(0, hem, W, 10);
+  g.globalCompositeOperation = 'destination-out';
+  g.fillRect(0, 0, W, hem - 17);
+  for (let x = 0; x <= W; x += 32) { g.beginPath(); g.arc(x + 16, hem - 4, 5, 0, Math.PI * 2); g.fill(); }
   laceTex = new THREE.CanvasTexture(c);
-  laceTex.wrapS = laceTex.wrapT = THREE.RepeatWrapping;
-  laceTex.repeat.set(10, 4);
+  laceTex.wrapS = THREE.RepeatWrapping;
+  laceTex.flipY = false;   // canvas row 0 is v = 0: the hem sits at the bottom of the veil
+  laceTex.repeat.set(5, 1);
+  laceTex.anisotropy = 4;
   return laceTex;
+}
+
+/**
+ * The long veil: an open, flared tube around the back and sides of the head that falls past the
+ * shoulders in soft folds, open at the face. Built from a cylinder: every ring is pushed out a
+ * little more the lower it is, wavy folds grow toward the hem, and the two front edges come
+ * forward over the shoulders.
+ */
+function veilDrape(r) {
+  const H = 0.78, top = r + 0.05, bottom = r + 0.1;
+  const open = 0.98;   // radians left open at the face, on each side of +z (cylinder theta 0 is +z)
+  const geo = new THREE.CylinderGeometry(1, 1, H, 64, 16, true, open, Math.PI * 2 - 2 * open);
+  const p = geo.attributes.position, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const t = (H / 2 - v.y) / H;                       // 0 at the top ring, 1 at the hem
+    const a = Math.atan2(v.z, v.x);
+    const rad = top + (bottom - top) * Math.pow(t, 0.8) + Math.sin(a * 9) * 0.022 * t;
+    const front = Math.max(0, Math.sin(a)) * t * 0.08;
+    p.setXYZ(i, Math.cos(a) * rad, v.y, Math.sin(a) * rad + front);
+  }
+  geo.computeVertexNormals();
+  return geo;
 }
 
 /**
@@ -379,14 +426,16 @@ function makeKid(o) {
     // longer hair down the back
     const back = new THREE.Mesh(new THREE.SphereGeometry(0.4, 24, 16), hairM);
     back.scale.set(1.08, 1.08, 0.75); back.position.set(0, -0.1, -0.17); head.add(back);
-    // 미사보: white lace over the top of the head, falling down the back to the shoulders
-    const veilM = new THREE.MeshPhongMaterial({ color: 0xffffff, map: lace(), transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, shininess: 10 });
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(r + 0.07, 36, 18, 0, Math.PI * 2, 0, Math.PI * 0.42), veilM);
-    // tipped back so the forehead and the face stay clear
-    cap.position.set(0, 0.0, -0.04); cap.rotation.x = -0.75; head.add(cap);
-    // round the back only (cylinder angle 0 is the front, +z)
-    const drape = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.07, r + 0.15, 0.5, 30, 1, true, Math.PI * 0.42, Math.PI * 1.16), veilM);
-    drape.position.set(0, -0.18, -0.06); head.add(drape);
+    // 미사보: a long, sheer lace mantilla laid on the crown and set back, so the front hair and the
+    // forehead show; it falls past the shoulders in soft folds. Sheer on purpose: a solid white
+    // cloth wrapped round the head read as a hijab
+    const veilM = new THREE.MeshPhongMaterial({ color: 0xffffff, map: lace(), transparent: true, alphaTest: 0.08, side: THREE.DoubleSide, shininess: 6, depthWrite: false });
+    const crownTex = lace().clone(); crownTex.repeat.set(3, 0.12); crownTex.offset.set(0, 0.6); crownTex.needsUpdate = true;
+    const crownM = veilM.clone(); crownM.map = crownTex;
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(r + 0.06, 40, 18, 0, Math.PI * 2, 0, Math.PI * 0.5), crownM);
+    cap.position.set(0, 0.02, -0.06); cap.rotation.x = -0.55; cap.renderOrder = 2; head.add(cap);
+    const drape = new THREE.Mesh(veilDrape(r), veilM);
+    drape.position.set(0, -0.27, -0.03); drape.renderOrder = 2; head.add(drape);
   }
 
   // points the emotes reach for (emotes.js), in the kid's own space
