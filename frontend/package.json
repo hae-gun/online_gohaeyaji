@@ -7,7 +7,8 @@
     "dev": "vite",
     "dev:server": "VITE_REALTIME_URL=ws://localhost:8080/ws vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "three": "0.128.0"

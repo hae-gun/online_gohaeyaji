@@ -92,6 +92,10 @@ jobs:
 
       # The realtime server the site connects to. Without it the build falls back to the
       # in-browser simulation (see frontend/src/main.js).
+      # answer engine and crisis detection regression tests, on the real data written above
+      # (or the samples when no secret exists). A failure stops the deploy.
+      - run: npm test
+
       - run: npm run build
         env:
           VITE_REALTIME_URL: wss://api.gohaeyaji.com/ws

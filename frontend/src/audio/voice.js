@@ -26,6 +26,8 @@ const PRIESTS = {
   eom: { prefer: ['BongJin', 'GookMin', 'InJoon', 'Hyunsu'], rate: 1.05, pitch: 0.78, lowPitch: 0.4 },
   yu: { prefer: ['Hyunsu', 'InJoon', 'BongJin', 'GookMin'], rate: 1.0, pitch: 1.15, lowPitch: 0.85 },
   baek: { prefer: ['GookMin', 'BongJin', 'InJoon', 'Hyunsu'], rate: 0.8, pitch: 0.7, lowPitch: 0.35 },   // the legendary priest
+  // crisis replies (where to get help): the same calm, slow, even voice whichever priest is in the booth
+  serious: { prefer: ['InJoon', 'Hyunsu', 'GookMin', 'BongJin'], rate: 0.85, pitch: 0.9, lowPitch: 0.55 },
 };
 
 const isKorean = (v) => v && v.lang && v.lang.replace('_', '-').toLowerCase().startsWith('ko');

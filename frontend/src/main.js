@@ -711,6 +711,8 @@ const idle = {
 
 /* ---------- answer feedback, only with consent (protocol v0.11) ---------- */
 let lastAnswer = null;
+// small talk about how someone feels: answered gently, but never offered for collection
+const NO_FEEDBACK_CHAT = new Set(['sad', 'lonely', 'cry', 'help', 'advice']);
 const fbPanel = $('#fbPanel'), fbError = $('#fbError');
 const FB_REASON = {
   INVALID: '보낼 수 없는 내용입니다. 고해를 1~200자로 적어 주세요.',
@@ -810,6 +812,8 @@ $('#chatForm').addEventListener('submit', (e) => {
   const r = engine.answer(text, priest && priest.id);
   setTimeout(() => {
     if (state !== 'room') return;
+    // a crisis reply is read in the same calm voice by every priest, never in the joking one
+    voice.setTone(r.kind === 'safety' ? 'serious' : priest && priest.id);
     const sec = bubble.say(r.line, { safety: r.kind === 'safety' });
     confessional.talk(sec, faceFor(r));
     if (r.kind === 'answer') {
@@ -824,8 +828,9 @@ $('#chatForm').addEventListener('submit', (e) => {
       $('#penance').hidden = true;
       lastCard = null;
     }
-    // "답이 엉뚱해요": only where a real answer was given (never for crisis replies), and only with a server
-    if ((r.kind === 'answer' || r.kind === 'chat') && rooms.sendFeedback) {
+    // "답이 엉뚱해요": only where a real answer was given, and only with a server. Never for crisis
+    // replies, risky-sounding messages (caution) or heavy small talk, so those are not collected
+    if ((r.kind === 'answer' || r.kind === 'chat') && !r.caution && !NO_FEEDBACK_CHAT.has(r.category) && rooms.sendFeedback) {
       lastAnswer = { text, persona: r.persona, category: r.category || 'generic', answer: r.line };
       $('#fbBtn').hidden = false;
     }
@@ -842,6 +847,8 @@ $('#chatForm').addEventListener('submit', (e) => {
 function faceFor(r) {
   if (r.kind === 'safety') return { script: [[0, 'concern']], after: 'concern', hold: 4 };
   if (r.kind === 'blocked') return { script: [[0, 'stern']], after: 'stern', hold: 1.5 };
+  // something may be wrong (caution): a worried, kind face the whole time, no grin
+  if (r.caution) return { script: [[0, 'concern']], after: 'listen', hold: 2 };
   if (r.kind === 'chat') {
     const mood = { jin: 'neutral', eom: 'stern', yu: 'smile', baek: 'smile' }[r.persona] || 'neutral';
     return { script: [[0, mood]], after: r.persona === 'eom' ? 'neutral' : 'smile', hold: 1.2 };

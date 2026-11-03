@@ -69,6 +69,10 @@ const squash = (s) => s.toLowerCase().replace(/[\s.,_\-*~!?^@#'"()\[\]…]+/g, '
  *   unless none of these words appears ("마약김밥" is food, "모기를 죽였" is not a threat)
  * Words are compared with spaces and symbols removed, so "자 살" is still caught.
  * v1 files ({ keywords, message }) become a single type.
+ *
+ * "caution" ({ any, unless }) is the step below a crisis: words that hint at something serious
+ * ("맞았", "무서워", "숨어") without a rule matching. The engine then skips joke categories and
+ * small talk and gives the plain, non-joking generic answer, with no feedback button.
  */
 function compileSafety(safety) {
   const words = (l) => (l || []).map(squash).filter(Boolean);
@@ -92,15 +96,26 @@ function compileSafety(safety) {
     if (r.re.length && !r.re.some((x) => x.test(spaced))) return false;
     return !r.unless.some((w) => flat.includes(w));
   };
-  /** @returns the first crisis type the text falls under, or null */
-  return (text) => {
-    const flat = squash(text), spaced = text.replace(/\s+/g, ' ');
-    return types.find((t) => t.rules.some((r) => ruleHits(r, flat, spaced))) || null;
+  const caution = safety && safety.caution
+    ? { any: words(safety.caution.any), all: [], re: [], unless: words(safety.caution.unless) }
+    : null;
+  return {
+    /** small talk that is already gentle and may still answer a cautious message ("외로워요") */
+    cautionChat: new Set((safety && safety.caution && safety.caution.allowChat) || []),
+    /** @returns the first crisis type the text falls under, or null */
+    crisisOf(text) {
+      const flat = squash(text), spaced = text.replace(/\s+/g, ' ');
+      return types.find((t) => t.rules.some((r) => ruleHits(r, flat, spaced))) || null;
+    },
+    /** @returns true when the text is not a crisis but should not get a joke either */
+    cautious(text) {
+      return !!caution && ruleHits(caution, squash(text), text);
+    },
   };
 }
 
 export function createAnswerEngine({ answers, safety, blocked }, random = Math.random) {
-  const crisisOf = compileSafety(safety);
+  const { crisisOf, cautious, cautionChat } = compileSafety(safety);
   const blockedWords = ((blocked && blocked.words) || []).map(squash).filter(Boolean);
   const blockedMessage = (blocked && blocked.message) || DEFAULT_BLOCKED_MESSAGE;
   const categories = answers.categories || [];
@@ -134,7 +149,8 @@ export function createAnswerEngine({ answers, safety, blocked }, random = Math.r
    * Order matters: a crisis message wins even when it contains profanity.
    * @param {string} input
    * @param {string} [personaId] which priest is in this booth ('jin' | 'eom' | 'yu')
-   * @returns {{kind:'safety'|'blocked'|'tooShort'|'chat'|'answer', line:string, persona:string, type?:string,
+   * caution: true when a risky word was seen; the answer is then the plain generic one.
+   * @returns {{kind:'safety'|'blocked'|'tooShort'|'chat'|'answer', line:string, persona:string, type?:string, caution?:boolean,
    *   category?:string, keyword?:string, penance?:string, penanceAt?:number, closingAt?:number}}
    *   penanceAt/closingAt are character offsets in line, for timing the priest's face.
    */
@@ -147,13 +163,15 @@ export function createAnswerEngine({ answers, safety, blocked }, random = Math.r
     if (blockedWords.some((w) => flat.includes(w))) return { kind: 'blocked', line: blockedMessage, persona: p.id };
     if (text.length < 3) return { kind: 'tooShort', line: p.tooShort || answers.messages.tooShort, persona: p.id };
 
-    const { best, keyword } = bestMatch(text, categories);
+    // a hint of something serious: no joke category, only gentle small talk, else the plain answer
+    const careful = cautious(text);
+    const { best, keyword } = careful ? { best: null, keyword: '' } : bestMatch(text, categories);
     if (!best) {
       // not a confession: talk back like a person instead of handing out a random penance
-      const chat = bestMatch(text, chatter).best;
+      const chat = bestMatch(text, careful ? chatter.filter((c) => cautionChat.has(c.id)) : chatter).best;
       if (chat) {
         const own = p.chatter && (p.chatter[chat.id] || p.chatter.default);
-        return { kind: 'chat', line: pick(own || listFor(chat.replies, p.id)), category: chat.id, persona: p.id };
+        return { kind: 'chat', line: pick(own || listFor(chat.replies, p.id)), category: chat.id, persona: p.id, ...(careful ? { caution: true } : {}) };
       }
     }
 
@@ -170,7 +188,7 @@ export function createAnswerEngine({ answers, safety, blocked }, random = Math.r
     const head = `${fillKeyword(empathy, k)} ${p.lead} `;
     const line = `${head}${penance} ${pick(section('closing'))}`;
     return {
-      kind: 'answer', line, category: c.id, keyword: k, penance, persona: p.id,
+      kind: 'answer', line, category: c.id, keyword: k, penance, persona: p.id, ...(careful ? { caution: true } : {}),
       penanceAt: head.length - p.lead.length - 1, closingAt: head.length + penance.length,
     };
   }
