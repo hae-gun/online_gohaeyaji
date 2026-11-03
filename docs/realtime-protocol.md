@@ -464,6 +464,10 @@
 | `gy:feedback:{id}` | HASH: at, reason, text, persona, category, answer, status, TTL 30일 | 답변 개선함 한 건 (v0.11). 이름과 IP 없음 |
 | `gy:feedbacks`, `gy:feedbacks:todo` | ZSET(시각), SET | 관리자 목록, 아직 안 본 것 |
 | `gy:feedback:ip:{hash}` | 정수, TTL 1시간 | IP당 보낸 수. 키에는 IP의 해시만 |
+| `gy:stats:visits` | 정수 | 누적 입장 수(hello 성공마다 1, 재접속도 셈). 관리자 페이지 "방문" |
+| `gy:stats:day:{yyyy-MM-dd}` | HASH, TTL 400일 | 그날(한국 시간) `visits` 입장 수, `peak` 최고 동시 접속(10초마다 잼) |
+| `gy:stats:uv:{yyyy-MM-dd}` | HyperLogLog, TTL 400일 | 그날 방문자 추정. IP와 날짜의 해시를 넣지만 HyperLogLog는 개수만 남기므로 IP도 해시도 저장되지 않음 |
+| `gy:stats:peak` | HASH | 역대 최고 동시 접속 `count`와 그 시각 `at` |
 | `gy:ch:{no}:emptySince` | 시각(ms) | 채널이 비기 시작한 때. 5분 지나면 채널을 닫음 (v0.10) |
 
 - 인원 수는 서버별로 셈. 서버는 시작할 때 무작위 ID를 받고 5초마다 하트비트(`server_heartbeat.lua`)로 자기 몫을 실제 접속 수로 덮어씀. 15초 넘게 하트비트가 없는 서버의 몫은 합계에서 빠지고 다음 하트비트 때 지워짐. 재시작한 서버는 새 ID라 예전 몫을 이어받지 않음. 정상 종료 때는 바로 자기 몫을 지움

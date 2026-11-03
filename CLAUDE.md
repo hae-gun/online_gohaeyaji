@@ -102,6 +102,7 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 - 본당에서 E: 촛불 켜기(내 화면만, 3분), 봉헌하기(내 화면만, 결제 없음), 성수 찍기(`cross` 동작이라 모두에게 보임), 장의자에 앉기(`sit`)
 - 길찾기(`navigation.js`)는 0.3m 격자 A*를 시작할 때 한 번 만들고, 경로는 직선으로 펴서 씀. 장애물은 원 `{x,z,r}`과 상자 `{box,x0,x1,z0,z1}`. 고해소 몸통도 상자 장애물
 - 바깥에서 보이는 본당과 고해소 방 외벽은 한쪽 면만 그리는 평면(안에서는 안 보이고 카메라 광선도 통과). 두 방 사이에는 외벽을 두지 않음(옆문이 막히므로)
+- 방문 통계(`stats/VisitStats`): hello 성공마다 누적과 그날 입장 수, 그날 방문자는 IP+날짜 해시를 HyperLogLog에(개수만 남음, 날이 바뀌면 같은 사람도 이어지지 않음), 최고 동시 접속은 10초마다 전체 채널 인원 합으로. 날짜는 한국 시간, 하루 단위 키는 400일 보관. 관리자 페이지 "방문" 칸에 누적과 최근 14일
 - 신께 알리기: 고해소 방 가운데 함 -> `inquiry` -> Redis -> 관리자 페이지 "신께 알리기" 칸. 연락처와 IP는 저장 안 함(세례명만). IP당 제한은 IP 해시로 1시간만. 운영 Redis는 영속화 필요
 - 답변 개선함(v0.11): 답 아래 "답이 엉뚱해요" -> 동의 창 -> `feedback` -> Redis 30일(이름, IP 없음, 연락처 가림) -> 관리자 페이지에서 분류하고 "AI에 넘길 내용 만들기". 고해는 그 외에는 저장하지 않음
 - 답변 데이터 하루 한 번 반영(방식 A, GitHub Secrets): 관리자 페이지 "AI에 넘길 내용 만들기" -> AI 답을 patch.json으로 저장 -> `node scripts/apply-answer-patch.mjs patch.json --dry`로 확인 -> 같은 명령에서 `--dry`를 빼고 적용(이전 파일은 answers.vN.backup.json, version 1 증가) -> `scripts/set-data-secrets.sh answers --deploy`. Secret은 48KB 한도라 gzip+base64를 45,000자씩 `ANSWERS_JSON_GZ`, `_2` ~ `_6`으로 나눠 넣고 워크플로가 이어 붙임(지금 약 28,000자, 여유 약 10배). 반영까지 배포 몇 분 + Pages 캐시 최대 10분

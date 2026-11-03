@@ -20,6 +20,7 @@ public class LuaScripts {
     public final RedisScript<Long> reportFace = load("report_face");
     public final RedisScript<Long> serverHeartbeat = load("server_heartbeat");
     public final RedisScript<Long> switchChannel = load("switch_channel");
+    public final RedisScript<Long> recordPeak = load("record_peak");
 
     private static RedisScript<Long> load(String name) {
         return RedisScript.of(new ClassPathResource("redis/" + name + ".lua"), Long.class);

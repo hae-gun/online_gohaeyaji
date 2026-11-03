@@ -28,6 +28,7 @@ import com.gohaeyaji.realtime.protocol.Messages.Released;
 import com.gohaeyaji.realtime.protocol.Messages.RenameResult;
 import com.gohaeyaji.realtime.protocol.Messages.Welcome;
 import com.gohaeyaji.realtime.protocol.Messages.You;
+import com.gohaeyaji.realtime.stats.VisitStats;
 import com.gohaeyaji.realtime.session.ClientSession;
 import com.gohaeyaji.realtime.session.SessionRegistry;
 import io.micrometer.core.instrument.Counter;
@@ -73,6 +74,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     private final FaceModeration moderation;
     private final Inquiries inquiries;
     private final AnswerFeedback feedback;
+    private final VisitStats visits;
     private final MessageSender sender;
     private final ObjectMapper mapper;
     private final SecureRandom random = new SecureRandom();
@@ -84,7 +86,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
 
     public RealtimeWebSocketHandler(RealtimeProperties props, SessionRegistry registry, ChannelService channels,
                                     BoothService booths, PresenceService presence, NameService names,
-                                    FaceReports faceReports, FaceModeration moderation, Inquiries inquiries, AnswerFeedback feedback, MessageSender sender,
+                                    FaceReports faceReports, FaceModeration moderation, Inquiries inquiries, AnswerFeedback feedback, VisitStats visits, MessageSender sender,
                                     ObjectMapper mapper, MeterRegistry meters) {
         this.props = props;
         this.registry = registry;
@@ -96,6 +98,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         this.moderation = moderation;
         this.inquiries = inquiries;
         this.feedback = feedback;
+        this.visits = visits;
         this.sender = sender;
         this.mapper = mapper;
         Gauge.builder("gohaeyaji.sessions", registry, SessionRegistry::size)
@@ -215,6 +218,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         // the client drops events whose seq is not above the snapshot seq
         registry.joinChannel(session);
         sendWelcome(session, "rt_" + token());
+        visits.recordVisit(session.remoteIp(), now());
     }
 
     /** The full state of the session's channel: on hello, and again after switching channel. */

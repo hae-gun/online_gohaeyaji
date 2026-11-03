@@ -80,6 +80,20 @@ public final class RedisKeys {
         return "gy:feedback:ip:" + ipHash;
     }
 
+    /** Visit counts for the admin page (stats/VisitStats): entries, per day, the most at once. */
+    public static final String STATS_VISITS = "gy:stats:visits";
+    public static final String STATS_PEAK = "gy:stats:peak";
+
+    /** HASH visits, peak of one day (yyyy-MM-dd, Korean time). */
+    public static String statsDay(String date) {
+        return "gy:stats:day:" + date;
+    }
+
+    /** HyperLogLog of one day's visitors (hashes of IP and date, never the IP). */
+    public static String statsVisitors(String date) {
+        return "gy:stats:uv:" + date;
+    }
+
     public static String booth(int channelNo, int boothId) {
         return CHANNEL_PREFIX + channelNo + ":booth:" + boothId;
     }

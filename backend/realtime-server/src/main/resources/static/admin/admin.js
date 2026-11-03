@@ -71,6 +71,7 @@
       d.append(b, s);
       box.appendChild(d);
     }
+    renderVisits(o.visits);
     const tb = $('#channels');
     tb.textContent = '';
     for (const c of o.channels) {
@@ -85,6 +86,47 @@
       td.colSpan = 4; td.className = 'muted'; td.textContent = '아직 열린 채널이 없습니다.';
       tr.appendChild(td); tb.appendChild(tr);
     }
+  }
+
+  // ------------------------------------------------------------ visits
+  const fmtNum = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const fmtDay = (d) => { const [, m, dd] = d.split('-'); return `${Number(m)}월 ${Number(dd)}일`; };
+  function renderVisits(v) {
+    if (!v) return;
+    const today = v.days[0] || { visits: 0, visitors: 0, peak: 0 };
+    const week = v.days.slice(0, 7);
+    const stats = [
+      [fmtNum(v.total), '누적 입장'],
+      [fmtNum(today.visits), '오늘 입장'],
+      [fmtNum(today.visitors), '오늘 방문자(추정)'],
+      [fmtNum(week.reduce((s, d) => s + d.visits, 0)), '최근 7일 입장'],
+      [fmtNum(today.peak), '오늘 최고 동시 접속'],
+      [fmtNum(v.peakEver), `역대 최고 동시 접속${v.peakEverAt ? ` (${fmtTime(v.peakEverAt)})` : ''}`],
+    ];
+    const box = $('#visitStats');
+    box.textContent = '';
+    for (const [val, label] of stats) {
+      const d = document.createElement('div');
+      d.className = 'stat';
+      const b = document.createElement('b'); b.textContent = val;
+      const s = document.createElement('span'); s.textContent = label;
+      d.append(b, s);
+      box.appendChild(d);
+    }
+    const tb = $('#visitDays');
+    tb.textContent = '';
+    const max = Math.max(1, ...v.days.map((d) => d.visits));
+    v.days.forEach((d, i) => {
+      const tr = document.createElement('tr');
+      if (i === 0) tr.className = 'today';
+      for (const val of [i === 0 ? `${fmtDay(d.date)} (오늘)` : fmtDay(d.date), fmtNum(d.visits), fmtNum(d.visitors), fmtNum(d.peak)]) {
+        const td = document.createElement('td'); td.textContent = val; tr.appendChild(td);
+      }
+      const td = document.createElement('td');
+      const bar = document.createElement('div'); bar.className = 'bar'; bar.style.width = `${(d.visits / max) * 100}%`; bar.hidden = !d.visits;
+      td.appendChild(bar); tr.appendChild(td);
+      tb.appendChild(tr);
+    });
   }
 
   // ------------------------------------------------------------ reported drawings

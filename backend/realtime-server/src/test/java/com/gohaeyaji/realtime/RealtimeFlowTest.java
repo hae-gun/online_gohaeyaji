@@ -644,6 +644,38 @@ class RealtimeFlowTest {
         assertThat(admin("GET", "/admin/", "test-secret", false).statusCode()).isEqualTo(200);
     }
 
+    @Autowired
+    com.gohaeyaji.realtime.stats.VisitStats visitStats;
+
+    @Test
+    void visitsAreCountedForTheAdminPageWithoutKeepingIps() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            a.hello();
+            b.hello();
+            visitStats.samplePeak();
+            var res = admin("GET", "/admin/api/overview", "test-secret", false);
+            JsonNode v = new com.fasterxml.jackson.databind.ObjectMapper().readTree(res.body()).path("visits");
+            assertThat(v.path("total").asLong()).isEqualTo(2);
+            JsonNode today = v.path("days").get(0);
+            assertThat(today.path("visits").asLong()).isEqualTo(2);
+            assertThat(today.path("visitors").asLong()).isEqualTo(1);   // both from 127.0.0.1
+            assertThat(today.path("peak").asLong()).isEqualTo(2);
+            assertThat(v.path("peakEver").asLong()).isEqualTo(2);
+            assertThat(v.path("days")).hasSize(14);
+        }
+        // nothing in Redis holds the address
+        for (String key : redisTemplate.keys("gy:stats:*")) {
+            assertThat(key).doesNotContain("127.0.0.1");
+            Object value = redisTemplate.type(key) == org.springframework.data.redis.connection.DataType.HASH
+                    ? redisTemplate.opsForHash().entries(key) : redisTemplate.opsForValue().get(key);
+            assertThat(String.valueOf(value)).doesNotContain("127.0.0.1");
+        }
+        // a lower count later in the day does not lower the peak
+        visitStats.samplePeak();
+        var again = new com.fasterxml.jackson.databind.ObjectMapper().readTree(admin("GET", "/admin/api/overview", "test-secret", false).body());
+        assertThat(again.path("visits").path("peakEver").asLong()).isEqualTo(2);
+    }
+
     @Test
     void adminSeesReportedDrawingsAndCanRestoreOrBanForGood() throws Exception {
         try (TestClient a = TestClient.connect(port); TestClient r1 = TestClient.connect(port);

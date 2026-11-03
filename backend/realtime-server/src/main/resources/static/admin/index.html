@@ -24,6 +24,16 @@
       </table>
     </section>
 
+    <section aria-labelledby="h-visits">
+      <h2 id="h-visits">방문 <span class="muted">(누적, 한국 시간 기준)</span></h2>
+      <div class="stats" id="visitStats"></div>
+      <table>
+        <thead><tr><th>날짜</th><th>입장</th><th>방문자(추정)</th><th>최고 동시 접속</th><th class="barCol"></th></tr></thead>
+        <tbody id="visitDays"></tbody>
+      </table>
+      <p class="muted">입장은 접속해서 성당에 들어온 횟수로, 다시 접속하면 또 셉니다. 방문자는 그날의 IP 해시로 센 추정치입니다(오차 약 1%). IP와 해시는 저장하지 않고 개수만 남으며, 다른 날의 같은 사람은 이어지지 않습니다. 같은 IP를 쓰는 여러 사람(학교, 통신사)은 한 명으로 셉니다. 최고 동시 접속은 10초마다 잽니다.</p>
+    </section>
+
     <section aria-labelledby="h-inquiries">
       <div class="row">
         <h2 id="h-inquiries">신께 알리기 <span class="muted">(문의함)</span></h2>

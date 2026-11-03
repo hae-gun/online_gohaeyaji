@@ -55,3 +55,7 @@ table.log .ip{color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,m
 .badge.fb-todo{color:var(--gold)}
 .badge.fb-wrong{color:#ff9b8a;border-color:rgba(226,69,58,.6)}
 .badge.fb-new{color:#9fe0b4;border-color:rgba(95,191,127,.6)}
+/* visits: one bar per day, scaled to the busiest day shown */
+.barCol{width:40%}
+.bar{height:10px;border-radius:5px;background:linear-gradient(90deg,var(--gold),#f3d27a);min-width:2px}
+tr.today td{color:var(--gold)}
