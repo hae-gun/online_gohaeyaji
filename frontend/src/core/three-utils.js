@@ -26,9 +26,17 @@ export function makeGlassTexture() {
     let seed = 7;
     const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
     for (let y = 0; y < h; y += 40) for (let x = 0; x < w; x += 32) {
-      g.fillStyle = cols[Math.floor(rnd() * cols.length)];
-      g.fillRect(x, y, 32, 40);
+      // each pane a little lighter at its middle, as glass with the sun behind it
+      const c = cols[Math.floor(rnd() * cols.length)];
+      const gr = g.createRadialGradient(x + 13, y + 15, 2, x + 16, y + 20, 30);
+      gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.18, c); gr.addColorStop(1, c + '99');
+      g.fillStyle = '#120c08'; g.fillRect(x, y, 32, 40);
+      g.fillStyle = gr; g.fillRect(x, y, 32, 40);
     }
+    // a glow from the middle of the window
+    const glow = g.createRadialGradient(w / 2, h * 0.42, 10, w / 2, h * 0.42, h * 0.6);
+    glow.addColorStop(0, 'rgba(255,240,200,.35)'); glow.addColorStop(1, 'rgba(0,0,0,.25)');
+    g.fillStyle = glow; g.fillRect(0, 0, w, h);
     g.strokeStyle = '#1a1410'; g.lineWidth = 5;
     for (let y = 0; y <= h; y += 40) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
     for (let x = 0; x <= w; x += 32) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }

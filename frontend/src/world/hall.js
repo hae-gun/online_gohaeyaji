@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { M, B, canvasTex, mergeStatic } from '../core/three-utils.js';
 import { CONFESSION_HALL } from './booths.js';
+import { surfaces, tileUV, heightShade, makeLeadedGlass } from './materials.js';
 
 /**
  * Inside the cathedral: the nave you walk into from the main doors, and the confession hall
@@ -12,6 +13,8 @@ import { CONFESSION_HALL } from './booths.js';
  *
  * Confession hall (CONFESSION_HALL): 21 booths on three walls (booths.js) and, in the middle,
  * "신께 알리기", the box where people leave questions for the site's admins.
+ *
+ * Surfaces (marble, cut stone, the vault, wood, light through the windows) come from materials.js.
  *
  * Returns floors for tap-to-walk, colliders for the camera, obstacles and seats for walking
  * and sitting, the places people can use (candles, fonts, offering box, inquiry box) and update().
@@ -29,16 +32,24 @@ export function buildHall(scene, glassTex) {
   const obstacles = [];
   const seats = [];
 
-  scene.add(new THREE.HemisphereLight(0xfff0dc, 0x2a2233, 0.75));
-  const sun = new THREE.DirectionalLight(0xffe2b8, 0.55);
+  scene.add(new THREE.HemisphereLight(0xfff0dc, 0x2a2233, 0.68));
+  const sun = new THREE.DirectionalLight(0xffe2b8, 0.5);
   sun.position.set(3, 8, 6);
   scene.add(sun);
 
-  const wallM = M(0xcab89a, { shininess: 6 });
+  // cut stone, fading darker toward the vault (vertex colours, see stoneBox)
+  const wallM = new THREE.MeshPhongMaterial({ map: surfaces.stone(), vertexColors: true, shininess: 4, specular: 0x111111 });
   const darkWoodM = M(0x4a2e1c), woodM = M(0x7a4d2c), goldM = M(0xd4ad55, { shininess: 90 });
   const add = (mesh, collide = false) => { scene.add(mesh); if (collide) colliders.push(mesh); return mesh; };
   const box = (w, h, d, m, x, y, z, collide = false) => {
     const b = add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m), collide);
+    b.position.set(x, y, z);
+    return b;
+  };
+  /** A wall of cut stone: the texture tiles every 4 m, the top fades into the dark of the vault. */
+  const stoneBox = (w, h, d, m, x, y, z, top = 0.5) => {
+    const geo = heightShade(tileUV(new THREE.BoxGeometry(w, h, d), Math.max(w, d) / 4, h / 4), h, 1.0, top);
+    const b = add(new THREE.Mesh(geo, m), true);
     b.position.set(x, y, z);
     return b;
   };
@@ -53,37 +64,39 @@ export function buildHall(scene, glassTex) {
 
   /* ================================================================ nave */
   const N = NAVE;
-  const tileTex = canvasTex(128, 128, (g) => {
-    g.fillStyle = '#7d6a55'; g.fillRect(0, 0, 128, 128);
-    g.fillStyle = '#d9cbb0'; g.fillRect(2, 2, 60, 60); g.fillRect(66, 66, 60, 60);
-    g.fillStyle = '#c7b796'; g.fillRect(66, 2, 60, 60); g.fillRect(2, 66, 60, 60);
-  });
-  tileTex.wrapS = tileTex.wrapT = THREE.RepeatWrapping;
-  tileTex.repeat.set((N.x1 - N.x0) / 2, (N.z1 - N.z0) / 2);
-  tileTex.magFilter = THREE.NearestFilter;
-  const naveFloor = new THREE.Mesh(new THREE.PlaneGeometry(N.x1 - N.x0, N.z1 - N.z0), new THREE.MeshPhongMaterial({ map: tileTex, shininess: 30 }));
+  // polished marble, a 2 m slab
+  const marbleM = new THREE.MeshPhongMaterial({ map: surfaces.naveMarble(), color: 0xcfc6ba, shininess: 70, specular: 0x3a342e });
+  const naveFloor = new THREE.Mesh(tileUV(new THREE.PlaneGeometry(N.x1 - N.x0, N.z1 - N.z0), (N.x1 - N.x0) / 4, (N.z1 - N.z0) / 4), marbleM);
   naveFloor.rotation.x = -Math.PI / 2;
   naveFloor.position.set(0, 0, (N.z0 + N.z1) / 2);
   scene.add(naveFloor);
   // red carpet down the middle
-  const carpet = new THREE.Mesh(new THREE.PlaneGeometry(3, N.z1 - N.rail - 0.4), M(0x8e2a24, { shininess: 4 }));
+  const carpetLen = N.z1 - N.rail - 0.4;
+  const carpet = new THREE.Mesh(tileUV(new THREE.PlaneGeometry(3, carpetLen), 1, carpetLen / 6),
+    new THREE.MeshPhongMaterial({ map: surfaces.carpet(), shininess: 2, specular: 0x000000 }));
   carpet.rotation.x = -Math.PI / 2; carpet.position.set(0, 0.01, (N.z1 + N.rail) / 2); scene.add(carpet);
 
   // walls and ceiling (the facade closes the front)
-  box(0.4, NAVE_H, N.z1 - N.z0 + 0.4, wallM, N.x0 - 0.2, NAVE_H / 2, (N.z0 + N.z1) / 2, true);
+  stoneBox(0.4, NAVE_H, N.z1 - N.z0 + 0.4, wallM, N.x0 - 0.2, NAVE_H / 2, (N.z0 + N.z1) / 2);
   const NW = N.x1 - N.x0;
-  box(NW + 0.8, NAVE_H, 0.4, wallM, 0, NAVE_H / 2, N.z0 - 0.2, true);
-  box(NW + 0.8, 0.4, N.z1 - N.z0 + 0.4, M(0x2f2533), 0, NAVE_H + 0.2, (N.z0 + N.z1) / 2, true);
+  stoneBox(NW + 0.8, NAVE_H, 0.4, wallM, 0, NAVE_H / 2, N.z0 - 0.2);
+  // the vault: ribs and a gilded boss over every bay, lit softly from below (unlit material: the
+  // lamps are too far down to light it, and a black ceiling made the nave feel like a box)
+  const vaultGeo = tileUV(new THREE.BoxGeometry(NW + 0.8, 0.4, N.z1 - N.z0 + 0.4), (NW + 0.8) / 6.4, (N.z1 - N.z0 + 0.4) / 6.4);
+  const vault = add(new THREE.Mesh(vaultGeo, new THREE.MeshBasicMaterial({ map: surfaces.vault(), color: 0xa89884 })), true);
+  vault.position.set(0, NAVE_H + 0.2, (N.z0 + N.z1) / 2);
   // the front beside the facade: the nave is wider than the facade
   for (const s of [-1, 1]) {
     const w = N.x1 - FACADE_HALF + 0.4;
-    box(w, NAVE_H, 0.4, wallM, s * (FACADE_HALF + w / 2 - 0.2), NAVE_H / 2, N.z1 + 0.2, true);
+    stoneBox(w, NAVE_H, 0.4, wallM, s * (FACADE_HALF + w / 2 - 0.2), NAVE_H / 2, N.z1 + 0.2);
   }
   // right wall, shared with the confession hall, open at the side door
   const D = SIDE_DOOR, wallZ1 = CONFESSION_HALL.z1 + 0.4;
-  box(0.6, NAVE_H, D.z0 - N.z0, wallM, D.x, NAVE_H / 2, (N.z0 + D.z0) / 2, true);
-  box(0.6, NAVE_H, wallZ1 - D.z1, wallM, D.x, NAVE_H / 2, (D.z1 + wallZ1) / 2, true);
-  box(0.6, NAVE_H - 3.6, D.z1 - D.z0, wallM, D.x, 3.6 + (NAVE_H - 3.6) / 2, (D.z0 + D.z1) / 2, true);
+  stoneBox(0.6, NAVE_H, D.z0 - N.z0, wallM, D.x, NAVE_H / 2, (N.z0 + D.z0) / 2);
+  stoneBox(0.6, NAVE_H, wallZ1 - D.z1, wallM, D.x, NAVE_H / 2, (D.z1 + wallZ1) / 2);
+  // over the side door: shaded like the rest of the wall (its own height is shorter)
+  const lintel = stoneBox(0.6, NAVE_H - 3.6, D.z1 - D.z0, wallM, D.x, 3.6 + (NAVE_H - 3.6) / 2, (D.z0 + D.z1) / 2);
+  lintel.geometry = heightShade(lintel.geometry, NAVE_H - 3.6, 0.85, 0.5);
   for (const s of [-1, 1]) {
     const arch = add(new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.12, 10, 28, Math.PI), goldM));
     arch.rotation.y = Math.PI / 2; arch.position.set(D.x + s * 0.31, 2.1, (D.z0 + D.z1) / 2); arch.scale.set(1, 1, 1);
@@ -117,29 +130,96 @@ export function buildHall(scene, glassTex) {
   const BAY = 6.4;
   const bays = [];
   for (let z = 8; z > N.rail + 1; z -= BAY) bays.push(z);
-  const blueGlass = new THREE.MeshBasicMaterial({ map: glassTex, color: 0x9ab8ff });
-  const warmGlass = new THREE.MeshBasicMaterial({ map: glassTex, color: 0xffc58a });
+  // pointed arches of leaded glass in a carved stone frame; the light they let in falls across
+  // the floor as coloured shafts and pools (additive, no lights: cheap on phones)
+  const leaded = makeLeadedGlass();
+  const blueGlass = new THREE.MeshBasicMaterial({ map: leaded, color: 0xa8c2ff });
+  const warmGlass = new THREE.MeshBasicMaterial({ map: leaded, color: 0xffcf9a });
+  const WW = 2.2, WH = 7.4;   // window width, height (with the arch)
+  const winShape = new THREE.Shape();
+  winShape.moveTo(-WW / 2, 0); winShape.lineTo(WW / 2, 0); winShape.lineTo(WW / 2, WH - WW * 0.8);
+  winShape.quadraticCurveTo(WW / 2, WH - 0.3, 0, WH); winShape.quadraticCurveTo(-WW / 2, WH - 0.3, -WW / 2, WH - WW * 0.8);
+  winShape.lineTo(-WW / 2, 0);
+  const winGeo = new THREE.ShapeGeometry(winShape, 10);
+  const wuv = winGeo.attributes.uv;
+  for (let i = 0; i < wuv.count; i++) wuv.setXY(i, (wuv.getX(i) + WW / 2) / WW, wuv.getY(i) / WH);
+  const winFrameGeo = new THREE.ShapeGeometry(winShape, 10).scale(1.22, 1.06, 1);
+  const winFrameM = M(0x9c8668, { shininess: 6 });
+  const shaftM = (c) => new THREE.MeshBasicMaterial({ map: surfaces.shaft(), color: c, transparent: true, opacity: 0.3,
+    depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+  const poolM = (c) => new THREE.MeshBasicMaterial({ map: surfaces.pool(), color: c, transparent: true, opacity: 0.32,
+    depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+  const light = new THREE.Group();   // shafts and pools, merged at the end
+  /** The shaft from a window at x = wx (facing +dir in x) down to the floor, and its pool. */
+  const shaft = (wx, dir, z, c) => {
+    const top = 9.4, bot = 2.6, reach = 7.5;   // from the glass down and across the nave
+    const geo = new THREE.PlaneGeometry(1, 1);
+    const P = geo.attributes.position;
+    // vertices of a PlaneGeometry: 0 top left, 1 top right, 2 bottom left, 3 bottom right
+    P.setXYZ(0, wx, top, z - WW * 0.42); P.setXYZ(1, wx, top, z + WW * 0.42);
+    P.setXYZ(2, wx + dir * reach, 0.02, z - WW * 0.6 - 1.2); P.setXYZ(3, wx + dir * reach, 0.02, z + WW * 0.6 - 1.2);
+    geo.computeVertexNormals();
+    light.add(new THREE.Mesh(geo, shaftM(c)));
+    const geo2 = geo.clone(); const P2 = geo2.attributes.position;   // a second, steeper sheet for depth
+    P2.setXYZ(0, wx, bot + 4, z - WW * 0.4); P2.setXYZ(1, wx, bot + 4, z + WW * 0.4);
+    P2.setXYZ(2, wx + dir * reach * 0.6, 0.02, z - WW * 0.5 - 0.6); P2.setXYZ(3, wx + dir * reach * 0.6, 0.02, z + WW * 0.5 - 0.6);
+    light.add(new THREE.Mesh(geo2, shaftM(c)));
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 3.4), poolM(c));
+    pool.rotation.x = -Math.PI / 2; pool.position.set(wx + dir * reach * 0.82, 0.025, z - 1.0); light.add(pool);
+  };
   for (const zc of bays.slice(0, -1)) {
     const z = zc - BAY / 2;
-    const l = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 7.4), blueGlass);
-    l.rotation.y = Math.PI / 2; l.position.set(N.x0 + 0.01, 6.4, z); still.add(l);
+    const fl = new THREE.Mesh(winFrameGeo, winFrameM); fl.rotation.y = Math.PI / 2; fl.position.set(N.x0 + 0.005, 2.7 - 0.2, z); still.add(fl);
+    const l = new THREE.Mesh(winGeo, blueGlass);
+    l.rotation.y = Math.PI / 2; l.position.set(N.x0 + 0.015, 2.7, z); still.add(l);
+    shaft(N.x0 + 0.05, 1, z, 0x7fa4ff);
     if (z < D.z0 - 1.5 || z > D.z1 + 1.5) {
-      const r = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 7.4), warmGlass);
-      r.rotation.y = -Math.PI / 2; r.position.set(D.x - 0.31, 6.4, z); still.add(r);
+      const fr = new THREE.Mesh(winFrameGeo, winFrameM); fr.rotation.y = -Math.PI / 2; fr.position.set(D.x - 0.305, 2.7 - 0.2, z); still.add(fr);
+      const r = new THREE.Mesh(winGeo, warmGlass);
+      r.rotation.y = -Math.PI / 2; r.position.set(D.x - 0.315, 2.7, z); still.add(r);
+      shaft(D.x - 0.35, -1, z, 0xffb070);
     }
   }
+  scene.add(light);
+  mergeStatic(light);
+  light.children.forEach((m) => { m.renderOrder = 2; });
+  // dust drifting in the light: one draw call, moved in the vertex shader by time
+  const DUST = 420;
+  const dustPos = new Float32Array(DUST * 3);
+  for (let i = 0; i < DUST; i++) {
+    dustPos[i * 3] = N.x0 + 1 + Math.random() * (NW - 2);
+    dustPos[i * 3 + 1] = 0.5 + Math.random() * 9;
+    dustPos[i * 3 + 2] = N.rail + Math.random() * (N.z1 - N.rail);
+  }
+  const dustGeo = new THREE.BufferGeometry();
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+  const dustM = new THREE.PointsMaterial({ map: surfaces.pool(), color: 0xffe9c0, size: 0.07, transparent: true, opacity: 0.55,
+    depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+  dustM.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = dustTime;
+    sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>',
+      `#include <begin_vertex>
+      float ph = position.x * 1.7 + position.z * 0.9;
+      transformed.y = mod(position.y + uTime * 0.05 + sin(ph) * 0.4, 9.0) + 0.5;
+      transformed.x += sin(uTime * 0.21 + ph) * 0.35;
+      transformed.z += cos(uTime * 0.17 + ph * 1.3) * 0.35;`);
+  };
+  const dustTime = { value: 0 };
+  const dust = new THREE.Points(dustGeo, dustM);
+  dust.frustumCulled = false;
+  scene.add(dust);
   // light along the nave
   [[-9, 0, 0x6f9bff], [9, -6, 0xffa860], [0, -18, 0xfff0d8], [-9, -30, 0x6f9bff], [9, -38, 0xffa860]].forEach(([x, z, c]) => {
     const l = new THREE.PointLight(c, 0.7, 26); l.position.set(x, 9, z); scene.add(l);
   });
 
   // tree columns: a trunk that branches near the ceiling
-  const columnM = M(0xd8cdb8, { shininess: 10 });
+  const columnM = new THREE.MeshPhongMaterial({ map: surfaces.stone(), color: 0xf2ebdf, shininess: 10, specular: 0x1a1a1a });
   const TRUNK = NAVE_H - 3.2;
   for (const s of [-1, 1]) {
     for (const z of bays) {
       const x = s * (N.x1 - 1.6);
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.46, TRUNK, 16), columnM); trunk.position.set(x, TRUNK / 2, z); still.add(trunk);
+      const trunk = new THREE.Mesh(tileUV(new THREE.CylinderGeometry(0.3, 0.46, TRUNK, 16), 1, TRUNK / 4), columnM); trunk.position.set(x, TRUNK / 2, z); still.add(trunk);
       const knot = new THREE.Mesh(new THREE.SphereGeometry(0.56, 20, 14), columnM); knot.position.set(x, TRUNK, z); knot.scale.y = 0.7; still.add(knot);
       for (let k = 0; k < 4; k++) {
         const a = (k / 4) * Math.PI * 2 + 0.4;
@@ -152,14 +232,15 @@ export function buildHall(scene, glassTex) {
     }
   }
 
+  const pewM = new THREE.MeshPhongMaterial({ map: surfaces.wood(), shininess: 40, specular: 0x2a1c10 });
   // pews: two blocks facing the altar, eight seats each, as many rows as fit before the candles
   for (let r = 0; ; r++) {
     const zr = 6.6 - r * 1.9;
     if (zr < N.rail + 13) break;
     for (const s of [-1, 1]) {
       const xa = s * 2.2, xb = s * 11.4, cx = (xa + xb) / 2, len = Math.abs(xb - xa);
-      const seat = new THREE.Mesh(new THREE.BoxGeometry(len, 0.08, 0.45), woodM); seat.position.set(cx, 0.45, zr + 0.02); still.add(seat);
-      const back = new THREE.Mesh(new THREE.BoxGeometry(len, 0.5, 0.07), woodM); back.position.set(cx, 0.78, zr + 0.28); still.add(back);
+      const seat = new THREE.Mesh(tileUV(new THREE.BoxGeometry(len, 0.08, 0.45), len / 3, 1), pewM); seat.position.set(cx, 0.45, zr + 0.02); still.add(seat);
+      const back = new THREE.Mesh(tileUV(new THREE.BoxGeometry(len, 0.5, 0.07), len / 3, 1), pewM); back.position.set(cx, 0.78, zr + 0.28); still.add(back);
       for (const e of [xa, xb]) {
         const end = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.95, 0.6), darkWoodM); end.position.set(e, 0.47, zr + 0.05); still.add(end);
       }
@@ -174,7 +255,8 @@ export function buildHall(scene, glassTex) {
   mergeStatic(still);
 
   // sanctuary: raised floor behind a rail, altar, canopy and cross
-  box(NW, 0.3, N.rail - N.z0, M(0xb9a27a, { shininess: 10 }), 0, 0.15, (N.rail + N.z0) / 2);
+  add(new THREE.Mesh(tileUV(new THREE.BoxGeometry(NW, 0.3, N.rail - N.z0), NW / 4, (N.rail - N.z0) / 4), marbleM))
+    .position.set(0, 0.15, (N.rail + N.z0) / 2);
   const railPosts = new THREE.Group(); scene.add(railPosts);
   for (let x = N.x0 + 0.7; x <= N.x1 - 0.69; x += 0.6) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.8, 0.07), goldM); p.position.set(x, 0.4, N.rail); railPosts.add(p); }
   mergeStatic(railPosts);
@@ -263,20 +345,17 @@ export function buildHall(scene, glassTex) {
   /* ================================================================ confession hall */
   const H = CONFESSION_HALL;
   const hcx = (H.x0 + H.x1) / 2, hcz = (H.z0 + H.z1) / 2, hw = H.x1 - H.x0, hd = H.z1 - H.z0;
-  const checker = canvasTex(128, 128, (g, w, h) => {
-    g.fillStyle = '#6b4a34'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#e9dcc4'; g.fillRect(0, 0, 64, 64); g.fillRect(64, 64, 64, 64);
-  });
-  checker.wrapS = checker.wrapT = THREE.RepeatWrapping;
-  checker.repeat.set(hw / 2.4, hd / 2.4);
-  checker.magFilter = THREE.NearestFilter;
-  const hallFloor = new THREE.Mesh(new THREE.PlaneGeometry(hw, hd), new THREE.MeshPhongMaterial({ map: checker, shininess: 60 }));
+  // black and white marble, a 2.4 m slab
+  const hallFloor = new THREE.Mesh(tileUV(new THREE.PlaneGeometry(hw, hd), hw / 4.8, hd / 4.8),
+    new THREE.MeshPhongMaterial({ map: surfaces.checkMarble(), color: 0xe6ddd2, shininess: 90, specular: 0x5a5048 }));
   hallFloor.rotation.x = -Math.PI / 2; hallFloor.position.set(hcx, 0, hcz); scene.add(hallFloor);
-  const hallWallM = M(0x8c7a68);
-  box(hw + 0.8, HALL_H, 0.4, hallWallM, hcx, HALL_H / 2, H.z0 - 0.2, true);
-  box(hw + 0.8, HALL_H, 0.4, hallWallM, hcx, HALL_H / 2, H.z1 + 0.2, true);
-  box(0.4, HALL_H, hd + 0.8, hallWallM, H.x1 + 0.2, HALL_H / 2, hcz, true);
-  box(hw + 0.8, 0.3, hd + 0.8, M(0x2f2533), hcx, HALL_H + 0.15, hcz, true);
+  const hallWallM = new THREE.MeshPhongMaterial({ map: surfaces.darkStone(), vertexColors: true, shininess: 4, specular: 0x111111 });
+  stoneBox(hw + 0.8, HALL_H, 0.4, hallWallM, hcx, HALL_H / 2, H.z0 - 0.2, 0.6);
+  stoneBox(hw + 0.8, HALL_H, 0.4, hallWallM, hcx, HALL_H / 2, H.z1 + 0.2, 0.6);
+  stoneBox(0.4, HALL_H, hd + 0.8, hallWallM, H.x1 + 0.2, HALL_H / 2, hcz, 0.6);
+  const hallVault = add(new THREE.Mesh(tileUV(new THREE.BoxGeometry(hw + 0.8, 0.3, hd + 0.8), (hw + 0.8) / 5.8, (hd + 0.8) / 5.8),
+    new THREE.MeshBasicMaterial({ map: surfaces.vault(), color: 0x7d6e60 })), true);
+  hallVault.position.set(hcx, HALL_H + 0.15, hcz);
   for (let x = H.x0 + 4; x < H.x1 - 2; x += 6) {
     for (let z = H.z0 + 5; z < H.z1 - 3; z += 6.5) {
       const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.2, 16), B(0x221a14)); cord.position.set(x, HALL_H - 0.6, z); scene.add(cord);
@@ -318,9 +397,9 @@ export function buildHall(scene, glassTex) {
   // seen from the yard, the nave and the hall are stone blocks behind the facade. Single sided
   // planes facing out: from inside they are invisible and the camera's ray passes through them.
   // No plane between the two rooms, so the side door stays open.
-  const shellM = M(0xb9a37f, { shininess: 6 });
+  const shellM = new THREE.MeshPhongMaterial({ map: surfaces.stone(), color: 0xd9c7a6, shininess: 6, specular: 0x111111 });
   const outside = (w, h, x, y, z, ry, rx = 0) => {
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), shellM);
+    const p = new THREE.Mesh(tileUV(new THREE.PlaneGeometry(w, h), w / 4, h / 4), shellM);
     p.position.set(x, y, z); p.rotation.set(rx, ry, 0, 'YXZ'); scene.add(p);
   };
   const HT = HALL_H + 0.8, NT = NAVE_H + 0.9;
@@ -409,6 +488,7 @@ export function buildHall(scene, glassTex) {
     sendLetter() { letterT = 0; },
     update(dt, t) {
       const now = performance.now();
+      dustTime.value = t;
       let lit = 0;
       for (const c of candles) {
         if (c.flame.visible && c.until < now) c.flame.visible = false;
