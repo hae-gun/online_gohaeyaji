@@ -172,6 +172,21 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
       return out;
     },
 
+    /**
+     * Someone else sitting at (x, z), within r metres: their pid, or null. A seat already taken
+     * cannot be sat on.
+     */
+    sitterAt(x, z, r = 0.4) {
+      for (const [pid, p] of players) {
+        if (p.inBooth || !p.emote.seated) continue;
+        if (Math.hypot(p.tx - x, p.tz - z) < r) return pid;
+      }
+      return null;
+    },
+
+    /** My pid in this channel (from the welcome), or null. */
+    get myPid() { return me; },
+
     /** Visible people in the channel, not counting me. */
     count() {
       let n = 0;

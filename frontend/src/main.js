@@ -284,8 +284,11 @@ function playEmote(id) {
   moveSender.now(player.position, player.rotation.y);
 }
 /** Sit on the bench or pew next to me (protocol section 16, emote 'sit'). Walking stands up again. */
+let mySeat = null;   // the bench or pew I sit on
 function sitDown(bench) {
   if (state !== 'hall' || myEmote.seated) return;
+  if (others.sitterAt(bench.seat.x, bench.seat.z) !== null) { toast('이미 누가 앉아 있는 자리입니다'); return; }
+  mySeat = bench;
   path = []; walkBooth = null;
   player.position.set(bench.seat.x, 0, bench.seat.z);
   player.rotation.y = bench.rot;
@@ -961,17 +964,32 @@ function updateSurroundings(dt) {
     }
   }
   nearBooth = nb;
-  // a free bench or pew next to me (not while something else is playing)
-  let bench = null;
+  // a free bench or pew next to me (not while something else is playing); a seat someone is
+  // already sitting on is skipped, and only mentioned when there is no free one nearby
+  let bench = null, taken = false;
   if (!nb && !myEmote.seated && place !== 'booths') {
     let bd = 1.0;
     for (const b of OUTDOORS.has(place) ? outside.benches : hall.seats) {
       const d = Math.min(Math.hypot(b.front.x - player.position.x, b.front.z - player.position.z),
         Math.hypot(b.seat.x - player.position.x, b.seat.z - player.position.z));
-      if (d < bd) { bd = d; bench = b; }
+      if (d >= bd) continue;
+      if (others.sitterAt(b.seat.x, b.seat.z) !== null) { if (d < 0.8) taken = true; continue; }
+      bd = d; bench = b;
     }
   }
   nearBench = bench;
+  // two people sat on the same seat at the same moment: the smaller pid keeps it (both browsers
+  // see both sits and apply the same rule), the other stands up in front of it
+  if (myEmote.seated && mySeat) {
+    const other = others.sitterAt(mySeat.seat.x, mySeat.seat.z, 0.3);
+    if (other !== null && others.myPid !== null && other < others.myPid) {
+      myEmote.stop();
+      player.position.set(mySeat.front.x, 0, mySeat.front.z);
+      moveSender.now(player.position, player.rotation.y);   // moving is standing up for the server too
+      mySeat = null;
+      toast('같은 자리에 먼저 앉은 분이 있어 일어났습니다');
+    }
+  }
   nearDo = nb || myEmote.seated ? null : nearAction();
   const prompt = $('#prompt'), act = $('#actBtn');
   if (state === 'hall' && myEmote.seated) {
@@ -984,6 +1002,10 @@ function updateSurroundings(dt) {
     prompt.append(nearDo.label);
     act.textContent = nearDo.label;
     act.hidden = false;
+  } else if (state === 'hall' && taken && !nb) {
+    prompt.hidden = false;
+    prompt.textContent = '이미 누가 앉아 있는 자리입니다';
+    act.hidden = true;
   } else if (state === 'hall' && nb) {
     prompt.hidden = false;
     if (nb.occupied) {
