@@ -356,12 +356,18 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
 
     private static final long LOOK_MIN_GAP_MS = 1_000;
 
+    /**
+     * Clothes "m"/"f", optionally followed by a skin colour (preset 0..5, or six lowercase hex digits
+     * for any RGB colour) and hair style 0..4 (protocol v0.17).
+     */
+    private static final java.util.regex.Pattern LOOK = java.util.regex.Pattern.compile("[mf](?:(?:[0-5]|[0-9a-f]{6})[0-4])?");
+
     private static boolean validLook(String look) {
-        return "m".equals(look) || "f".equals(look);
+        return look != null && LOOK.matcher(look).matches();
     }
 
     /**
-     * 형제님 "m" or 자매님 "f" (protocol v0.16). No reply: the browser has already changed its own
+     * A look code: 형제님 "m" or 자매님 "f", then skin tone and hair style (protocol v0.17). No reply: the browser has already changed its own
      * clothes; anything invalid or faster than once a second is dropped.
      */
     private void onSetLook(ClientSession session, JsonNode msg) {
