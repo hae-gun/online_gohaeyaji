@@ -4,7 +4,7 @@
  * would ignore movement. e.code is the same regardless of the input language.
  */
 const CODE = {
-  KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', KeyE: 'e', KeyV: 'v',
+  KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', KeyE: 'e', KeyV: 'v', KeyF: 'f',
   ArrowUp: 'arrowup', ArrowDown: 'arrowdown', ArrowLeft: 'arrowleft', ArrowRight: 'arrowright',
   Space: ' ', Escape: 'escape',
   Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4',

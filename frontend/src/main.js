@@ -251,13 +251,14 @@ const faceEditor = createFaceEditor({
     if (r.ok) {
       player.userData.face.setCustom(face);
       toast(face ? '새 얼굴로 바꿨습니다' : '기본 얼굴로 돌아갔습니다');
+      if (face && state === 'hall') showMyFace(false);   // show the new face right away
     }
     return r;
   },
 });
 $('#faceBtn').onclick = () => faceEditor.open();
 
-/* top-right menu on phones (styles.css hides the row behind one 메뉴 button under 640px wide) */
+/* top-right menu on phones (styles.css hides the row behind one 메뉴 button under 900px wide) */
 const menuItems = $('#menuItems'), menuBtn = $('#menuBtn');
 const setMenu = (open) => { menuItems.classList.toggle('open', open); menuBtn.setAttribute('aria-expanded', String(open)); };
 menuBtn.onclick = () => setMenu(!menuItems.classList.contains('open'));
@@ -540,6 +541,7 @@ const keys = createKeyboard((k) => {
   if (k === 'e' && state === 'hall') act();
   if (state === 'hall' && ['1', '2', '3', '4'].includes(k)) playEmote(EMOTES[Number(k) - 1].id);
   if (k === 'v' && state === 'hall') toggleView();
+  if (k === 'f' && state === 'hall') showMyFace();
   if (k === 'escape' && state === 'room') leaveRoom();
 });
 
@@ -574,7 +576,15 @@ function tapAt(cx, cy) {
 function toggleView() {
   const fp = rig.toggleFirstPerson();
   $('#viewBtn').textContent = fp ? '3인칭 시점' : '1인칭 시점';
+  $('#selfieBtn').textContent = '내 얼굴 보기';
 }
+/** Camera to the front of me at face height (and back again): to see the face I drew. */
+function showMyFace(back) {
+  const front = rig.showFace(player.rotation.y, back);
+  $('#selfieBtn').textContent = front ? '뒤에서 보기' : '내 얼굴 보기';
+  $('#viewBtn').textContent = '1인칭 시점';
+}
+$('#selfieBtn').onclick = () => { if (state === 'hall') showMyFace(); };
 
 /* ---------- booth flow ---------- */
 const CLAIM_FAILED = {
