@@ -11,7 +11,8 @@ export default defineConfig({
     outDir: 'dist',
     target: 'es2019',
     // three.js rarely changes, so keep it in its own long-cached chunk
-    rollupOptions: { output: { manualChunks: { three: ['three'] } } },
+    // two pages: the game, and card.html for shared 보속 카드 links
+    rollupOptions: { input: { main: 'index.html', card: 'card.html' }, output: { manualChunks: { three: ['three'] } } },
     chunkSizeWarningLimit: 700,
   },
 });

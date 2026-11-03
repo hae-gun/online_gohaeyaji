@@ -28,6 +28,7 @@ import { EMOTES, createEmotePlayer } from './world/emotes.js';
 import { history } from './storage/history.js';
 import { $, toast, fade, createBubble, initHistoryPanel } from './ui/hud.js';
 import { drawPenanceCard, createCardPanel } from './ui/penance-card.js';
+import { cardUrl } from './card/link.js';
 
 /*
  * Flow:  intro -> hall (yard, nave, confession hall) -> opening (door animation) -> room -> hall
@@ -779,7 +780,8 @@ $('#cardBtn').onclick = async () => {
       face: rooms.myFace,
       site: SITE,
     });
-    await cardPanel.show(canvas);
+    const link = lastCard.ref ? cardUrl({ ref: lastCard.ref, name: rooms.myName || '', when: lastCard.when, nth: lastCard.nth, look: myLook, face: rooms.myFace }) : '';
+    await cardPanel.show(canvas, link);
   } catch (_) {
     toast('카드를 만들지 못했습니다');
   } finally {
@@ -823,7 +825,7 @@ $('#chatForm').addEventListener('submit', (e) => {
       history.add({ t: Date.now(), q: text, c: r.category, p: r.penance, pr: r.persona });
       // for the card: how many times this sin was confessed in this browser, this one included
       const nth = history.load().filter((h) => h.c === r.category).length;
-      lastCard = { sin: r.keyword || r.category, penance: r.penance, legend: !!(priest && priest.chance), nth, when: new Date() };
+      lastCard = { sin: r.keyword || r.category, penance: r.penance, legend: !!(priest && priest.chance), nth, when: new Date(), ref: r.ref };
     } else {
       $('#penance').hidden = true;
       lastCard = null;

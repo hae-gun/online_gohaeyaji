@@ -1,5 +1,6 @@
 import { $, toast } from './hud.js';
 import { paintFace, FACE_SIZE } from '../net/faces.js';
+import { drawGlassBand } from '../card/glass.js';
 
 /**
  * "보속 카드": after a confession, one picture to keep or post (Instagram story size, 1080x1920).
@@ -106,31 +107,59 @@ export async function drawPenanceCard(d) {
   const g = c.getContext('2d');
   const gold = d.legend ? '#f3d27a' : GOLD;
 
-  // night sky behind a church window
+  // inside a church at night: deep violet, warm light coming from the window in the middle
   const bg = g.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, d.legend ? '#3b2a12' : '#1d1630');
-  bg.addColorStop(0.55, d.legend ? '#4a3418' : '#2c1d3d');
-  bg.addColorStop(1, d.legend ? '#24190b' : '#15121a');
+  bg.addColorStop(0, d.legend ? '#2a1d0c' : '#120d24');
+  bg.addColorStop(0.35, d.legend ? '#4a3418' : '#2a1840');
+  bg.addColorStop(0.7, d.legend ? '#3a2812' : '#1f1430');
+  bg.addColorStop(1, d.legend ? '#1c1408' : '#0f0c18');
   g.fillStyle = bg; g.fillRect(0, 0, W, H);
-  // little stars
+  const halo = g.createRadialGradient(W / 2, 520, 40, W / 2, 520, 760);
+  halo.addColorStop(0, d.legend ? 'rgba(255,214,120,.45)' : 'rgba(255,196,140,.32)');
+  halo.addColorStop(0.45, d.legend ? 'rgba(255,190,90,.12)' : 'rgba(190,120,200,.12)');
+  halo.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = halo; g.fillRect(0, 0, W, H);
+  // rays of light falling from above, very faint
+  g.save();
+  g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 7; i++) {
+    const x = 160 + i * 128, spread = 70 + (i % 3) * 30;
+    const ray = g.createLinearGradient(0, 0, 0, H * 0.85);
+    ray.addColorStop(0, 'rgba(255,236,200,.07)'); ray.addColorStop(1, 'rgba(255,236,200,0)');
+    g.fillStyle = ray;
+    g.beginPath(); g.moveTo(x - 18, 0); g.lineTo(x + 18, 0); g.lineTo(x + spread + 120, H * 0.85); g.lineTo(x - spread + 60, H * 0.85); g.closePath(); g.fill();
+  }
+  g.restore();
+  // floating dust and stars
   let seed = 7;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-  for (let i = 0; i < 70; i++) {
-    g.fillStyle = `rgba(255,240,210,${0.15 + rnd() * 0.45})`;
-    g.beginPath(); g.arc(rnd() * W, rnd() * H * 0.5, 1 + rnd() * 2.2, 0, Math.PI * 2); g.fill();
+  for (let i = 0; i < 110; i++) {
+    g.fillStyle = `rgba(255,240,210,${0.08 + rnd() * 0.35})`;
+    g.beginPath(); g.arc(70 + rnd() * (W - 140), 70 + rnd() * (H - 140), 0.8 + rnd() * 2.2, 0, Math.PI * 2); g.fill();
   }
-  // frame
-  g.strokeStyle = gold; g.lineWidth = 6;
-  roundRect(g, 36, 36, W - 72, H - 72, 44); g.stroke();
-  g.globalAlpha = 0.45; g.lineWidth = 2;
-  roundRect(g, 54, 54, W - 108, H - 108, 34); g.stroke();
+  // film grain so the gradient does not band
+  const grain = g.getImageData(0, 0, W, H), gp = grain.data;
+  for (let i = 0; i < gp.length; i += 4) {
+    const n = (rnd() - 0.5) * 10;
+    gp[i] += n; gp[i + 1] += n; gp[i + 2] += n;
+  }
+  g.putImageData(grain, 0, 0);
+  // stained glass frame all round
+  drawGlassBand(g, 22, 22, W - 44, H - 44, 34, { legend: d.legend, pane: 34 });
+  g.strokeStyle = gold; g.lineWidth = 2; g.globalAlpha = 0.6;
+  roundRect(g, 74, 74, W - 148, H - 148, 26); g.stroke();
   g.globalAlpha = 1;
 
   g.textAlign = 'center'; g.textBaseline = 'alphabetic';
-  // title
-  g.fillStyle = gold;
+  // title in gold leaf
   g.font = `400 96px ${DISPLAY}`;
+  const leaf = g.createLinearGradient(0, 90, 0, 175);
+  leaf.addColorStop(0, d.legend ? '#fff1c4' : '#fbe7a8'); leaf.addColorStop(0.5, gold); leaf.addColorStop(1, d.legend ? '#b07a1f' : '#9c7630');
+  g.save();
+  g.shadowColor = 'rgba(255,210,120,.55)'; g.shadowBlur = 24;
+  g.fillStyle = leaf;
   g.fillText('고해야지', W / 2, 168);
+  g.restore();
   g.fillStyle = 'rgba(243,236,224,.75)';
   g.font = `400 34px ${BODY}`;
   g.fillText(whenText(d.when), W / 2, 222);
@@ -143,17 +172,31 @@ export async function drawPenanceCard(d) {
     // the booth camera shows the whole window; come closer to the priest
     // (a wide screen shows the whole booth window around him; a phone's tall screen is already close)
     const wide = d.priestImage.width > d.priestImage.height;
-    cover(g, d.priestImage, ax, ay, aw, ah, 0.5, wide ? 0.44 : 0.47, wide ? 1.7 : 1.05);
+    if (d.priestFramed) cover(g, d.priestImage, ax, ay, aw, ah);   // already framed (the card page)
+    else cover(g, d.priestImage, ax, ay, aw, ah, 0.5, wide ? 0.44 : 0.47, wide ? 1.7 : 1.05);
   } else {
     g.fillStyle = '#3a2a4a'; g.fillRect(ax, ay, aw, ah);
   }
-  // soft light from the top of the window
+  // soft light from the top of the window, darker at the edges
   const glow = g.createLinearGradient(0, ay, 0, ay + ah);
-  glow.addColorStop(0, 'rgba(255,230,170,.18)'); glow.addColorStop(0.5, 'rgba(255,230,170,0)');
+  glow.addColorStop(0, 'rgba(255,230,170,.22)'); glow.addColorStop(0.5, 'rgba(255,230,170,0)');
   g.fillStyle = glow; g.fillRect(ax, ay, aw, ah);
+  const edge = g.createRadialGradient(W / 2, ay + ah * 0.55, ah * 0.35, W / 2, ay + ah * 0.55, ah * 0.85);
+  edge.addColorStop(0, 'rgba(0,0,0,0)'); edge.addColorStop(1, 'rgba(10,6,16,.45)');
+  g.fillStyle = edge; g.fillRect(ax, ay, aw, ah);
   g.restore();
-  g.strokeStyle = gold; g.lineWidth = 10;
+  // a carved frame: dark outside, gold, then a thin light line inside
+  g.save();
+  g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 30;
+  g.strokeStyle = '#2a1d16'; g.lineWidth = 26;
+  archPath(g, ax - 6, ay - 6, aw + 12, ah + 6); g.stroke();
+  g.restore();
+  const frameGold = g.createLinearGradient(ax, ay, ax + aw, ay + ah);
+  frameGold.addColorStop(0, '#fbe7a8'); frameGold.addColorStop(0.5, gold); frameGold.addColorStop(1, '#8a6424');
+  g.strokeStyle = frameGold; g.lineWidth = 12;
   archPath(g, ax, ay, aw, ah); g.stroke();
+  g.strokeStyle = 'rgba(255,245,220,.5)'; g.lineWidth = 2;
+  archPath(g, ax + 10, ay + 10, aw - 20, ah - 10); g.stroke();
   // name plate across the bottom of the window
   g.font = `400 46px ${DISPLAY}`;
   const plateW = Math.max(300, g.measureText(d.priestName).width + 90);
@@ -223,10 +266,26 @@ export async function drawPenanceCard(d) {
   const ph = 112 + lines.length * lh + 34;
   const py = top + Math.max(0, (bottom - top - ph) / 2);
   g.save();
-  g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 30; g.shadowOffsetY = 10;
-  g.fillStyle = PAPER;
+  g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 36; g.shadowOffsetY = 12;
+  // old paper: warm cream, a little darker towards the edges
+  const paper = g.createRadialGradient(W / 2, py + ph / 2, 40, W / 2, py + ph / 2, pw * 0.7);
+  paper.addColorStop(0, '#fbf5e8'); paper.addColorStop(1, '#eadcc0');
+  g.fillStyle = paper;
   roundRect(g, px, py, pw, ph, 32); g.fill();
   g.restore();
+  // gold rules inside the paper
+  g.strokeStyle = d.legend ? '#c99a3a' : '#c8a35a'; g.lineWidth = 3;
+  roundRect(g, px + 14, py + 14, pw - 28, ph - 28, 22); g.stroke();
+  g.lineWidth = 1; g.globalAlpha = 0.7;
+  roundRect(g, px + 22, py + 22, pw - 44, ph - 44, 18); g.stroke();
+  g.globalAlpha = 1;
+  // small ornaments either side of the label
+  g.fillStyle = d.legend ? '#c99a3a' : '#c8a35a';
+  for (const sx of [-1, 1]) {
+    const ox = W / 2 + sx * 150, oy = py + 56;
+    g.beginPath(); g.moveTo(ox, oy - 9); g.lineTo(ox + 9, oy); g.lineTo(ox, oy + 9); g.lineTo(ox - 9, oy); g.closePath(); g.fill();
+    g.fillRect(ox + (sx > 0 ? 14 : -74), oy - 1, 60, 2);
+  }
   g.fillStyle = d.legend ? '#a8781c' : '#8a5cc0';
   g.font = `400 34px ${BODY}`;
   g.fillText(d.legend ? '전설의 보속' : '오늘의 보속', W / 2, py + 66);
@@ -249,14 +308,14 @@ export async function drawPenanceCard(d) {
 }
 
 /**
- * The preview panel: shows the card, then share (phones: straight to Instagram and the like),
- * save, or close.
+ * The preview panel: shows the card, then share a link to the card page (card.html, opens as a
+ * web page in KakaoTalk and the like), share or save the picture, or close.
  * @param {{ onOpen?: () => void, onClose?: () => void }} hooks
  */
 export function createCardPanel({ onOpen, onClose } = {}) {
   const panel = $('#cardPanel');
   const img = $('#cardImg');
-  let blob = null, url = '';
+  let blob = null, url = '', link = '';
   const fileName = () => `gohaeyaji-${new Date().toISOString().slice(0, 10)}.png`;
 
   const close = () => {
@@ -275,6 +334,24 @@ export function createCardPanel({ onOpen, onClose } = {}) {
     a.href = url; a.download = fileName();
     document.body.appendChild(a); a.click(); a.remove();
   };
+  $('#cardLink').onclick = async () => {
+    if (!link) return;
+    const text = '오늘의 보속을 받았습니다. 나도 고해하러 가기';
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: '고해야지 보속 카드', text, url: link });
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      toast('링크를 복사했습니다. 카톡이나 메시지에 붙여 넣어 주세요');
+    } catch (_) {
+      prompt('이 링크를 복사해 주세요', link);   // last resort where the clipboard is blocked
+    }
+  };
   $('#cardShare').onclick = async () => {
     if (!blob) return;
     const file = new File([blob], fileName(), { type: 'image/png' });
@@ -287,8 +364,10 @@ export function createCardPanel({ onOpen, onClose } = {}) {
   };
 
   return {
-    /** @param {HTMLCanvasElement} canvas */
-    async show(canvas) {
+    /** @param {HTMLCanvasElement} canvas @param {string} [cardLink] the card page for this card */
+    async show(canvas, cardLink = '') {
+      link = cardLink;
+      $('#cardLink').hidden = !link;
       blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
       if (!blob) { toast('카드를 만들지 못했습니다'); return; }
       url = URL.createObjectURL(blob);
