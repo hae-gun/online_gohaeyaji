@@ -2,17 +2,21 @@ import * as THREE from 'three';
 import { M, B, canvasTex, mergeStatic } from '../core/three-utils.js';
 import { CONFESSION_HALL } from './booths.js';
 import { surfaces, tileUV, heightShade, makeLeadedGlass } from './materials.js';
+import { dressNave } from './nave-dress.js';
 
 /**
  * Inside the cathedral: the nave you walk into from the main doors, and the confession hall
  * through a side door on the right.
  *
- * Nave (NAVE): pews on both sides of a red carpet, Gaudí-like tree columns, coloured windows,
- * the altar behind a rail under a hanging canopy, a rack of votive candles, an offering box and
- * two holy water fonts by the door. Next to the entrance a sign points right: "고해소 가는 곳".
+ * Nave (NAVE): first an open entrance hall (NARTHEX_Z) with holy water fonts, an inlaid star in
+ * the floor and a signpost on it (본당 straight on, 고해소 to the right); then pews on both sides
+ * of a red carpet, coloured windows, the altar behind a rail, a rack of votive candles and an
+ * offering box. The grand dressing (arcade, altarpiece, baldachin, chandeliers, rose window,
+ * the side portal) is in nave-dress.js.
  *
  * Confession hall (CONFESSION_HALL): 21 booths on three walls (booths.js) and, in the middle,
- * "신께 알리기", the box where people leave questions for the site's admins.
+ * "신께 알리기", the box where people leave questions for the site's admins. The side door is in
+ * the middle of its wall, so you come in facing the box with the booths at a distance.
  *
  * Surfaces (marble, cut stone, the vault, wood, light through the windows) come from materials.js.
  *
@@ -22,10 +26,17 @@ import { surfaces, tileUV, heightShade, makeLeadedGlass } from './materials.js';
 // a big nave: 34 m wide, 69 m long, 13 m high (about four times the first one), the facade in
 // the middle of its front, the confession hall through a side door on the right
 export const NAVE = { x0: -17, x1: 17, z0: -58.8, z1: 10.2, rail: -46 };
-export const SIDE_DOOR = { x: 17.3, z0: 3.6, z1: 6.6 };
+/**
+ * The entrance hall: the first 14 m inside the doors are open floor (no pews), with the signpost
+ * in the middle. The pews start behind it. The side door to the confession hall is at its far
+ * right end, in the middle of the confession hall's wall, so neither room starts right at a door.
+ */
+export const NARTHEX_Z = -4.6;
+// h: the top of the pointed arch over the door (the square opening is 1.1 m lower)
+export const SIDE_DOOR = { x: 17.3, z0: -4.0, z1: -1.0, h: 5.0 };
 const NAVE_H = 13;
 const FACADE_HALF = 10;   // the facade (exterior.js) covers x -10..10 of the front
-const HALL_H = 6.5;
+const HALL_H = 8;
 
 export function buildHall(scene, glassTex) {
   const colliders = [];
@@ -94,33 +105,15 @@ export function buildHall(scene, glassTex) {
   const D = SIDE_DOOR, wallZ1 = CONFESSION_HALL.z1 + 0.4;
   stoneBox(0.6, NAVE_H, D.z0 - N.z0, wallM, D.x, NAVE_H / 2, (N.z0 + D.z0) / 2);
   stoneBox(0.6, NAVE_H, wallZ1 - D.z1, wallM, D.x, NAVE_H / 2, (D.z1 + wallZ1) / 2);
-  // over the side door: shaded like the rest of the wall (its own height is shorter)
-  const lintel = stoneBox(0.6, NAVE_H - 3.6, D.z1 - D.z0, wallM, D.x, 3.6 + (NAVE_H - 3.6) / 2, (D.z0 + D.z1) / 2);
-  lintel.geometry = heightShade(lintel.geometry, NAVE_H - 3.6, 0.85, 0.5);
-  for (const s of [-1, 1]) {
-    const arch = add(new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.12, 10, 28, Math.PI), goldM));
-    arch.rotation.y = Math.PI / 2; arch.position.set(D.x + s * 0.31, 2.1, (D.z0 + D.z1) / 2); arch.scale.set(1, 1, 1);
-  }
-
-  // the way to the booths: a sign right of the entrance, and plates over the side door
-  const way = new THREE.Group(); way.position.set(6.5, 0, 8.3); way.rotation.y = -0.4; scene.add(way);
-  const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.5, 0.1), darkWoodM); post.position.y = 0.75; way.add(post);
-  const wayTex = canvasTex(320, 120, (g) => {
-    g.fillStyle = '#efe4cc'; g.fillRect(0, 0, 320, 120);
-    g.strokeStyle = '#8a6a3a'; g.lineWidth = 6; g.strokeRect(3, 3, 314, 114);
-    g.fillStyle = '#3a2414'; g.font = 'bold 40px sans-serif'; g.textBaseline = 'middle';
-    g.fillText('고해소 가는 곳', 22, 60);
-    g.fillStyle = '#a3231b';
-    g.beginPath(); g.moveTo(258, 32); g.lineTo(304, 60); g.lineTo(258, 88); g.lineTo(258, 72); g.lineTo(232, 72); g.lineTo(232, 48); g.lineTo(258, 48); g.fill();
-  });
-  const wayBoard = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.64, 0.06),
-    [darkWoodM, darkWoodM, darkWoodM, darkWoodM, new THREE.MeshBasicMaterial({ map: wayTex }), darkWoodM]);
-  wayBoard.position.y = 1.75; way.add(wayBoard);
-  obstacles.push({ x: 6.5, z: 8.3, r: 0.35 });
-  const overDoor = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.5), new THREE.MeshBasicMaterial({ map: sign('고해소 →', null, 240, 50) }));
-  overDoor.rotation.y = -Math.PI / 2; overDoor.position.set(D.x - 0.32, 4.1, (D.z0 + D.z1) / 2); scene.add(overDoor);
-  const backPlate = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.5), new THREE.MeshBasicMaterial({ map: sign('← 본당', null, 240, 50) }));
-  backPlate.rotation.y = Math.PI / 2; backPlate.position.set(D.x + 0.32, 4.1, (D.z0 + D.z1) / 2); scene.add(backPlate);
+  // over the side door: shaded like the rest of the wall (its own height is shorter); the arch
+  // above the square opening is solid, with the room's name in it (nave-dress.js draws the portal)
+  const DOOR_TOP = D.h - 1.1;
+  const lintel = stoneBox(0.6, NAVE_H - DOOR_TOP, D.z1 - D.z0, wallM, D.x, DOOR_TOP + (NAVE_H - DOOR_TOP) / 2, (D.z0 + D.z1) / 2);
+  lintel.geometry = heightShade(lintel.geometry, NAVE_H - DOOR_TOP, 0.85, 0.5);
+  const overDoor = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.55), new THREE.MeshBasicMaterial({ map: sign('고해소', '고해성사 21칸', 280, 70) }));
+  overDoor.rotation.y = -Math.PI / 2; overDoor.position.set(D.x - 0.34, DOOR_TOP + 0.45, (D.z0 + D.z1) / 2); scene.add(overDoor);
+  const backPlate = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.55), new THREE.MeshBasicMaterial({ map: sign('본당', '나가는 문', 280, 70) }));
+  backPlate.rotation.y = Math.PI / 2; backPlate.position.set(D.x + 0.34, DOOR_TOP + 0.45, (D.z0 + D.z1) / 2); scene.add(backPlate);
 
   // things that never move here (windows, columns, pews) are merged into a few draw calls
   const still = new THREE.Group();
@@ -209,40 +202,25 @@ export function buildHall(scene, glassTex) {
   dust.frustumCulled = false;
   scene.add(dust);
   // light along the nave
-  [[-9, 0, 0x6f9bff], [9, -6, 0xffa860], [0, -18, 0xfff0d8], [-9, -30, 0x6f9bff], [9, -38, 0xffa860]].forEach(([x, z, c]) => {
-    const l = new THREE.PointLight(c, 0.7, 26); l.position.set(x, 9, z); scene.add(l);
+  [[-9, 0, 0x8fb0ff], [9, -8, 0xffb070], [0, -20, 0xffe2b0], [-9, -31, 0x8fb0ff], [9, -40, 0xffb070]].forEach(([x, z, c]) => {
+    const l = new THREE.PointLight(c, 0.7, 26); l.position.set(x, 8.5, z); scene.add(l);
   });
 
-  // tree columns: a trunk that branches near the ceiling
-  const columnM = new THREE.MeshPhongMaterial({ map: surfaces.stone(), color: 0xf2ebdf, shininess: 10, specular: 0x1a1a1a });
-  const TRUNK = NAVE_H - 3.2;
-  for (const s of [-1, 1]) {
-    for (const z of bays) {
-      const x = s * (N.x1 - 1.6);
-      const trunk = new THREE.Mesh(tileUV(new THREE.CylinderGeometry(0.3, 0.46, TRUNK, 16), 1, TRUNK / 4), columnM); trunk.position.set(x, TRUNK / 2, z); still.add(trunk);
-      const knot = new THREE.Mesh(new THREE.SphereGeometry(0.56, 20, 14), columnM); knot.position.set(x, TRUNK, z); knot.scale.y = 0.7; still.add(knot);
-      for (let k = 0; k < 4; k++) {
-        const a = (k / 4) * Math.PI * 2 + 0.4;
-        const br = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.2, 4.4, 16), columnM);
-        br.position.set(x + Math.cos(a) * 1.0, TRUNK + 1.8, z + Math.sin(a) * 1.0);
-        br.rotation.set(Math.sin(a) * 0.55, 0, -Math.cos(a) * 0.55);
-        still.add(br);
-      }
-      obstacles.push({ x, z, r: 0.6 });
-    }
-  }
 
   const pewM = new THREE.MeshPhongMaterial({ map: surfaces.wood(), shininess: 40, specular: 0x2a1c10 });
-  // pews: two blocks facing the altar, eight seats each, as many rows as fit before the candles
+  // pews: two blocks facing the altar, eight seats each, from behind the entrance hall to the
+  // candles (15 rows, 240 seats)
+  const pewKnobM = M(0xd9b45e, { shininess: 110 });
   for (let r = 0; ; r++) {
-    const zr = 6.6 - r * 1.9;
+    const zr = NARTHEX_Z - 1.8 - r * 1.9;
     if (zr < N.rail + 13) break;
     for (const s of [-1, 1]) {
       const xa = s * 2.2, xb = s * 11.4, cx = (xa + xb) / 2, len = Math.abs(xb - xa);
       const seat = new THREE.Mesh(tileUV(new THREE.BoxGeometry(len, 0.08, 0.45), len / 3, 1), pewM); seat.position.set(cx, 0.45, zr + 0.02); still.add(seat);
       const back = new THREE.Mesh(tileUV(new THREE.BoxGeometry(len, 0.5, 0.07), len / 3, 1), pewM); back.position.set(cx, 0.78, zr + 0.28); still.add(back);
       for (const e of [xa, xb]) {
-        const end = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.95, 0.6), darkWoodM); end.position.set(e, 0.47, zr + 0.05); still.add(end);
+        const end = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.0, 0.62), darkWoodM); end.position.set(e, 0.5, zr + 0.05); still.add(end);
+        const knob = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), pewKnobM); knob.position.set(e, 1.04, zr + 0.3); still.add(knob);
       }
       obstacles.push({ box: true, x0: Math.min(xa, xb) - 0.05, x1: Math.max(xa, xb) + 0.05, z0: zr + 0.08, z1: zr + 0.34 });
       for (let i = 0; i < 8; i++) {
@@ -272,23 +250,12 @@ export function buildHall(scene, glassTex) {
     const f = new THREE.Sprite(flameMaterial()); f.scale.set(0.16, 0.26, 1); f.position.set(x, 2.0, AZ); scene.add(f);
     altarFlames.push(f);
   }
-  // the cross on the back wall, under a hanging hexagonal canopy with little bulbs
-  box(0.4, 5.4, 0.25, goldM, 0, 5.6, N.z0 + 0.15);
-  box(3.0, 0.4, 0.25, goldM, 0, 7.1, N.z0 + 0.15);
-  const canopy = new THREE.Group(); canopy.position.set(0, 8.5, AZ); canopy.scale.setScalar(1.4); scene.add(canopy);
-  const can = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 2.1, 0.5, 16, 1, true), M(0xe8dcc0, { side: THREE.DoubleSide })); canopy.add(can);
-  const canTop = new THREE.Mesh(new THREE.ConeGeometry(1.7, 0.6, 16), M(0xd4ad55)); canTop.position.y = 0.55; canopy.add(canTop);
-  const bulbM = B(0xffe6a0);
-  for (let k = 0; k < 12; k++) {
-    const a = (k / 12) * Math.PI * 2;
-    const b = new THREE.Mesh(new THREE.SphereGeometry(0.07, 20, 14), bulbM); b.position.set(Math.cos(a) * 2.05, -0.3, Math.sin(a) * 2.05); canopy.add(b);
-  }
-  for (const a of [0.5, 2.6, 4.7]) {
-    const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.6, 16), B(0x221a14)); cord.position.set(Math.cos(a) * 1.4, 1.1, Math.sin(a) * 1.4); canopy.add(cord);
-  }
-  const altarL = new THREE.PointLight(0xffd59a, 0.9, 14); altarL.position.set(0, 5, AZ + 1.6); scene.add(altarL);
-  const rose = new THREE.Mesh(new THREE.CircleGeometry(1.4, 28), new THREE.MeshBasicMaterial({ map: glassTex }));
-  rose.position.set(0, 10.4, N.z0 + 0.02); rose.scale.setScalar(1.3); scene.add(rose);
+  // the cross in the middle niche of the altarpiece; the altarpiece, the baldachin over the altar,
+  // the arcade, the chandeliers, the rose window and the signpost are in nave-dress.js
+  box(0.36, 4.6, 0.22, goldM, 0, 4.6, N.z0 + 0.3);
+  box(2.4, 0.34, 0.22, goldM, 0, 5.8, N.z0 + 0.3);
+  const altarL = new THREE.PointLight(0xffd59a, 1.1, 22); altarL.position.set(0, 6, AZ + 3); scene.add(altarL);
+  const dressed = dressNave(scene, { N, H: NAVE_H, bays, BAY, door: D, AZ, obstacles, colliders });
 
   // holy water fonts by the door: a shell on a short pillar
   const fonts = [];
@@ -489,6 +456,7 @@ export function buildHall(scene, glassTex) {
     update(dt, t) {
       const now = performance.now();
       dustTime.value = t;
+      dressed.update(t);
       let lit = 0;
       for (const c of candles) {
         if (c.flame.visible && c.until < now) c.flame.visible = false;
