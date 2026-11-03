@@ -305,20 +305,26 @@ export function createFaceEditor({ getFace, apply, getLook = () => 'm', previewL
     NOT_IMAGE: '그림 파일을 읽을 수 없습니다. PNG, GIF, WEBP, JPG 파일을 골라 주세요.',
     TOO_BIG: '파일이 너무 큽니다. 5MB 이하로 골라 주세요.',
   };
-  $('#faceImport').onclick = () => importFile.click();
-  importFile.onchange = async () => {
-    const file = importFile.files && importFile.files[0];
-    importFile.value = '';   // the same file can be picked again
-    if (!file) return;
+  const importBg = $('#faceImportBg');
+  let lastImport = null;   // the last picture, so 배경 지우기 can be switched and applied again
+  async function importPicture(file) {
     try {
-      load(await fileToFace(file));
+      load(await fileToFace(file, { removeBackground: importBg.checked }));
+      lastImport = file;
       noteEl.textContent = '그림을 32칸 판에 맞춰 올렸습니다. 12색으로 줄어서 원본과 다를 수 있어요. 다듬은 뒤 "이 얼굴 쓰기"를 눌러 주세요.';
       noteEl.hidden = false;
     } catch (e) {
       errorEl.textContent = IMPORT_ERROR[e.message] || IMPORT_ERROR.NOT_IMAGE;
       errorEl.hidden = false;
     }
+  }
+  $('#faceImport').onclick = () => importFile.click();
+  importFile.onchange = () => {
+    const file = importFile.files && importFile.files[0];
+    importFile.value = '';   // the same file can be picked again
+    if (file) importPicture(file);
   };
+  importBg.onchange = () => { if (lastImport) importPicture(lastImport); };
 
   $('#faceClear').onclick = () => load(EMPTY_FACE);
   $('#faceStarter').onclick = () => load(STARTER_FACE);

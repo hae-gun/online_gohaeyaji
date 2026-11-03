@@ -34,3 +34,25 @@ test('a few flat colours come through exactly', () => {
   assert.deepEqual(picked.sort(), ['#20b060', '#3070e0']);
   assert.notEqual(grid[0], grid[FACE_CELLS - 1]);
 });
+
+import { sampleToGrid } from '../src/net/face-import.js';
+
+test('a dark backdrop is removed, the drawing is cropped and keeps flat colours', () => {
+  // 100x100: dark backdrop, a 50x50 blue square in the middle with a white dot inside
+  const W = 100, px = new Uint8ClampedArray(W * W * 4);
+  for (let i = 0; i < W * W; i++) {
+    const x = i % W, y = (i - x) / W;
+    let c = [27, 23, 33];
+    if (x >= 25 && x < 75 && y >= 25 && y < 75) c = [0, 125, 252];
+    if (x >= 45 && x < 55 && y >= 45 && y < 55) c = [250, 250, 250];
+    if (x % 10 === 0 && c[0] === 27) c = [40, 38, 48];   // grid lines of a screenshot
+    px.set([...c, 255], i * 4);
+  }
+  const out = sampleToGrid(px, W, W);
+  const cell = (x, y) => [...out.slice((y * 32 + x) * 4, (y * 32 + x) * 4 + 4)];
+  assert.deepEqual(cell(0, 0), [0, 125, 252, 255]);   // cropped: the square fills the grid
+  assert.deepEqual(cell(16, 16), [250, 250, 250, 255]);
+  const kept = sampleToGrid(px, W, W, { removeBackground: false });
+  assert.equal(kept[3], 255);                          // corner kept as backdrop colour
+  assert.ok(kept[0] < 60);
+});
