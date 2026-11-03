@@ -138,6 +138,7 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .lookRows small{color:var(--muted)}
 .swatch.skin{border-radius:50%}
 .hairPick{flex-wrap:wrap}
+.note{color:var(--muted);font-size:.9em;margin:4px 0}
 .skinRow{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 .skinRgb{display:inline-flex;align-items:center;gap:6px;font-size:.85em;padding:3px 8px;border-radius:999px;border:2px solid transparent;cursor:pointer}
 .skinRgb[aria-pressed="true"]{border-color:var(--gold)}

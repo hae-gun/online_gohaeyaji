@@ -5,6 +5,7 @@ import {
 } from '../net/faces.js';
 import { smoothFace } from '../world/pixel-face.js';
 import { SKIN_TONES, HAIR_STYLES, parseLook, makeLook, skinColor } from '../net/looks.js';
+import { fileToFace } from '../net/face-import.js';
 
 /**
  * "얼굴 그리기": a 32x32 dot grid over a blank skin-coloured head. Click or drag to place dots,
@@ -31,6 +32,7 @@ export function createFaceEditor({ getFace, apply, getLook = () => 'm', previewL
   const smallGrid = document.createElement('canvas'); smallGrid.width = smallGrid.height = FACE_SIZE;
   const smallRound = document.createElement('canvas'); smallRound.width = smallRound.height = 256;
   const errorEl = $('#faceError');
+  const noteEl = $('#faceNote');
   const galleryEl = $('#faceGallery');
   const CELL = grid.width / FACE_SIZE;
   let look = parseLook(getLook());   // { clothes, skin, hair } being tried on
@@ -256,6 +258,7 @@ export function createFaceEditor({ getFace, apply, getLook = () => 'm', previewL
     renderOwn();
     markSwatch();
     errorEl.hidden = true;
+    noteEl.hidden = true;
     render();
   }
 
@@ -293,6 +296,28 @@ export function createFaceEditor({ getFace, apply, getLook = () => 'm', previewL
     TOO_SOON: '얼굴은 5초에 한 번만 바꿀 수 있습니다. 잠시 후 다시 눌러 주세요.',
     TIMEOUT: '서버가 답하지 않아 바꾸지 못했습니다. 다시 시도해 주세요.',
     OFFLINE: '서버와 연결되지 않아 바꾸지 못했습니다.',
+  };
+
+  // a picture file put onto the grid (net/face-import.js): only loaded here, so it can be touched
+  // up and checked before "이 얼굴 쓰기" shows it to anyone
+  const importFile = $('#faceImportFile');
+  const IMPORT_ERROR = {
+    NOT_IMAGE: '그림 파일을 읽을 수 없습니다. PNG, GIF, WEBP, JPG 파일을 골라 주세요.',
+    TOO_BIG: '파일이 너무 큽니다. 5MB 이하로 골라 주세요.',
+  };
+  $('#faceImport').onclick = () => importFile.click();
+  importFile.onchange = async () => {
+    const file = importFile.files && importFile.files[0];
+    importFile.value = '';   // the same file can be picked again
+    if (!file) return;
+    try {
+      load(await fileToFace(file));
+      noteEl.textContent = '그림을 32칸 판에 맞춰 올렸습니다. 12색으로 줄어서 원본과 다를 수 있어요. 다듬은 뒤 "이 얼굴 쓰기"를 눌러 주세요.';
+      noteEl.hidden = false;
+    } catch (e) {
+      errorEl.textContent = IMPORT_ERROR[e.message] || IMPORT_ERROR.NOT_IMAGE;
+      errorEl.hidden = false;
+    }
   };
 
   $('#faceClear').onclick = () => load(EMPTY_FACE);

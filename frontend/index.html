@@ -136,6 +136,8 @@
           <canvas id="facePreview" width="128" height="128"></canvas>
           <button id="faceStarter" type="button">기본 얼굴부터</button>
           <button id="faceClear" type="button">모두 지우기</button>
+          <button id="faceImport" type="button" title="PNG 같은 그림 파일을 32칸 판에 맞춰 올립니다">그림 불러오기</button>
+          <input type="file" id="faceImportFile" accept="image/png,image/gif,image/webp,image/jpeg" hidden>
         </div>
       </div>
       <div id="faceGalleryWrap" hidden>
@@ -145,6 +147,7 @@
       <label class="check"><input type="checkbox" id="faceShowOthers" checked> 다른 사람이 그린 얼굴 보기</label>
       <p class="rule">다른 사람 이름표를 누르면 그 사람이 그린 얼굴을 숨기거나 신고할 수 있습니다. 여러 사람에게 신고된 그림은 내려가고 하루 동안 다시 쓸 수 없습니다.</p>
       <button id="faceUnhide" type="button" hidden>숨긴 그림 모두 다시 보기</button>
+      <p class="note" id="faceNote" role="status" hidden></p>
       <p class="error" id="faceError" role="alert" hidden></p>
       <div class="row">
         <button id="faceCancel" type="button">취소</button>
