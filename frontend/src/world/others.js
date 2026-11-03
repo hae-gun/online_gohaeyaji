@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { makeFigure, parishioner, NAME_HEIGHT, walkPose } from './figure.js';
+import { validLook } from '../net/looks.js';
 import { hiddenFaces } from '../net/faces.js';
 import { createEmotePlayer, SIT } from './emotes.js';
 
@@ -32,7 +33,7 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
   const boothOwner = new Map();    // boothId -> pid
   const names = new Map();         // pid -> name (may arrive before the first move)
   const faces = new Map();         // pid -> hand-drawn face code
-  const looks = new Map();         // pid -> 'm' | 'f'
+  const looks = new Map();         // pid -> look code (net/looks.js)
   let showDrawn = true;
   const v = new THREE.Vector3();
   let me = null;
@@ -80,9 +81,9 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
     return p;
   }
 
-  /** Someone switched between 형제님 and 자매님: new clothes, same place, same gesture state. */
+  /** Someone changed clothes, skin tone or hair (net/looks.js): rebuilt in place, same gesture state. */
   function setLook(pid, look) {
-    if (look !== 'm' && look !== 'f') return;
+    if (!validLook(look)) return;
     const before = looks.get(pid) || 'm';
     looks.set(pid, look);
     const p = players.get(pid);

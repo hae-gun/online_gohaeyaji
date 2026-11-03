@@ -86,7 +86,7 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
       ...(client.myName ? { name: client.myName } : {}),
       // the face drawn in this browser before (protocol section 15)
       ...(client.myFace ? { face: client.myFace } : {}),
-      look: client.myLook,   // 형제님 'm' or 자매님 'f' (v0.16)
+      look: client.myLook,   // look code: clothes, skin tone, hair (v0.17)
     });
     ws.onmessage = (e) => {
       let msg;

@@ -4,6 +4,7 @@ import {
   paintFace, normalizeFace, storedFace, splitFace, joinFace,
 } from '../net/faces.js';
 import { smoothFace } from '../world/pixel-face.js';
+import { SKIN_TONES, HAIR_STYLES, parseLook, makeLook, skinColor } from '../net/looks.js';
 
 /**
  * "얼굴 그리기": a 32x32 dot grid over a blank skin-coloured head. Click or drag to place dots,
@@ -13,10 +14,15 @@ import { smoothFace } from '../world/pixel-face.js';
  *
  * Earlier drawings stay in this browser (storedFace.gallery) and can be loaded again.
  *
- * @param {{ getFace(): string|null, apply(face: string|null): Promise<{ok:boolean, reason?:string}> }} opts
+ * Skin tone and hair style are picked here too (net/looks.js). A pick shows on my character at
+ * once (previewLook); "이 얼굴 쓰기" keeps it and tells the server (commitLook), 취소 puts the old
+ * look back.
+ *
+ * @param {{ getFace(): string|null, apply(face: string|null): Promise<{ok:boolean, reason?:string}>,
+ *           getLook(): string, previewLook(code: string): void, commitLook(code: string): void }} opts
  * @returns {{ open(): void, isOpen(): boolean }}
  */
-export function createFaceEditor({ getFace, apply }) {
+export function createFaceEditor({ getFace, apply, getLook = () => 'm', previewLook = () => {}, commitLook = () => {} }) {
   const panel = $('#facePanel');
   const grid = $('#faceGrid');
   const ctx = grid.getContext('2d');
@@ -27,7 +33,50 @@ export function createFaceEditor({ getFace, apply }) {
   const errorEl = $('#faceError');
   const galleryEl = $('#faceGallery');
   const CELL = grid.width / FACE_SIZE;
-  const SKIN = '#efc39b';
+  let look = parseLook(getLook());   // { clothes, skin, hair } being tried on
+  let lookAtOpen = getLook();
+  let faceAtOpen = null;
+  const skinHex = () => `#${skinColor(look.skin).toString(16).padStart(6, '0')}`;
+  const lookCode = () => makeLook(look.clothes, look.skin, look.hair);
+
+  // skin tones: one tap changes the whole face colour
+  const skinRow = $('#skinSwatches');
+  SKIN_TONES.forEach((tone, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'swatch skin';
+    b.style.setProperty('--c', `#${tone.toString(16).padStart(6, '0')}`);
+    b.title = `피부색 ${i + 1}`;
+    b.setAttribute('aria-label', `피부색 ${i + 1}`);
+    b.onclick = () => { look.skin = String(i); tryLook(); };
+    skinRow.appendChild(b);
+  });
+  // or any colour at all (RGB): the browser's own colour picker, shown live while dragging
+  const skinPick = $('#skinRgb');
+  skinPick.oninput = () => { look.skin = skinPick.value.slice(1).toLowerCase(); tryLook(); };
+  // hair styles of my clothes (형제님 or 자매님); the last one is always 민머리
+  const hairRow = $('#hairPick');
+  function renderHair() {
+    hairRow.textContent = '';
+    HAIR_STYLES[look.clothes].forEach((label, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.onclick = () => { look.hair = i; tryLook(); };
+      hairRow.appendChild(b);
+    });
+  }
+  function markLookPicks() {
+    [...skinRow.children].forEach((b, i) => b.setAttribute('aria-pressed', String(String(i) === look.skin)));
+    skinPick.value = skinHex();
+    skinPick.parentElement.setAttribute('aria-pressed', String(look.skin.length === 6));
+    [...hairRow.children].forEach((b, i) => b.setAttribute('aria-pressed', String(i === look.hair)));
+  }
+  function tryLook() {
+    markLookPicks();
+    previewLook(lookCode());
+    render();
+  }
 
   let cells = EMPTY_FACE.split('');
   let picked = [DEFAULT_PICKED[0]];   // my colours, slot 1 first
@@ -130,7 +179,7 @@ export function createFaceEditor({ getFace, apply }) {
     // the head: skin circle, so people see where the face sits
     ctx.fillStyle = '#1d1823';
     ctx.fillRect(0, 0, grid.width, grid.height);
-    ctx.fillStyle = SKIN;
+    ctx.fillStyle = skinHex();
     ctx.beginPath();
     ctx.arc(grid.width / 2, grid.height / 2, grid.width / 2 - 2, 0, Math.PI * 2);
     ctx.fill();
@@ -145,7 +194,7 @@ export function createFaceEditor({ getFace, apply }) {
     // small preview at the size it shows in the game
     const pv = preview.canvas;
     preview.fillStyle = '#1d1823'; preview.fillRect(0, 0, pv.width, pv.height);
-    preview.fillStyle = SKIN; preview.beginPath(); preview.arc(pv.width / 2, pv.height / 2, pv.width / 2 - 1, 0, Math.PI * 2); preview.fill();
+    preview.fillStyle = skinHex(); preview.beginPath(); preview.arc(pv.width / 2, pv.height / 2, pv.width / 2 - 1, 0, Math.PI * 2); preview.fill();
     smallGrid.getContext('2d').clearRect(0, 0, FACE_SIZE, FACE_SIZE);
     paintFace(smallGrid.getContext('2d'), face, 1);
     smoothFace(smallGrid, smallRound);
@@ -223,7 +272,7 @@ export function createFaceEditor({ getFace, apply }) {
       const cv = document.createElement('canvas');
       cv.width = cv.height = 64;
       const c = cv.getContext('2d');
-      c.fillStyle = SKIN; c.beginPath(); c.arc(32, 32, 31, 0, Math.PI * 2); c.fill();
+      c.fillStyle = skinHex(); c.beginPath(); c.arc(32, 32, 31, 0, Math.PI * 2); c.fill();
       paintFace(c, face, 2);
       pick.appendChild(cv);
       pick.onclick = () => load(face);
@@ -248,9 +297,14 @@ export function createFaceEditor({ getFace, apply }) {
 
   $('#faceClear').onclick = () => load(EMPTY_FACE);
   $('#faceStarter').onclick = () => load(STARTER_FACE);
-  $('#faceCancel').onclick = () => { panel.hidden = true; };
+  // closing without saving puts the look I came in with back on
+  const cancel = () => { if (lookCode() !== lookAtOpen) previewLook(lookAtOpen); panel.hidden = true; };
+  $('#faceCancel').onclick = cancel;
   $('#faceSave').onclick = async () => {
     const face = normalizeFace(code());
+    if (lookCode() !== lookAtOpen) { commitLook(lookCode()); lookAtOpen = lookCode(); }
+    // only the look changed: no need to send the same drawing again (setFace is limited to 5 s)
+    if (face === faceAtOpen) { panel.hidden = true; return; }
     $('#faceSave').disabled = true;
     const r = await apply(face);
     $('#faceSave').disabled = false;
@@ -262,13 +316,18 @@ export function createFaceEditor({ getFace, apply }) {
     storedFace.remember(face);   // empty drawings are not kept
     panel.hidden = true;
   };
-  panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') panel.hidden = true; });
+  panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') cancel(); });
 
   renderOwn();
   markSwatch();
   markBrush();
   return {
     open() {
+      lookAtOpen = getLook();
+      look = parseLook(lookAtOpen);
+      faceAtOpen = normalizeFace(getFace());
+      renderHair();
+      markLookPicks();
       load(getFace() || EMPTY_FACE);
       renderGallery();
       panel.hidden = false;

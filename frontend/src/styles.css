@@ -134,6 +134,14 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .card .check{display:flex;gap:8px;align-items:center;font-size:13.5px;color:var(--muted)}
 
 .brushes{display:flex;gap:6px}
+.lookRows{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center}
+.lookRows small{color:var(--muted)}
+.swatch.skin{border-radius:50%}
+.hairPick{flex-wrap:wrap}
+.skinRow{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.skinRgb{display:inline-flex;align-items:center;gap:6px;font-size:.85em;padding:3px 8px;border-radius:999px;border:2px solid transparent;cursor:pointer}
+.skinRgb[aria-pressed="true"]{border-color:var(--gold)}
+.skinRgb input{width:28px;height:28px;padding:0;border:none;border-radius:50%;background:none;cursor:pointer}
 .brushes button{padding:6px 10px;font-size:13px}
 .brushes button[aria-pressed="true"]{border-color:var(--gold);color:var(--gold)}
 /* name tags open the player menu (hide or report a drawn face) */

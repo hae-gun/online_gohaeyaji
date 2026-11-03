@@ -7,7 +7,7 @@ import { createPigeons, plazaPigeonSpots } from './world/pigeons.js';
 import { createWalkMarker } from './world/walk-marker.js';
 import { buildBooths, BOOTH_COUNT } from './world/booths.js';
 import { makeFigure, parishioner, walkPose } from './world/figure.js';
-import { storedLook, validLook } from './net/looks.js';
+import { storedLook, validLook, parseLook, makeLook } from './net/looks.js';
 import { createOtherPlayers } from './world/others.js';
 import { buildConfessional } from './world/confessional.js';
 import { createKeyboard } from './controls/keyboard.js';
@@ -251,6 +251,9 @@ nameInput.addEventListener('input', () => { nameError.hidden = true; });
 player.userData.face.setCustom(rooms.myFace);
 const faceEditor = createFaceEditor({
   getFace: () => rooms.myFace,
+  getLook: () => myLook || 'm',
+  previewLook: (code) => wearLook(code),
+  commitLook: (code) => { setMyLook(code); toast('모습을 바꿨습니다'); },
   async apply(face) {
     const r = await rooms.setFace(face);
     if (r.ok) {
@@ -919,16 +922,16 @@ $('#sndBtn').onclick = () => {
 };
 /* ---------- 형제님 / 자매님 ---------- */
 function markLook() {
-  document.querySelectorAll('.lookPick button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.look === myLook)));
+  const clothes = myLook ? parseLook(myLook).clothes : null;
+  document.querySelectorAll('.lookPick button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.look === clothes)));
 }
-/** Changes my clothes where I stand (keeps the face, the seat and the camera) and tells the server. */
-function setMyLook(look) {
-  if (!validLook(look)) return;
-  const changed = look !== myLook;
-  myLook = look;
-  markLook();
-  if (!changed && player.userData.look === look) { rooms.setLook(look); return; }
-  if (player.userData.look !== look) {
+/**
+ * Puts a look (clothes, skin tone, hair: net/looks.js) on my character where I stand, keeping the
+ * drawn face, the seat and the camera. Local only: the face editor uses it to try looks on.
+ */
+function wearLook(look) {
+  if (!validLook(look) || player.userData.lookCode === look) return;
+  {
     const fig = makeFigure(parishioner(look, MY_SEED, { face: 'derpy' }));
     fig.position.copy(player.position);
     fig.rotation.y = player.rotation.y;
@@ -941,9 +944,23 @@ function setMyLook(look) {
     myEmote = createEmotePlayer(player);
     if (seated) myEmote.start('sit');
   }
+}
+/** Wears a look and tells the server, so everyone sees it (protocol v0.17). */
+function setMyLook(look) {
+  if (!validLook(look)) return;
+  myLook = look;
+  markLook();
+  wearLook(look);
   rooms.setLook(look);
 }
-document.querySelectorAll('.lookPick button').forEach((b) => { b.onclick = () => { setMyLook(b.dataset.look); $('#lookError').hidden = true; }; });
+// the entry card picks the clothes; skin tone and hair style chosen before are kept
+document.querySelectorAll('.lookPick button').forEach((b) => {
+  b.onclick = () => {
+    const now = parseLook(myLook || 'm');
+    setMyLook(makeLook(b.dataset.look, now.skin, now.hair));
+    $('#lookError').hidden = true;
+  };
+});
 markLook();
 
 $('#startBtn').onclick = () => {

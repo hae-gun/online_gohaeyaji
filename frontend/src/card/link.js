@@ -44,7 +44,7 @@ const fromB64 = (s) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/
 export function encodeCard(d) {
   return toB64(JSON.stringify({
     v: 1, r: d.ref, n: d.name, t: Math.round(d.when.getTime() / 60000), x: d.nth | 0,
-    l: d.look === 'f' ? 'f' : 'm', ...(d.face ? { f: packFace(d.face) } : {}),
+    l: (d.look || 'm')[0] === 'f' ? 'f' : 'm', ...(d.face ? { f: packFace(d.face) } : {}),
   }));
 }
 

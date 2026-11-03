@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { M, B } from '../core/three-utils.js';
 import { createPixelFace, faceCap } from './pixel-face.js';
+import { parseLook, makeLook, skinColor } from '../net/looks.js';
 
 /**
  * Round and squishy chibi figures: big round heads, short bean bodies, mitten hands, all smooth
@@ -376,6 +377,87 @@ function veilDrape(r) {
 }
 
 /**
+ * Parishioner hair styles (net/looks.js HAIR_STYLES has the names; the last one is always bald).
+ *   형제님  0 short cap, 1 side part with a swept fringe, 2 curly perm, 3 spiky, 4 bald
+ *   자매님  0 long straight, 1 round bob, 2 ponytail, 3 twin buns, 4 bald
+ * The head faces +z. SphereGeometry puts +z at phi = PI/2, so "open at the face" ranges skip it.
+ */
+function hairdo(head, r, hairM, female, style) {
+  const add = (geo, x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, rz = 0) => {
+    const m = new THREE.Mesh(geo, hairM);
+    m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.set(rx, 0, rz);
+    head.add(m);
+    return m;
+  };
+  const cap = (tilt = -0.35, cover = 0.4, lean = 0.15) =>
+    add(new THREE.SphereGeometry(r + 0.03, 36, 18, 0, Math.PI * 2, 0, Math.PI * cover), 0, 0.02, 0, 1, 1, 1, tilt, lean);
+  const bangs = () => add(new THREE.SphereGeometry(r * 0.62, 24, 12, 0, Math.PI, 0, Math.PI * 0.5), 0, r * 0.42, r * 0.5, 1.25, 0.55, 0.7, -0.35);
+  const tie = (x, y, z, rad, rx, rz) => {
+    const t = new THREE.Mesh(new THREE.TorusGeometry(rad, rad * 0.28, 8, 20), M(0xf07a8a));
+    t.position.set(x, y, z); t.rotation.set(rx, 0, rz); head.add(t);
+  };
+  const last = 4;
+  if (style === last) return;   // bald: the head as it is
+
+  if (!female) {
+    if (style === 1) {
+      // side part: the cap plus a fringe swept to one side
+      cap(-0.3, 0.42, 0);
+      add(new THREE.SphereGeometry(0.2, 20, 12), r * 0.28, r * 0.68, r * 0.42, 1.6, 0.55, 0.8, -0.4, -0.35);
+      return;
+    }
+    if (style === 2) {
+      // curly perm: a mop of small balls round the top
+      cap(-0.25, 0.38, 0);
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI * 2, ring = i % 2 ? 0.24 : 0.32;
+        add(new THREE.SphereGeometry(0.12, 12, 8), Math.cos(a) * ring, r * 0.78 + (i % 3) * 0.03, Math.sin(a) * ring * 0.85 - 0.04);
+      }
+      add(new THREE.SphereGeometry(0.17, 14, 10), 0, r * 1.02, -0.04);
+      return;
+    }
+    if (style === 3) {
+      // spiky: short cap with cones sticking up
+      cap(-0.25, 0.4, 0);
+      [[0, 0.16, 0.18, 0], [-0.17, 0.12, 0.08, 0.5], [0.17, 0.12, 0.08, -0.5], [-0.09, 0.15, -0.12, 0.3], [0.1, 0.15, -0.12, -0.3]]
+        .forEach(([x, h, z, lean]) => {
+          const c = add(new THREE.ConeGeometry(0.08, h + 0.08, 12), x, r * 0.95, z, 1, 1, 1, z > 0.1 ? 0.35 : -0.2, lean);
+          c.position.y += (h - 0.12) * 0.5;
+        });
+      return;
+    }
+    cap();   // 0: short cap, tipped a little to one side
+    return;
+  }
+
+  // 자매님: a crown down to the brow with soft bangs, then the style
+  add(new THREE.SphereGeometry(r + 0.035, 36, 18, 0, Math.PI * 2, 0, Math.PI * 0.42), 0, 0.03, -0.01, 1.05, 1, 1, -0.12);
+  bangs();
+  if (style === 1) {
+    // round bob around the back and sides, open at the face, ending at the chin
+    add(new THREE.SphereGeometry(r + 0.06, 36, 18, Math.PI / 2 + 1.05, Math.PI * 2 - 2.1, Math.PI * 0.22, Math.PI * 0.5), 0, 0, -0.02, 1.08, 1.05, 1.02);
+    return;
+  }
+  if (style === 2 || style === 3) {
+    // short at the sides and back, so the tail or the buns stand out
+    add(new THREE.SphereGeometry(r + 0.045, 36, 18, Math.PI / 2 + 1.2, Math.PI * 2 - 2.4, Math.PI * 0.22, Math.PI * 0.38), 0, 0, -0.02, 1.06, 1, 1.02);
+    if (style === 2) {
+      tie(0, r * 0.72, -r * 0.92, 0.075, 1.1, 0);
+      add(new THREE.SphereGeometry(0.15, 20, 14), 0, r * 0.25, -r * 1.22, 0.95, 2.3, 0.85, 0.55);
+    } else {
+      for (const sd of [-1, 1]) {
+        add(new THREE.SphereGeometry(0.19, 20, 14), sd * r * 0.72, r * 0.86, -r * 0.12);
+        tie(sd * r * 0.6, r * 0.74, -r * 0.1, 0.12, Math.PI / 2, sd * 0.75);
+      }
+    }
+    return;
+  }
+  // 0: long straight hair down the back
+  const back = new THREE.Mesh(new THREE.SphereGeometry(0.4, 24, 16), hairM);
+  back.scale.set(1.08, 1.08, 0.75); back.position.set(0, -0.1, -0.17); head.add(back);
+}
+
+/**
  * A parishioner, as at Sunday Mass: 형제님 ('m') in a jacket over a white shirt and tie, 자매님
  * ('f') in a dress with a white lace 미사보 over her hair. Both slim enough that the head is
  * clearly the biggest part.
@@ -418,14 +500,8 @@ function makeKid(o) {
   const variant = o.face || KID_FACES[Math.abs(o.seed || 0) % KID_FACES.length];
   const face = createPixelFace('kid', r * 1.55, variant);
   const { head, front } = headShape(g, { r, scale: [1.05, 0.98, 1] }, skin, 1.16, face, r * 1.55);
-  const hairM = M(o.hair || 0x3b2618);
-  // round hair cap, tipped a little to one side
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(r + 0.03, 36, 18, 0, Math.PI * 2, 0, Math.PI * 0.4), hairM);
-  hair.position.y = 0.02; hair.rotation.set(-0.35, 0, 0.15); head.add(hair);
+  hairdo(head, r, M(o.hair || 0x3b2618), female, o.hairStyle | 0);
   if (female) {
-    // longer hair down the back
-    const back = new THREE.Mesh(new THREE.SphereGeometry(0.4, 24, 16), hairM);
-    back.scale.set(1.08, 1.08, 0.75); back.position.set(0, -0.1, -0.17); head.add(back);
     // 미사보: a long, sheer lace mantilla laid on the crown and set back, so the front hair and the
     // forehead show; it falls past the shoulders in soft folds. Sheer on purpose: a solid white
     // cloth wrapped round the head read as a hijab
@@ -455,7 +531,7 @@ function makeKid(o) {
     // hands resting on the knees when sitting on a bench
     lap: { R: v(-0.15, 0.5, 0.33), L: v(0.15, 0.5, 0.33) },
   };
-  g.userData = { legs, arms, head, ARM: 0.3, face, pose, look: female ? 'f' : 'm' };
+  g.userData = { legs, arms, head, ARM: 0.3, face, pose, look: female ? 'f' : 'm', lookCode: o.lookCode || (female ? 'f' : 'm') };
   return g;
 }
 
@@ -478,9 +554,11 @@ const HAIRS = [0x2b1d14, 0x1d1d1d, 0x7a4a20, 0x4a2e1c, 0xc9a050];
 /** @param {'m'|'f'} look @param {number} seed */
 export function parishioner(look, seed, extra = {}) {
   const n = Math.abs(seed | 0);
-  return look === 'f'
-    ? { look: 'f', shirt: DRESSES[n % DRESSES.length], hair: HAIRS[(n >> 1) % HAIRS.length], seed, ...extra }
-    : { look: 'm', shirt: JACKETS[n % JACKETS.length], pants: 0x26262c, tie: TIES[(n >> 1) % TIES.length], hair: HAIRS[(n >> 1) % HAIRS.length], seed, ...extra };
+  const { clothes, skin, hair } = parseLook(look);
+  const own = { skin: skinColor(skin), hairStyle: hair, lookCode: makeLook(clothes, skin, hair) };
+  return clothes === 'f'
+    ? { look: 'f', shirt: DRESSES[n % DRESSES.length], hair: HAIRS[(n >> 1) % HAIRS.length], seed, ...own, ...extra }
+    : { look: 'm', shirt: JACKETS[n % JACKETS.length], pants: 0x26262c, tie: TIES[(n >> 1) % TIES.length], hair: HAIRS[(n >> 1) % HAIRS.length], seed, ...own, ...extra };
 }
 
 /** Height where a name label sits above a kid's head. */
