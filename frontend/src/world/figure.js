@@ -306,64 +306,132 @@ function makePriest(o) {
   return g;
 }
 
+/** White lace for the 미사보 (chapel veil): a white sheet with a pattern of small holes. */
+let laceTex = null;
+function lace() {
+  if (laceTex) return laceTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fbf8f2'; g.fillRect(0, 0, 64, 64);
+  g.globalCompositeOperation = 'destination-out';
+  // small flowers of holes, as in the lace of a 미사보
+  for (const [cx, cy] of [[16, 16], [48, 48]]) {
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2;
+      g.beginPath(); g.arc(cx + Math.cos(a) * 6, cy + Math.sin(a) * 6, 2.2, 0, Math.PI * 2); g.fill();
+    }
+  }
+  laceTex = new THREE.CanvasTexture(c);
+  laceTex.wrapS = laceTex.wrapT = THREE.RepeatWrapping;
+  laceTex.repeat.set(10, 4);
+  return laceTex;
+}
+
+/**
+ * A parishioner, as at Sunday Mass: 형제님 ('m') in a jacket over a white shirt and tie, 자매님
+ * ('f') in a dress with a white lace 미사보 over her hair. Both slim enough that the head is
+ * clearly the biggest part.
+ */
 function makeKid(o) {
   const g = new THREE.Group();
   const skin = M(o.skin || 0xf3c9a4);
+  const female = o.look === 'f';
   const legs = [];
   for (const s of [-1, 1]) {
-    const p = new THREE.Group(); p.position.set(s * 0.13, 0.3, 0);
-    // trouser leg and round bean shoe, one mesh
+    const p = new THREE.Group(); p.position.set(s * 0.11, 0.3, 0);
+    // leg (trousers, or tights under the dress) and a round bean shoe, one mesh
     const legAt = new THREE.Matrix4().makeTranslation(0, -0.14, 0);
-    const shoeAt = new THREE.Matrix4().compose(new THREE.Vector3(0, -0.26, 0.04), new THREE.Quaternion(), new THREE.Vector3(0.95, 0.6, 1.4));
+    const shoeAt = new THREE.Matrix4().compose(new THREE.Vector3(0, -0.26, 0.04), new THREE.Quaternion(), new THREE.Vector3(0.9, 0.6, 1.35));
     p.add(new THREE.Mesh(joinColored([
-      [new THREE.CylinderGeometry(0.085, 0.085, 0.24, 12), o.pants, legAt],
-      [new THREE.SphereGeometry(0.1, 14, 10), 0x2f2c33, shoeAt],
+      [new THREE.CylinderGeometry(female ? 0.06 : 0.08, female ? 0.06 : 0.08, 0.24, 12), female ? 0x4a3f48 : o.pants, legAt],
+      [new THREE.SphereGeometry(0.1, 14, 10), female ? 0x5a2d2a : 0x2f2c33, shoeAt],
     ]), painted()));
     g.add(p); legs.push(p);
   }
-  // round bean body: wider at the bottom, rounded at both ends
-  const bodyPts = [[0.001, 0.29], [0.24, 0.31], [0.33, 0.4], [0.34, 0.56], [0.28, 0.74], [0.16, 0.8], [0.001, 0.81]]
-    .map(([r, y]) => new THREE.Vector2(r, y));
-  g.add(new THREE.Mesh(new THREE.LatheGeometry(bodyPts, 20), M(o.shirt)));   // a little coarser than the head
-  const arms = mittens(g, o.shirt, skin, 0.3, 0.74, 0.3);
+  // body: a slim bean (형제님's jacket), or a dress that flares down to the knees (자매님)
+  const bodyPts = female
+    ? [[0.001, 0.15], [0.29, 0.16], [0.3, 0.21], [0.25, 0.42], [0.235, 0.56], [0.2, 0.74], [0.12, 0.8], [0.001, 0.81]]
+    : [[0.001, 0.29], [0.2, 0.31], [0.255, 0.4], [0.26, 0.56], [0.215, 0.74], [0.12, 0.8], [0.001, 0.81]];
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(bodyPts.map(([r, y]) => new THREE.Vector2(r, y)), 20), M(o.shirt)));   // a little coarser than the head
+  if (female) {
+    // a round white collar on the dress
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.025, 8, 20), M(0xfbf8f2));
+    collar.rotation.x = Math.PI / 2; collar.position.y = 0.785; g.add(collar);
+  } else {
+    // white shirt showing in the V of the jacket, and a tie
+    const shirt = new THREE.Mesh(new THREE.CircleGeometry(0.11, 3), M(0xfbf8f2));
+    shirt.position.set(0, 0.7, 0.215); shirt.rotation.set(-0.35, 0, -Math.PI / 2); shirt.scale.set(1.25, 0.8, 1); g.add(shirt);
+    const tie = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.16, 0.02), M(o.tie || 0x8e2a24));
+    tie.position.set(0, 0.66, 0.24); tie.rotation.x = -0.32; g.add(tie);
+  }
+  const arms = mittens(g, o.shirt, skin, 0.25, 0.74, 0.3);
 
   const r = 0.42;
   const variant = o.face || KID_FACES[Math.abs(o.seed || 0) % KID_FACES.length];
   const face = createPixelFace('kid', r * 1.55, variant);
   const { head, front } = headShape(g, { r, scale: [1.05, 0.98, 1] }, skin, 1.16, face, r * 1.55);
+  const hairM = M(o.hair || 0x3b2618);
   // round hair cap, tipped a little to one side
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(r + 0.03, 36, 18, 0, Math.PI * 2, 0, Math.PI * 0.4), M(o.hair || 0x3b2618));
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(r + 0.03, 36, 18, 0, Math.PI * 2, 0, Math.PI * 0.4), hairM);
   hair.position.y = 0.02; hair.rotation.set(-0.35, 0, 0.15); head.add(hair);
+  if (female) {
+    // longer hair down the back
+    const back = new THREE.Mesh(new THREE.SphereGeometry(0.4, 24, 16), hairM);
+    back.scale.set(1.08, 1.08, 0.75); back.position.set(0, -0.1, -0.17); head.add(back);
+    // 미사보: white lace over the top of the head, falling down the back to the shoulders
+    const veilM = new THREE.MeshPhongMaterial({ color: 0xffffff, map: lace(), transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, shininess: 10 });
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(r + 0.07, 36, 18, 0, Math.PI * 2, 0, Math.PI * 0.42), veilM);
+    // tipped back so the forehead and the face stay clear
+    cap.position.set(0, 0.0, -0.04); cap.rotation.x = -0.75; head.add(cap);
+    // round the back only (cylinder angle 0 is the front, +z)
+    const drape = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.07, r + 0.15, 0.5, 30, 1, true, Math.PI * 0.42, Math.PI * 1.16), veilM);
+    drape.position.set(0, -0.18, -0.06); head.add(drape);
+  }
 
   // points the emotes reach for (emotes.js), in the kid's own space
   const v = (x, y, z) => new THREE.Vector3(x, y, z);
   const pose = {
-    shoulder: { R: v(-0.3, 0.74, 0), L: v(0.3, 0.74, 0) },
+    shoulder: { R: v(-0.25, 0.74, 0), L: v(0.25, 0.74, 0) },
     headTop: 1.16 + r,
     forehead: v(0, 1.32, front + 0.06),
-    chest: v(0, 0.6, 0.4),
-    lShoulder: v(0.2, 0.8, 0.36),
-    rShoulder: v(-0.2, 0.8, 0.36),
-    pray: { R: v(-0.035, 0.66, 0.44), L: v(0.035, 0.66, 0.44) },
+    chest: v(0, 0.6, 0.33),
+    lShoulder: v(0.17, 0.8, 0.29),
+    rShoulder: v(-0.17, 0.8, 0.29),
+    pray: { R: v(-0.035, 0.66, 0.37), L: v(0.035, 0.66, 0.37) },
     // above the big head, not beside it, or the hands vanish behind the hair
     up: { R: v(-0.5, 1.9, 0.1), L: v(0.5, 1.9, 0.1) },
-    halfUp: { R: v(-0.62, 1.45, 0.12), L: v(0.62, 1.45, 0.12) },
-    limp: { R: v(-0.26, 0.42, 0.22), L: v(0.26, 0.42, 0.22) },
+    halfUp: { R: v(-0.6, 1.45, 0.12), L: v(0.6, 1.45, 0.12) },
+    limp: { R: v(-0.22, 0.42, 0.2), L: v(0.22, 0.42, 0.2) },
     // hands resting on the knees when sitting on a bench
-    lap: { R: v(-0.17, 0.5, 0.36), L: v(0.17, 0.5, 0.36) },
+    lap: { R: v(-0.15, 0.5, 0.33), L: v(0.15, 0.5, 0.33) },
   };
-  g.userData = { legs, arms, head, ARM: 0.3, face, pose };
+  g.userData = { legs, arms, head, ARM: 0.3, face, pose, look: female ? 'f' : 'm' };
   return g;
 }
 
 /**
- * @param {{ priest?: boolean, look?: 'jin'|'eom'|'yu'|'baek',
- *           shirt?: number, pants?: number, hair?: number, skin?: number,
+ * @param {{ priest?: boolean, look?: 'jin'|'eom'|'yu'|'baek'|'m'|'f',
+ *           shirt?: number, pants?: number, hair?: number, skin?: number, tie?: number,
  *           face?: 'derpy'|'plain'|'sleepy'|'shock', seed?: number }} o
- *   kids: face picks the expression; without it, seed (e.g. the pid) picks one
+ *   priests: look picks the priest. Parishioners: look 'm' 형제님 or 'f' 자매님; face picks the
+ *   expression, and without it seed (e.g. the pid) picks one
  */
 export function makeFigure(o) {
   return o.priest ? makePriest(o) : makeKid(o);
+}
+
+/** Clothes for a parishioner, picked from the person's number so everyone looks a little different. */
+const JACKETS = [0x2e3a52, 0x3b3b42, 0x4a3426, 0x3d4a32, 0x5a2a32, 0x2f4a5a];
+const TIES = [0x8e2a24, 0x2a4a8e, 0xc9a050, 0x2f6b4a];
+const DRESSES = [0x2e3a62, 0x7a2a3a, 0xe9dcc4, 0xc98a9a, 0x7d9a7a, 0x8a6aa8];
+const HAIRS = [0x2b1d14, 0x1d1d1d, 0x7a4a20, 0x4a2e1c, 0xc9a050];
+/** @param {'m'|'f'} look @param {number} seed */
+export function parishioner(look, seed, extra = {}) {
+  const n = Math.abs(seed | 0);
+  return look === 'f'
+    ? { look: 'f', shirt: DRESSES[n % DRESSES.length], hair: HAIRS[(n >> 1) % HAIRS.length], seed, ...extra }
+    : { look: 'm', shirt: JACKETS[n % JACKETS.length], pants: 0x26262c, tie: TIES[(n >> 1) % TIES.length], hair: HAIRS[(n >> 1) % HAIRS.length], seed, ...extra };
 }
 
 /** Height where a name label sits above a kid's head. */

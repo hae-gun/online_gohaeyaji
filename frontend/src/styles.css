@@ -209,3 +209,8 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
   .emoteBar button kbd{display:none}
   .hint{font-size:12px}
 }
+
+/* 형제님 / 자매님 */
+.lookPick{display:flex;gap:8px}
+.lookPick button{flex:1;padding:10px 14px;background:rgba(255,255,255,.04)}
+.lookPick button[aria-pressed="true"]{border-color:var(--gold);color:#1d160c;background:var(--gold);font-weight:600}

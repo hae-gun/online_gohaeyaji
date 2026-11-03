@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeFigure, NAME_HEIGHT, walkPose } from './figure.js';
+import { makeFigure, parishioner, NAME_HEIGHT, walkPose } from './figure.js';
 import { hiddenFaces } from '../net/faces.js';
 import { createEmotePlayer, SIT } from './emotes.js';
 
@@ -19,9 +19,9 @@ import { createEmotePlayer, SIT } from './emotes.js';
  * A name tag of someone wearing a drawing can be clicked: onTagClick opens the hide/report menu.
  * Drawings hidden by this viewer stay hidden by content (hiddenFaces), even on the next visit.
  */
-const SHIRTS = [0x3a7bd5, 0x2fa36b, 0xe0a526, 0x8e5cc2, 0x1fb2b8, 0xd35d9c, 0x6d8a2e, 0xe0703a, 0x4a5bdc, 0x9a6b3f];
-const PANTS = [0x2e3a52, 0x3b3b3b, 0x4a3426, 0x1f3d3a];
-const HAIR = [0x2b1d14, 0x1d1d1d, 0x7a4a20, 0x4a2e1c, 0xc9a050];
+// clothes colours come from the pid (figure.js parishioner), so everyone sees the same person alike
+// 형제님 or 자매님 (protocol v0.16) comes with the name, as a third element of each name entry;
+// when it changes, the avatar is rebuilt in the new clothes where it stands.
 const WALK_SPEED = 3.4;            // same as the local player
 const CATCH_UP = 1.35;             // a bit faster so they never lag a whole batch behind
 const SNAP_DISTANCE = 3;
@@ -32,6 +32,7 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
   const boothOwner = new Map();    // boothId -> pid
   const names = new Map();         // pid -> name (may arrive before the first move)
   const faces = new Map();         // pid -> hand-drawn face code
+  const looks = new Map();         // pid -> 'm' | 'f'
   let showDrawn = true;
   const v = new THREE.Vector3();
   let me = null;
@@ -58,7 +59,7 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
   function ensure(pid, x, z, ry) {
     let p = players.get(pid);
     if (!p) {
-      const fig = makeFigure({ shirt: SHIRTS[pid % SHIRTS.length], pants: PANTS[pid % PANTS.length], hair: HAIR[pid % HAIR.length], seed: pid });
+      const fig = makeFigure(parishioner(looks.get(pid) || 'm', pid));
       fig.position.set(x, 0, z);
       fig.rotation.y = ry;
       scene.add(fig);
@@ -79,10 +80,32 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
     return p;
   }
 
+  /** Someone switched between 형제님 and 자매님: new clothes, same place, same gesture state. */
+  function setLook(pid, look) {
+    if (look !== 'm' && look !== 'f') return;
+    const before = looks.get(pid) || 'm';
+    looks.set(pid, look);
+    const p = players.get(pid);
+    if (!p || before === look) return;
+    const old = p.fig;
+    const fig = makeFigure(parishioner(look, pid));
+    fig.position.copy(old.position);
+    fig.rotation.y = old.rotation.y;
+    fig.visible = old.visible;
+    const seated = p.emote.seated;
+    scene.remove(old);
+    scene.add(fig);
+    p.fig = fig;
+    p.emote = createEmotePlayer(fig);
+    if (seated) p.emote.start(SIT);
+    applyFace(pid);
+  }
+
   function remove(pid) {
     const p = players.get(pid);
     names.delete(pid);
     faces.delete(pid);
+    looks.delete(pid);
     if (!p) return;
     scene.remove(p.fig);
     p.tag.remove();
@@ -105,7 +128,8 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
         boothOwner.clear();
         names.clear();
         me = e.you;
-        for (const [pid, name] of e.names || []) names.set(pid, name);
+        looks.clear();
+        for (const [pid, name, look] of e.names || []) { names.set(pid, name); if (look) looks.set(pid, look); }
         faces.clear();
         for (const [pid, face] of e.faces || []) faces.set(pid, face);
         for (const [pid, x, z, ry, boothId] of e.players) {
@@ -119,7 +143,7 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
           if (p && !p.inBooth) p.emote.start(SIT);
         }
       } else if (e.kind === 'batch') {
-        for (const [pid, name] of e.named || []) setName(pid, name);
+        for (const [pid, name, look] of e.named || []) { setName(pid, name); if (look) setLook(pid, look); }
         for (const [pid, face] of e.faced || []) setFace(pid, face);
         for (const [pid, x, z, ry] of e.moved) {
           if (pid === me) continue;

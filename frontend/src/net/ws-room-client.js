@@ -1,5 +1,6 @@
 import { DEFAULT_IDLE } from './room-client.js';
 import { storedName } from './names.js';
+import { storedLook } from './looks.js';
 import { storedFace, normalizeFace } from './faces.js';
 
 /**
@@ -45,7 +46,7 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
   const pendingReports = new Map();  // reqId -> resolve
   const pendingInquiries = new Map(); // reqId -> resolve
   const faceRemovedListeners = [];
-  const client = { idle: { ...DEFAULT_IDLE }, myName: storedName.load() || '', myFace: storedFace.load() };
+  const client = { idle: { ...DEFAULT_IDLE }, myName: storedName.load() || '', myFace: storedFace.load(), myLook: storedLook.load() || 'm' };
   const setMyName = (name) => {
     if (!name) return;
     client.myName = name;
@@ -85,6 +86,7 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
       ...(client.myName ? { name: client.myName } : {}),
       // the face drawn in this browser before (protocol section 15)
       ...(client.myFace ? { face: client.myFace } : {}),
+      look: client.myLook,   // 형제님 'm' or 자매님 'f' (v0.16)
     });
     ws.onmessage = (e) => {
       let msg;
@@ -310,6 +312,13 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
           if (pendingInquiries.delete(reqId)) resolve({ ok: false, reason: 'TIMEOUT' });
         }, REPORT_TIMEOUT_MS);
       });
+    },
+
+    /** 형제님 'm' or 자매님 'f'. Applied here at once; the server passes it on (no reply). */
+    setLook(look) {
+      client.myLook = look;
+      storedLook.save(look);
+      if (ready) send({ type: 'setLook', look });
     },
 
     /** Ask the server for a new display name. Resolves with the name it accepted, or why not. */

@@ -47,6 +47,7 @@
  */
 
 import { checkName, normalizeName, randomSaintName, storedName } from './names.js';
+import { storedLook } from './looks.js';
 import { storedFace, normalizeFace } from './faces.js';
 
 export const DEFAULT_IDLE = { limitMs: 90_000, warnMs: 20_000, dangerMs: 10_000 };
@@ -104,6 +105,8 @@ export function createLocalRoomClient({ count, simulate = false }) {
     sharesPresence: false,
     get myName() { return myName; },
     get myFace() { return myFace; },
+    myLook: storedLook.load() || 'm',
+    setLook(look) { this.myLook = look; storedLook.save(look); },
     async report() { return { ok: false, reason: 'NO_FACE' }; },   // nobody else exists here
     sendEmote() { /* nobody to show it to */ },
     onFaceRemoved() { /* never happens without a server */ },

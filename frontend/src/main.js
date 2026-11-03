@@ -6,7 +6,8 @@ import { buildExterior, FACADE_Z, FOUNTAIN } from './world/exterior.js';
 import { createPigeons, plazaPigeonSpots } from './world/pigeons.js';
 import { createWalkMarker } from './world/walk-marker.js';
 import { buildBooths, BOOTH_COUNT } from './world/booths.js';
-import { makeFigure, walkPose } from './world/figure.js';
+import { makeFigure, parishioner, walkPose } from './world/figure.js';
+import { storedLook, validLook } from './net/looks.js';
 import { createOtherPlayers } from './world/others.js';
 import { buildConfessional } from './world/confessional.js';
 import { createKeyboard } from './controls/keyboard.js';
@@ -64,7 +65,10 @@ const nav = createNavigation([...outside.obstacles, ...hall.obstacles, ...booths
 const pigeons = createPigeons(world, plazaPigeonSpots(FOUNTAIN, outside.obstacles));
 const confessional = buildConfessional();
 
-const player = makeFigure({ shirt: 0xe5533d, pants: 0x2e3a52, hair: 0x3b2618, face: 'derpy' });
+// 형제님 or 자매님 (net/looks.js); null until chosen on the entry card the first time
+let myLook = storedLook.load();
+const MY_SEED = 7;   // picks my clothes colours
+let player = makeFigure(parishioner(myLook || 'm', MY_SEED, { face: 'derpy' }));
 player.position.set(0, 0, 30);
 player.rotation.y = Math.PI;
 world.add(player);
@@ -274,7 +278,7 @@ others.setShowDrawn(showDrawn);
 
 /* ---------- emotes (protocol v0.7) ---------- */
 // one at a time: every button is locked until the current emote ends; walking and the camera stay free
-const myEmote = createEmotePlayer(player);
+let myEmote = createEmotePlayer(player);
 const emoteButtons = EMOTES.map((e, i) => {
   const b = document.createElement('button');
   b.type = 'button';
@@ -904,7 +908,39 @@ $('#sndBtn').onclick = () => {
   ambient.setMuted(muted);
   voice.setMuted(muted);
 };
+/* ---------- 형제님 / 자매님 ---------- */
+function markLook() {
+  document.querySelectorAll('.lookPick button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.look === myLook)));
+}
+/** Changes my clothes where I stand (keeps the face, the seat and the camera) and tells the server. */
+function setMyLook(look) {
+  if (!validLook(look)) return;
+  const changed = look !== myLook;
+  myLook = look;
+  markLook();
+  if (!changed && player.userData.look === look) { rooms.setLook(look); return; }
+  if (player.userData.look !== look) {
+    const fig = makeFigure(parishioner(look, MY_SEED, { face: 'derpy' }));
+    fig.position.copy(player.position);
+    fig.rotation.y = player.rotation.y;
+    fig.visible = player.visible;
+    const seated = myEmote.seated;
+    world.remove(player);
+    world.add(fig);
+    player = fig;
+    player.userData.face.setCustom(rooms.myFace);
+    myEmote = createEmotePlayer(player);
+    if (seated) myEmote.start('sit');
+  }
+  rooms.setLook(look);
+}
+document.querySelectorAll('.lookPick button').forEach((b) => { b.onclick = () => { setMyLook(b.dataset.look); $('#lookError').hidden = true; }; });
+markLook();
+
 $('#startBtn').onclick = () => {
+  // the first time, 형제님 or 자매님 has to be picked; after that it is remembered
+  if (!myLook) { $('#lookError').hidden = false; return; }
+  setMyLook(myLook);
   ambient.start();
   voice.unlock();   // Safari speaks only after a first phrase inside a click
   $('#intro').hidden = true;
