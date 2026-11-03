@@ -4,6 +4,7 @@ import { makeGlassTexture } from './core/three-utils.js';
 import { buildHall } from './world/hall.js';
 import { buildExterior, FACADE_Z, FOUNTAIN } from './world/exterior.js';
 import { createPigeons, plazaPigeonSpots } from './world/pigeons.js';
+import { createWalkMarker } from './world/walk-marker.js';
 import { buildBooths, BOOTH_COUNT } from './world/booths.js';
 import { makeFigure, walkPose } from './world/figure.js';
 import { createOtherPlayers } from './world/others.js';
@@ -541,6 +542,8 @@ const rig = createCameraRig({
 });
 
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+// where a tap is taking me: ring on the spot, dots on the way (world/walk-marker.js)
+const walkMarker = createWalkMarker(world);
 function tapAt(cx, cy) {
   ndc.set((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1);
   ray.setFromCamera(ndc, camera);
@@ -550,9 +553,11 @@ function tapAt(cx, cy) {
     const b = booths[doorHits[0].object.userData.booth];
     path = nav.planPath(player.position, b.spot);
     walkBooth = b;
+    walkMarker.tapped(path, b.spot);
   } else if (groundHits.length) {
     path = nav.planPath(player.position, groundHits[0].point);
     walkBooth = null;
+    walkMarker.tapped(path, groundHits[0].point);
   }
   stuck = 0;
 }
@@ -1049,6 +1054,7 @@ function animate() {
     if (state === 'hall') moveSender.update(player.position, player.rotation.y, moving);
     updateEmoteBar();
     updateSurroundings(dt);
+    walkMarker.update(dt, path, player.position, state === 'hall');
     const people = others.count() + 1;
     if (people !== shownPeople) { shownPeople = people; $('#people').textContent = people; }
     others.updateTags(camera, player.position, innerWidth, innerHeight, state === 'hall');
