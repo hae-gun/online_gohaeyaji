@@ -256,6 +256,15 @@ const faceEditor = createFaceEditor({
   },
 });
 $('#faceBtn').onclick = () => faceEditor.open();
+
+/* top-right menu on phones (styles.css hides the row behind one 메뉴 button under 640px wide) */
+const menuItems = $('#menuItems'), menuBtn = $('#menuBtn');
+const setMenu = (open) => { menuItems.classList.toggle('open', open); menuBtn.setAttribute('aria-expanded', String(open)); };
+menuBtn.onclick = () => setMenu(!menuItems.classList.contains('open'));
+// choosing an item closes the list (each item's own handler still runs)
+menuItems.addEventListener('click', (e) => { if (e.target.closest('button')) setMenu(false); });
+// a tap anywhere else closes it too
+addEventListener('pointerdown', (e) => { if (menuItems.classList.contains('open') && !e.target.closest('.btns')) setMenu(false); }, true);
 const SHOW_DRAWN_KEY = 'gohaeyaji-show-drawn';
 let showDrawn = true;
 try { showDrawn = localStorage.getItem(SHOW_DRAWN_KEY) !== '0'; } catch (_) { /* storage blocked */ }

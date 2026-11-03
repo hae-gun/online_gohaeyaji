@@ -182,3 +182,29 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .cardView{width:min(420px,100%);max-height:calc(100dvh - 32px);display:flex;flex-direction:column;gap:10px}
 .cardView img{display:block;width:auto;max-width:100%;max-height:calc(100dvh - 230px);aspect-ratio:9/16;margin:0 auto;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);object-fit:contain}
 .cardView .row{flex-wrap:wrap}
+
+/* top-right menu: a row on wide screens, one 메뉴 button with a drop-down list on phones */
+.menuBtn{display:none}
+.menuItems{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.chanBtn{white-space:nowrap}
+@media (max-width:640px){
+  .top{gap:8px}
+  .sign{min-width:0}
+  .sign b{font-size:17px;white-space:nowrap}
+  .sign>span{display:block;font-size:12px;line-height:1.45}
+  .btns{position:relative;flex-wrap:nowrap}
+  .menuBtn{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;background:rgba(28,23,33,.88)}
+  .menuBtn .bars,.menuBtn .bars::before,.menuBtn .bars::after{display:block;width:14px;height:2px;border-radius:2px;background:var(--gold);position:relative}
+  .menuBtn .bars::before,.menuBtn .bars::after{content:'';position:absolute;left:0}
+  .menuBtn .bars::before{top:-5px}
+  .menuBtn .bars::after{top:5px}
+  .menuBtn[aria-expanded="true"]{border-color:var(--gold);color:var(--gold)}
+  .menuItems{display:none;position:absolute;right:0;top:calc(100% + 8px);z-index:20;flex-direction:column;align-items:stretch;gap:6px;
+    min-width:200px;padding:10px;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+  .menuItems.open{display:flex}
+  .menuItems button{text-align:left;border-radius:12px;padding:11px 14px;background:rgba(255,255,255,.04)}
+  .emoteBar{gap:6px;flex-wrap:nowrap}
+  .emoteBar button{min-width:0;padding:9px 14px;font-size:14px}
+  .emoteBar button kbd{display:none}
+  .hint{font-size:12px}
+}
