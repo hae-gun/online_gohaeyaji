@@ -61,8 +61,41 @@ function headShape(g, spec, skin, y, face, faceSize) {
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
-const UNIT_TUBE = new THREE.CylinderGeometry(1, 1, 1, 16, 1, true);   // scaled into each arm segment
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+
+/*
+ * Arms and legs are drawn as one mesh each (vertex colours for sleeve and hand, trouser and shoe)
+ * instead of five and two: with a channel full of people that is 6 draw calls per person instead of
+ * 14. The shapes are a little coarser than the head, which is where people look.
+ */
+const flat = (geo) => (geo.index ? geo.toNonIndexed() : geo);
+const ARM_BALL = flat(new THREE.SphereGeometry(1, 12, 8));        // scaled to the arm's thickness
+const ARM_TUBE = flat(new THREE.CylinderGeometry(1, 1, 1, 10, 1, true));   // scaled into each segment
+const HAND = flat(new THREE.SphereGeometry(0.12, 14, 10));
+/** Material for meshes coloured per vertex. */
+const painted = () => M(0xffffff, { vertexColors: true });
+
+/** Joins geometries that never move relative to each other, each with its own colour and placement. */
+function joinColored(parts) {
+  const geos = parts.map(([geo, color, matrix]) => {
+    const g = flat(geo.clone());
+    if (matrix) g.applyMatrix4(matrix);
+    const c = new THREE.Color(color), n = g.attributes.position.count, col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    return g;
+  });
+  const count = geos.reduce((a, g) => a + g.attributes.position.count, 0);
+  const out = new THREE.BufferGeometry();
+  for (const [name, size] of [['position', 3], ['normal', 3], ['color', 3]]) {
+    const arr = new Float32Array(count * size);
+    let k = 0;
+    for (const g of geos) { arr.set(g.attributes[name].array, k); k += g.attributes[name].array.length; }
+    out.setAttribute(name, new THREE.BufferAttribute(arr, size));
+  }
+  out.computeBoundingSphere();
+  return out;
+}
 
 /**
  * Bendy two-part arms with round mitten hands.
@@ -74,31 +107,68 @@ const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
  * more the hand goes up or across the body, so the arm goes around the big head and round belly
  * instead of through them, and outward when the hand goes out to the side (hands up). The hand is
  * never stretched.
+ *
+ * Each arm is one mesh (shoulder, upper arm, elbow, forearm, hand) whose vertices are rewritten
+ * only when the hand moved, so people standing still cost nothing per frame.
  */
 function mittens(g, sleeve, skin, shoulderX, shoulderY, ARM, thick = 0.09) {
   const arms = {};
-  const sm = M(sleeve);
+  const sleeveC = new THREE.Color(sleeve), skinC = skin.color.clone();
   const S = new THREE.Vector3(), H = new THREE.Vector3(), E = new THREE.Vector3(), tmp = new THREE.Vector3();
-  const place = (mesh, A, B) => {
-    tmp.subVectors(B, A);
-    const len = Math.max(0.001, tmp.length());
-    mesh.position.addVectors(A, B).multiplyScalar(0.5);
-    mesh.quaternion.setFromUnitVectors(UP, tmp.divideScalar(len));
-    mesh.scale.set(thick, len, thick);
-    mesh.updateMatrixWorld();
-  };
+  const q = new THREE.Quaternion(), v = new THREE.Vector3();
+  const nb = ARM_BALL.attributes.position.count, nt = ARM_TUBE.attributes.position.count, nh = HAND.attributes.position.count;
+  const total = nb * 2 + nt * 2 + nh;
+
   for (const s of [-1, 1]) {
     const pivot = new THREE.Group();
     pivot.position.set(s * shoulderX, shoulderY, 0);
     g.add(pivot);
-    const shoulder = new THREE.Mesh(ball(thick), sm); shoulder.position.copy(pivot.position);
-    const upper = new THREE.Mesh(UNIT_TUBE, sm), fore = new THREE.Mesh(UNIT_TUBE, sm);
-    const elbow = new THREE.Mesh(ball(thick), sm);
-    const hand = new THREE.Mesh(ball(0.12), skin);
-    g.add(shoulder, upper, fore, elbow, hand);
+
+    const pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), col = new Float32Array(total * 3);
+    for (let i = 0; i < total; i++) {
+      const c = i >= total - nh ? skinC : sleeveC;
+      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+    }
+    const geo = new THREE.BufferGeometry();
+    const posA = new THREE.BufferAttribute(pos, 3), norA = new THREE.BufferAttribute(nor, 3);
+    posA.setUsage(THREE.DynamicDrawUsage); norA.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('position', posA);
+    geo.setAttribute('normal', norA);
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    // wherever the hand goes, it stays within this sphere around the shoulder
+    geo.boundingSphere = new THREE.Sphere(pivot.position.clone(), ARM * 3 + 0.4);
+    const mesh = new THREE.Mesh(geo, painted());
+    g.add(mesh);
+
+    // writes one part into the arm's buffers at vertex `at`
+    const ball = (src, at, center, r) => {
+      const p = src.attributes.position.array, n = src.attributes.normal.array;
+      for (let i = 0; i < p.length; i += 3) {
+        const o = at * 3 + i;
+        pos[o] = center.x + p[i] * r; pos[o + 1] = center.y + p[i + 1] * r; pos[o + 2] = center.z + p[i + 2] * r;
+        nor[o] = n[i]; nor[o + 1] = n[i + 1]; nor[o + 2] = n[i + 2];
+      }
+    };
+    const tube = (at, A, B) => {
+      tmp.subVectors(B, A);
+      const len = Math.max(0.001, tmp.length());
+      q.setFromUnitVectors(UP, tmp.divideScalar(len));
+      const p = ARM_TUBE.attributes.position.array, n = ARM_TUBE.attributes.normal.array;
+      for (let i = 0; i < p.length; i += 3) {
+        const o = at * 3 + i;
+        v.set(p[i] * thick, p[i + 1] * len, p[i + 2] * thick).applyQuaternion(q);
+        pos[o] = v.x + (A.x + B.x) / 2; pos[o + 1] = v.y + (A.y + B.y) / 2; pos[o + 2] = v.z + (A.z + B.z) / 2;
+        v.set(n[i], n[i + 1], n[i + 2]).applyQuaternion(q);
+        nor[o] = v.x; nor[o + 1] = v.y; nor[o + 2] = v.z;
+      }
+    };
+
+    let lastX = NaN, lastY = NaN, lastZ = NaN;
     const sync = () => {
       S.copy(pivot.position);
       H.set(0, -ARM * pivot.scale.y, 0).applyQuaternion(pivot.quaternion).add(S);
+      if (Math.abs(H.x - lastX) < 1e-5 && Math.abs(H.y - lastY) < 1e-5 && Math.abs(H.z - lastZ) < 1e-5) return;
+      lastX = H.x; lastY = H.y; lastZ = H.z;
       const up = clamp((H.y - (S.y - ARM)) / ARM, 0, 1.5) / 1.5;          // 0 hanging .. 1 well above the shoulder
       const across = clamp(((H.x - S.x) * -s) / shoulderX, 0, 2) / 2;    // 0 at the side .. 1 past the middle
       const outside = clamp(((H.x - S.x) * s) / 0.2, 0, 1);              // hand out to the side
@@ -106,13 +176,15 @@ function mittens(g, sleeve, skin, shoulderX, shoulderY, ARM, thick = 0.09) {
       const out = 0.04 + 0.25 * outside * up;
       E.addVectors(S, H).multiplyScalar(0.5);
       E.x += s * out; E.y -= 0.05 * up; E.z += fwd;
-      place(upper, S, E);
-      place(fore, E, H);
-      elbow.position.copy(E); elbow.updateMatrixWorld();
-      hand.position.copy(H); hand.updateMatrixWorld();
+      // order in the buffers: shoulder, elbow, upper arm, forearm, hand
+      ball(ARM_BALL, 0, S, thick);
+      ball(ARM_BALL, nb, E, thick);
+      tube(nb * 2, S, E);
+      tube(nb * 2 + nt, E, H);
+      ball(HAND, nb * 2 + nt * 2, H, 1);
+      posA.needsUpdate = true; norA.needsUpdate = true;
     };
-    // whichever part draws first rebuilds the whole arm for this frame
-    for (const m of [upper, fore, elbow, hand]) { m.frustumCulled = false; m.onBeforeRender = sync; }
+    mesh.onBeforeRender = sync;
     arms[s < 0 ? 'R' : 'L'] = pivot;   // figure faces +z, so its right hand is on -x
   }
   return arms;
@@ -240,16 +312,19 @@ function makeKid(o) {
   const legs = [];
   for (const s of [-1, 1]) {
     const p = new THREE.Group(); p.position.set(s * 0.13, 0.3, 0);
-    const pm = M(o.pants);
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.24, 16), pm); leg.position.y = -0.14; p.add(leg);
-    // round bean shoes
-    const shoe = new THREE.Mesh(ball(0.1), M(0x2f2c33)); shoe.scale.set(0.95, 0.6, 1.4); shoe.position.set(0, -0.26, 0.04); p.add(shoe);
+    // trouser leg and round bean shoe, one mesh
+    const legAt = new THREE.Matrix4().makeTranslation(0, -0.14, 0);
+    const shoeAt = new THREE.Matrix4().compose(new THREE.Vector3(0, -0.26, 0.04), new THREE.Quaternion(), new THREE.Vector3(0.95, 0.6, 1.4));
+    p.add(new THREE.Mesh(joinColored([
+      [new THREE.CylinderGeometry(0.085, 0.085, 0.24, 12), o.pants, legAt],
+      [new THREE.SphereGeometry(0.1, 14, 10), 0x2f2c33, shoeAt],
+    ]), painted()));
     g.add(p); legs.push(p);
   }
   // round bean body: wider at the bottom, rounded at both ends
   const bodyPts = [[0.001, 0.29], [0.24, 0.31], [0.33, 0.4], [0.34, 0.56], [0.28, 0.74], [0.16, 0.8], [0.001, 0.81]]
     .map(([r, y]) => new THREE.Vector2(r, y));
-  g.add(new THREE.Mesh(new THREE.LatheGeometry(bodyPts, ROUND), M(o.shirt)));
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(bodyPts, 20), M(o.shirt)));   // a little coarser than the head
   const arms = mittens(g, o.shirt, skin, 0.3, 0.74, 0.3);
 
   const r = 0.42;
