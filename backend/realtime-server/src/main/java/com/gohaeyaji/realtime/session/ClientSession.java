@@ -104,6 +104,27 @@ public final class ClientSession {
         return true;
     }
 
+    private volatile String look = "m";
+    private volatile long lastLookAt;
+
+    /** 형제님 "m" or 자매님 "f" (protocol v0.16). */
+    public String look() {
+        return look;
+    }
+
+    public void look(String look) {
+        this.look = look;
+    }
+
+    /** @return true if enough time has passed since the last accepted change of clothes */
+    public boolean acceptLook(long now, long minGapMs) {
+        if (lastLookAt != 0 && now - lastLookAt < minGapMs) {
+            return false;
+        }
+        lastLookAt = now;
+        return true;
+    }
+
     /** @return true if enough time has passed since the last accepted name change */
     public boolean acceptRename(long now, long minGapMs) {
         if (lastRenameAt != 0 && now - lastRenameAt < minGapMs) {

@@ -63,6 +63,11 @@ public class PresenceService {
         channel(channelNo).setName(pid, name);
     }
 
+    /** 형제님 "m" or 자매님 "f" (protocol v0.16). Goes out with the next batch, with the name. */
+    public void setLook(int channelNo, int pid, String look) {
+        channel(channelNo).setLook(pid, look);
+    }
+
     /** Hand-drawn face (protocol section 15); null = default face. Goes out with the next batch. */
     public void setFace(int channelNo, int pid, String face) {
         channel(channelNo).setFace(pid, face);

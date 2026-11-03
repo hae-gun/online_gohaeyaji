@@ -409,6 +409,30 @@ class RealtimeFlowTest {
     }
 
     @Test
+    void clothesAreSharedWithTheChannel() throws Exception {
+        try (TestClient a = TestClient.connect(port); TestClient b = TestClient.connect(port)) {
+            a.send("{\"type\":\"hello\",\"v\":1,\"look\":\"f\"}");
+            int pidA = a.await("welcome").path("you").path("pid").asInt();
+            JsonNode welcomeB = b.hello();
+            assertThat(lookOf(welcomeB.path("names"), pidA)).isEqualTo("f");          // in the newcomer's welcome
+            a.send("{\"type\":\"setLook\",\"look\":\"m\"}");
+            b.await("presence", m -> "m".equals(lookOf(m.path("named"), pidA)));    // and a change, with the name
+            a.send("{\"type\":\"setLook\",\"look\":\"x\"}");                   // not a look: dropped
+            a.send("{\"type\":\"ping\",\"t\":1}");
+            a.await("pong");
+        }
+    }
+
+    private static String lookOf(JsonNode entries, int pid) {
+        for (JsonNode e : entries) {
+            if (e.get(0).asInt() == pid) {
+                return e.path(2).asText(null);
+            }
+        }
+        return null;
+    }
+
+    @Test
     void badNamesAreRefusedWithAReason() throws Exception {
         try (TestClient a = TestClient.connect(port)) {
             a.hello();

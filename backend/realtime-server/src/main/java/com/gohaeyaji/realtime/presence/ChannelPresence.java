@@ -19,6 +19,8 @@ final class ChannelPresence {
     private final Set<Integer> dirty = new LinkedHashSet<>();
     private final Set<Integer> left = new LinkedHashSet<>();
     private final Map<Integer, String> names = new HashMap<>();
+    /** 형제님 "m" or 자매님 "f" (v0.16); sent with the name as a third element */
+    private final Map<Integer, String> looks = new HashMap<>();
     private final Set<Integer> renamed = new LinkedHashSet<>();
     private final Map<Integer, String> faces = new HashMap<>();
     private final Set<Integer> refaced = new LinkedHashSet<>();
@@ -50,6 +52,12 @@ final class ChannelPresence {
 
     synchronized void setName(int pid, String name) {
         names.put(pid, name);
+        renamed.add(pid);
+    }
+
+    /** Clothes: goes out with the name, so a change is announced like a rename. */
+    synchronized void setLook(int pid, String look) {
+        looks.put(pid, look);
         renamed.add(pid);
     }
 
@@ -95,6 +103,7 @@ final class ChannelPresence {
         dirty.remove(pid);
         renamed.remove(pid);
         names.remove(pid);
+        looks.remove(pid);
         if (players.remove(pid) != null) {
             left.add(pid);
         }
@@ -114,7 +123,7 @@ final class ChannelPresence {
         }
         List<List<Object>> named = new ArrayList<>(renamed.size());
         for (int pid : renamed) {
-            named.add(List.of(pid, names.get(pid)));
+            named.add(nameEntry(pid));
         }
         List<List<Object>> faced = new ArrayList<>(refaced.size());
         for (int pid : refaced) {
@@ -139,11 +148,16 @@ final class ChannelPresence {
         return all;
     }
 
-    /** Every name in the channel: {@code [pid, name]}. */
+    /** Every name in the channel: {@code [pid, name, look]}. */
     synchronized List<List<Object>> names() {
         List<List<Object>> all = new ArrayList<>(names.size());
-        names.forEach((pid, name) -> all.add(List.of(pid, name)));
+        names.keySet().forEach((pid) -> all.add(nameEntry(pid)));
         return all;
+    }
+
+    /** {@code [pid, name, look]}; older clients read the first two and ignore the look. */
+    private List<Object> nameEntry(int pid) {
+        return List.of(pid, names.getOrDefault(pid, ""), looks.getOrDefault(pid, "m"));
     }
 
     /** Every drawn face in the channel: {@code [pid, face]}. */

@@ -169,6 +169,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             case "move" -> onMove(session, msg);
             case "rename" -> onRename(session, msg, reqId);
             case "setFace" -> onSetFace(session, msg, reqId);
+            case "setLook" -> onSetLook(session, msg);
             case "report" -> onReport(session, msg, reqId);
             case "emote" -> onEmote(session, msg);
             case "inquiry" -> onInquiry(session, msg, reqId);
@@ -201,6 +202,9 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         session.ready("s_" + UUID.randomUUID(), channelNo, pid, now());
         session.name(name);
         presence.setName(channelNo, pid, name);
+        // 형제님 or 자매님 (v0.16); anything else, or nothing (older clients), is 형제님
+        session.look(validLook(msg.path("look").asText(null)) ? msg.get("look").asText() : "m");
+        presence.setLook(channelNo, pid, session.look());
         // the face this browser drew before; a malformed or banned one is simply ignored (default face)
         String face = msg.hasNonNull("face") && FaceRules.valid(msg.get("face").asText()) ? FaceRules.normalize(msg.get("face").asText()) : null;
         if (face != null && !faceReports.banned(face)) {
@@ -305,6 +309,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             int pid = presence.allocatePid(to);
             session.switchChannel(to, pid);
             presence.setName(to, pid, session.name());
+            presence.setLook(to, pid, session.look());
             if (session.face() != null) {
                 presence.setFace(to, pid, session.face());
             }
@@ -347,6 +352,25 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         session.name(check.name());
         presence.setName(session.channelNo(), session.pid(), check.name());
         sender.send(session, RenameResult.ok(reqId, check.name()));
+    }
+
+    private static final long LOOK_MIN_GAP_MS = 1_000;
+
+    private static boolean validLook(String look) {
+        return "m".equals(look) || "f".equals(look);
+    }
+
+    /**
+     * 형제님 "m" or 자매님 "f" (protocol v0.16). No reply: the browser has already changed its own
+     * clothes; anything invalid or faster than once a second is dropped.
+     */
+    private void onSetLook(ClientSession session, JsonNode msg) {
+        String look = msg.path("look").asText(null);
+        if (!validLook(look) || look.equals(session.look()) || !session.acceptLook(now(), LOOK_MIN_GAP_MS)) {
+            return;
+        }
+        session.look(look);
+        presence.setLook(session.channelNo(), session.pid(), look);
     }
 
     private void onSetFace(ClientSession session, JsonNode msg, String reqId) {
