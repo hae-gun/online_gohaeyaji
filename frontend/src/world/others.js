@@ -18,6 +18,8 @@ import { createEmotePlayer, SIT } from './emotes.js';
  * Hand-drawn faces (protocol v0.5) replace the generated face when the viewer allows it
  * (setShowDrawn: someone who does not want to see other people's drawings can turn them off).
  * A name tag of someone wearing a drawing can be clicked: onTagClick opens the hide/report menu.
+ * Tapping the person themselves works too (pickAt, used by the tap handler): on a phone the tag is
+ * small, moves every frame and shows only within 3 m, so it was hard to hit.
  * Drawings hidden by this viewer stay hidden by content (hiddenFaces), even on the next visit.
  */
 // clothes colours come from the pid (figure.js parishioner), so everyone sees the same person alike
@@ -122,6 +124,26 @@ export function createOtherPlayers(scene, tagLayer, onTagClick = () => {}) {
   }
 
   return {
+    /**
+     * The person a tap ray hits first, if any within maxDist metres (people inside a booth are
+     * hidden and not counted). @returns {{ pid: number, name: string, face: string|null, distance: number }|null}
+     */
+    pickAt(raycaster, maxDist = 14) {
+      const owner = new Map();
+      for (const [pid, p] of players) if (p.fig.visible && !p.inBooth) owner.set(p.fig, pid);
+      if (!owner.size) return null;
+      const hits = raycaster.intersectObjects([...owner.keys()], true);
+      for (const h of hits) {
+        if (h.distance > maxDist) break;
+        let o = h.object;
+        while (o && !owner.has(o)) o = o.parent;
+        if (!o) continue;
+        const pid = owner.get(o);
+        return { pid, name: names.get(pid) || '', face: faces.get(pid) || null, distance: h.distance };
+      }
+      return null;
+    },
+
     /** @param {import('../net/room-client.js').PresenceEvent} e */
     handle(e) {
       if (e.kind === 'reset') {

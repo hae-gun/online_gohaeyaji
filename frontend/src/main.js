@@ -596,6 +596,13 @@ function tapAt(cx, cy) {
   ray.setFromCamera(ndc, camera);
   const doorHits = ray.intersectObjects(booths.map((b) => b.group), true).filter((h) => h.object.userData.booth !== undefined);
   const groundHits = ray.intersectObjects([...hall.floors, ...outside.groundMeshes]);
+  // tapped a person (in front of the floor behind them): the hide/report menu for their drawing
+  const who = others.pickAt(ray);
+  if (who && (!groundHits.length || who.distance <= groundHits[0].distance) && (!doorHits.length || who.distance <= doorHits[0].distance)) {
+    if (who.face) openPlayerMenu({ pid: who.pid, name: who.name, face: who.face, rect: { left: cx - 1, width: 2, top: cy, bottom: cy + 8 } });
+    else toast(`${who.name || '이 교우'}님은 그린 얼굴을 쓰고 있지 않아서 숨기거나 신고할 그림이 없습니다`);
+    return;
+  }
   if (doorHits.length && (!groundHits.length || doorHits[0].distance <= groundHits[0].distance + 0.5)) {
     const b = booths[doorHits[0].object.userData.booth];
     path = nav.planPath(player.position, b.spot);
