@@ -171,6 +171,13 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 /* channel switching (protocol v0.10) */
 .chanBtn{display:block;margin-top:6px;font:inherit;font-size:12.5px;color:var(--ink);background:rgba(18,14,22,.6);border:1px solid var(--line);border-radius:999px;padding:4px 12px;cursor:pointer}
 .chanBtn:hover{border-color:var(--gold)}
+.travel{margin-top:6px}
+.travel .travelBtn{margin-top:0}
+.travelBtn[aria-expanded="true"]{border-color:var(--gold);color:var(--gold)}
+.travelList{display:flex;gap:6px;margin-top:6px}
+.travelList[hidden]{display:none}
+.travelList button{font:inherit;font-size:13px;color:var(--ink);background:rgba(18,14,22,.72);border:1px solid var(--line);border-radius:999px;padding:6px 14px;cursor:pointer}
+.travelList button:hover{border-color:var(--gold)}
 .chanList{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto}
 .chanRow{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;border:1px solid var(--line);border-radius:16px;padding:10px 12px}
 .chanRow b{font-size:15px;min-width:52px}

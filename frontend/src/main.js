@@ -5,7 +5,7 @@ import { buildHall } from './world/hall.js';
 import { buildExterior, FACADE_Z, FOUNTAIN } from './world/exterior.js';
 import { createPigeons, plazaPigeonSpots } from './world/pigeons.js';
 import { createWalkMarker } from './world/walk-marker.js';
-import { buildBooths, BOOTH_COUNT } from './world/booths.js';
+import { buildBooths, BOOTH_COUNT, CONFESSION_HALL } from './world/booths.js';
 import { makeFigure, parishioner, walkPose } from './world/figure.js';
 import { storedLook, validLook, parseLook, makeLook } from './net/looks.js';
 import { createOtherPlayers } from './world/others.js';
@@ -593,6 +593,44 @@ function showMyFace(back) {
   $('#viewBtn').textContent = '1인칭 시점';
 }
 $('#selfieBtn').onclick = () => { if (state === 'hall') showMyFace(); };
+
+/* ---------- 이동하기: straight to the plaza, the nave or a free booth ---------- */
+// the cathedral is big: walking from the plaza to the confession hall takes a while, so one tap
+// moves there behind a short fade. 고해소 goes to the middle of the hall, where every booth and
+// its LED can be seen; picking a booth is still the person's own choice. Others see a jump (others.js snaps anything over 3 m).
+const HALL_MID = { x: (CONFESSION_HALL.x0 + CONFESSION_HALL.x1) / 2, z: (CONFESSION_HALL.z0 + CONFESSION_HALL.z1) / 2 };
+const TRAVEL = {
+  yard: { at: [[0, 27.5], [3, 27.5]], facing: Math.PI },                                   // in front of the fountain
+  nave: { at: [[0, 4], [1.5, 4], [0, 0]], facing: Math.PI },                               // the aisle, looking at the altar
+  // the middle of the confession hall, a few steps short of the inquiry box, looking at it
+  booths: { at: [[HALL_MID.x - 3.2, HALL_MID.z], [HALL_MID.x - 4.5, HALL_MID.z], [HALL_MID.x, HALL_MID.z + 3.2]], facing: Math.PI / 2 },
+};
+const travelBtn = $('#travelBtn'), travelList = $('#travelList');
+const setTravel = (open) => { travelList.hidden = !open; travelBtn.setAttribute('aria-expanded', String(open)); };
+travelBtn.onclick = () => setTravel(travelList.hidden);
+travelList.addEventListener('click', (e) => { const b = e.target.closest('button[data-go]'); if (b) { setTravel(false); travelTo(b.dataset.go); } });
+addEventListener('pointerdown', (e) => { if (!travelList.hidden && !e.target.closest('.travel')) setTravel(false); }, true);
+
+let travelling = false;
+function travelTo(where) {
+  if (state !== 'hall' || travelling) return;
+  const t = TRAVEL[where];
+  const spot = t.at.find(([x, z]) => nav.walkable(x, z)) || t.at[0];
+  travelling = true;
+  fade(true);
+  setTimeout(() => {
+    if (state === 'hall') {
+      if (myEmote.seated) { myEmote.stop(); mySeat = null; }
+      path = []; walkBooth = null;
+      player.position.set(spot[0], 0, spot[1]);
+      player.rotation.y = t.facing;
+      rig.yaw = player.rotation.y - Math.PI;   // camera behind me, looking where I look
+      moveSender.now(player.position, player.rotation.y);
+    }
+    fade(false);
+    travelling = false;
+  }, 380);
+}
 
 /* ---------- booth flow ---------- */
 const CLAIM_FAILED = {
