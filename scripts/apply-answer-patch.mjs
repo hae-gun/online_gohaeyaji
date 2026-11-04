@@ -7,7 +7,7 @@
  *   node scripts/apply-answer-patch.mjs patch.json --dry    # check and show what would change
  *
  * patch.json (the format the admin page asks the AI for):
- *   { "addKeys": [{ "category": "dopamine", "keys": ["쇼츠", "릴스|새벽"] }],
+ *   { "addKeys": [{ "category": "dopamine", "keys": ["쇼츠", "숏츠|쇼츠"] }],   "A|B": match A, say B
  *     "newCategories": [{ "id": "pet", "word": "반려동물", "keys": [...],
  *                         "empathy": { "jin": [...], "eom": [...], "yu": [...] },
  *                         "penance": [...], "closing": { "jin": [...], "eom": [...], "yu": [...] } }] }
