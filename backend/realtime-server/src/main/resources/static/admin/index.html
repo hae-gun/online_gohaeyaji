@@ -34,6 +34,19 @@
       <p class="muted">입장은 접속해서 성당에 들어온 횟수로, 다시 접속하면 또 셉니다. 방문자는 그날의 IP 해시로 센 추정치입니다(오차 약 1%). IP와 해시는 저장하지 않고 개수만 남으며, 다른 날의 같은 사람은 이어지지 않습니다. 같은 IP를 쓰는 여러 사람(학교, 통신사)은 한 명으로 셉니다. 최고 동시 접속은 10초마다 잽니다.</p>
     </section>
 
+    <section aria-labelledby="h-usage">
+      <div class="row">
+        <h2 id="h-usage">이용 흐름 <span class="muted">(익명 이용 통계, 한국 시간 기준)</span></h2>
+        <div class="filters" id="usageRange"></div>
+      </div>
+      <table>
+        <thead><tr><th>단계</th><th>사람</th><th>앞 단계 대비</th><th>처음 대비</th><th>횟수</th><th class="barCol"></th></tr></thead>
+        <tbody id="usageFunnel"></tbody>
+      </table>
+      <div class="tops" id="usageTops"></div>
+      <p class="muted" id="usageNote">사람 수는 브라우저마다 만든 무작위 번호로 센 추정치입니다(오차 약 1%). IP와 고해 내용은 모으지 않습니다. 원본 기록(하루 한 파일)은 서버에 90일 남고, scripts/analytics의 쿼리로 자세히 볼 수 있습니다.</p>
+    </section>
+
     <section aria-labelledby="h-inquiries">
       <div class="row">
         <h2 id="h-inquiries">신께 알리기 <span class="muted">(문의함)</span></h2>

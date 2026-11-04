@@ -314,6 +314,13 @@ export function createWsRoomClient({ url, appVersion = '0.2.0' }) {
       });
     },
 
+    /** Usage statistics (protocol section 20, net/track.js). @returns false when not connected (kept for later) */
+    sendTrack(payload) {
+      if (!ready) return false;
+      send({ type: 'track', ...payload });
+      return true;
+    },
+
     /** 형제님 'm' or 자매님 'f'. Applied here at once; the server passes it on (no reply). */
     setLook(look) {
       client.myLook = look;

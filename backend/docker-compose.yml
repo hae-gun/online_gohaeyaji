@@ -42,8 +42,11 @@ services:
       BLOCKED_WORDS_FILE: /data/blocked.json
       # admin page (/admin): empty password = off. Put the real one in backend/.env (git-ignored)
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # usage statistics (docs/analytics.md): one JSON-lines file per day, deleted after 90 days
+      TRACK_DIR: /data/track
     volumes:
       - ../frontend/public/data/blocked.json:/data/blocked.json:ro
+      - track-data:/data/track
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"
@@ -53,3 +56,5 @@ services:
 
 volumes:
   redis-data:
+  # usage event files. Read them with: docker compose cp realtime-server:/data/track ./track (scripts/analytics)
+  track-data: {}

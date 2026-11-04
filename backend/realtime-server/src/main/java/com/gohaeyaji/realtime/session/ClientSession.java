@@ -116,6 +116,24 @@ public final class ClientSession {
         this.look = look;
     }
 
+    private long trackMinute;
+    private int trackCount;
+
+    /**
+     * Usage events (protocol section 20): at most perMinute a minute per connection.
+     * @return how many of n may be taken now
+     */
+    public synchronized int acceptTrack(int n, long now, int perMinute) {
+        long minute = now / 60_000;
+        if (minute != trackMinute) {
+            trackMinute = minute;
+            trackCount = 0;
+        }
+        int ok = Math.max(0, Math.min(n, perMinute - trackCount));
+        trackCount += ok;
+        return ok;
+    }
+
     /** @return true if enough time has passed since the last accepted change of clothes */
     public boolean acceptLook(long now, long minGapMs) {
         if (lastLookAt != 0 && now - lastLookAt < minGapMs) {

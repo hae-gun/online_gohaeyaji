@@ -23,7 +23,7 @@ import { fileToFace } from '../net/face-import.js';
  *           getLook(): string, previewLook(code: string): void, commitLook(code: string): void }} opts
  * @returns {{ open(): void, isOpen(): boolean }}
  */
-export function createFaceEditor({ getFace, apply, getLook = () => 'm', previewLook = () => {}, commitLook = () => {} }) {
+export function createFaceEditor({ getFace, apply, getLook = () => 'm', previewLook = () => {}, commitLook = () => {}, onImport = () => {} }) {
   const panel = $('#facePanel');
   const grid = $('#faceGrid');
   const ctx = grid.getContext('2d');
@@ -311,6 +311,7 @@ export function createFaceEditor({ getFace, apply, getLook = () => 'm', previewL
     try {
       load(await fileToFace(file, { removeBackground: importBg.checked }));
       lastImport = file;
+      onImport();
       noteEl.textContent = '그림을 32칸 판에 맞춰 올렸습니다. 12색으로 줄어서 원본과 다를 수 있어요. 다듬은 뒤 "이 얼굴 쓰기"를 눌러 주세요.';
       noteEl.hidden = false;
     } catch (e) {

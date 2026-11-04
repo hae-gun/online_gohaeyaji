@@ -50,6 +50,8 @@ backend/
   realtime-server/     Spring Boot 3.3.5, Java 21, 순수 WebSocket(/ws), Redis Lua
   analyzer/            Python 형태소 분석 서비스 (미구현, README만)
 docs/realtime-protocol.md   프론트와 서버의 메시지 규약 (v0.4), 정책 결정 기록
+docs/analytics.md           이용 통계: 무엇을 모으고 어디서 보는지
+scripts/analytics/          이용 통계 DuckDB 분석 쿼리
 .github/workflows/deploy-pages.yml   frontend 빌드 후 Pages 배포, 시크릿으로 비공개 데이터 주입
 ```
 
@@ -151,6 +153,15 @@ cd realtime-server && ./gradlew bootRun              # ws://localhost:8080/ws
 - 얼굴(`pixel-face.js`): 신부님과 기본 캐릭터는 도형으로 그림(`drawVector`, 아기 얼굴 비율: 낮고 넓은 눈, 반짝이 점, 볼터치, 작은 미소, 백 신부님은 웃는 눈). 사람이 그린 얼굴은 격자 데이터 그대로 두고 화면에서만 점을 둥글게 이어 칠함(`smoothFace`), 얼굴 그리기 미리보기도 같은 방식
 - 글꼴 Jua(제목), Gowun Dodum(본문), 모서리 더 둥글게
 - 그린 얼굴 64x64 검토: 그림 하나 4,096자라 서버 메시지 한도 2KB를 넘고 휴대폰에서 그리기 어려움. 하려면 압축 형식과 규약, 서버 검사까지 같이 바꿔야 함 (미결정)
+
+## 이용 통계 (규약 v0.19, 2026-11-04)
+
+- 익명 이벤트를 모아 퍼널, 체류 시간, 재방문, 반응을 봄. 설명과 이벤트 목록: `docs/analytics.md`
+- 프론트 `net/track.js`: 브라우저 무작위 id(vid, localStorage)와 접속 id(sid). WebSocket `track` 메시지로 5초마다, 화면을 닫을 때는 `POST /api/track` sendBeacon. 입장 화면에서 끌 수 있음. `npm run dev`에서는 콘솔에 `[track]`으로 찍힘
+- 서버 `track/`: `TrackSchema`가 목록에 없는 이벤트, 키, 값을 버림(짧은 id와 숫자만). Redis 숫자(90일)와 하루 한 파일(`TRACK_DIR`, 지난 날 gzip, 90일 삭제, 디스크 여유 2GB 밑이면 파일 쓰기 멈춤), 지표 `gohaeyaji_track_events_total{type}`
+- 고해 원문, IP, 세례명은 넣지 않음. 고해는 카테고리 id만, 위기 답변은 위기 종류도 안 남김
+- 보는 곳: 관리자 페이지 "이용 흐름", Grafana `infra/ops/grafana/gohaeyaji-usage.json`, DuckDB `scripts/analytics/`
+- 새 이벤트는 서버 `TrackSchema.EVENTS`에 먼저 넣을 것(모르는 이벤트는 버려짐)
 
 ## 위기 대응과 답변 안전장치 (2026-11-03, 위험요인 점검 1번과 6번 반영)
 

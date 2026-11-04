@@ -129,6 +129,72 @@
     });
   }
 
+  // ------------------------------------------------------------ usage (protocol section 20)
+  const STEP_TEXT = {
+    session_start: '접속', enter_hall: '성당 입장', first_move: '첫 이동', booth_enter: '고해소 입장',
+    confess_submit: '고해 제출', answer_done: '답변 끝까지', card_share: '보속 카드 만들기',
+  };
+  const TOP_TEXT = {
+    session_start: '유입 경로', session_start_dev: '기기', place_enter: '들른 장소', travel: '이동하기 목적지',
+    confess_submit: '고해 카테고리', answer_done: '신부님(답변 끝까지)', card_share: '카드를 만든 카테고리',
+    emote: '감정표현', face_saved: '얼굴 저장 방법', idle_kick: '자리 비움으로 나간 장소', session_end: '마지막 장소',
+  };
+  const RANGES = [[1, '오늘'], [7, '최근 7일'], [30, '최근 30일']];
+  let usageDays = 1;
+  const rangeEl = $('#usageRange');
+  for (const [d, label] of RANGES) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = label;
+    b.onclick = () => { usageDays = d; markRange(); loadUsage().catch(() => {}); };
+    rangeEl.appendChild(b);
+  }
+  function markRange() { [...rangeEl.children].forEach((b, i) => b.setAttribute('aria-pressed', String(RANGES[i][0] === usageDays))); }
+  markRange();
+  const pct = (a, b) => (b ? `${Math.round((a / b) * 100)}%` : '-');
+
+  async function loadUsage() {
+    const u = await api(`/track?days=${usageDays}`);
+    // people: one day straight from that day, a range from the union over the range
+    const people = usageDays === 1 ? Object.fromEntries(u.days[0].funnel.map((s) => [s.type, s.visitors])) : u.rangeVisitors;
+    const events = {};
+    for (const d of u.days) for (const s of d.funnel) events[s.type] = (events[s.type] || 0) + s.events;
+    const order = Object.keys(STEP_TEXT);
+    const first = people[order[0]] || 0;
+    const max = Math.max(1, ...order.map((t) => people[t] || 0));
+    const tb = $('#usageFunnel');
+    tb.textContent = '';
+    order.forEach((t, i) => {
+      const n = people[t] || 0;
+      const prev = i ? people[order[i - 1]] || 0 : n;
+      const tr = document.createElement('tr');
+      for (const val of [STEP_TEXT[t], fmtNum(n), i ? pct(n, prev) : '-', i ? pct(n, first) : '-', fmtNum(events[t])]) {
+        const td = document.createElement('td'); td.textContent = val; tr.appendChild(td);
+      }
+      const td = document.createElement('td');
+      const bar = document.createElement('div'); bar.className = 'bar'; bar.style.width = `${(n / max) * 100}%`; bar.hidden = !n;
+      td.appendChild(bar); tr.appendChild(td);
+      tb.appendChild(tr);
+    });
+    const box = $('#usageTops');
+    box.textContent = '';
+    for (const [key, rows] of Object.entries(u.top || {})) {
+      if (!rows.length) continue;
+      const card = document.createElement('div'); card.className = 'top';
+      const h = document.createElement('h3'); h.textContent = TOP_TEXT[key] || key;
+      const ol = document.createElement('ol');
+      for (const r of rows.slice(0, 8)) {
+        const li = document.createElement('li');
+        li.textContent = r.value;
+        const s = document.createElement('span'); s.textContent = fmtNum(r.count);
+        li.appendChild(s); ol.appendChild(li);
+      }
+      card.append(h, ol); box.appendChild(card);
+    }
+    const note = $('#usageNote');
+    note.dataset.base = note.dataset.base || note.textContent;
+    note.textContent = note.dataset.base + (u.fileLog ? '' : ' (지금 서버는 원본 기록 파일이 꺼져 있습니다: TRACK_DIR)');
+  }
+
   // ------------------------------------------------------------ reported drawings
   function drawFace(face) {
     const cv = document.createElement('canvas');
@@ -439,7 +505,7 @@ ${lines.join('\n')}
 
   async function refresh() {
     try {
-      await Promise.all([loadOverview(), loadFaces(), loadInquiries(), loadFeedback()]);
+      await Promise.all([loadOverview(), loadFaces(), loadInquiries(), loadFeedback(), loadUsage()]);
       $('#updated').textContent = `${new Date().toLocaleTimeString('ko-KR')} 기준, 10초마다 새로고침`;
     } catch (e) {
       $('#updated').textContent = `불러오지 못했습니다 (${e.message})`;

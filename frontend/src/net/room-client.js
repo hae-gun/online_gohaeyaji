@@ -109,6 +109,7 @@ export function createLocalRoomClient({ count, simulate = false }) {
     setLook(look) { this.myLook = look; storedLook.save(look); },
     async report() { return { ok: false, reason: 'NO_FACE' }; },   // nobody else exists here
     sendEmote() { /* nobody to show it to */ },
+    sendTrack() { return false; },   // no server: statistics stay in the browser and are dropped
     onFaceRemoved() { /* never happens without a server */ },
     // the inquiry box needs the server: nobody would read it here
     async sendInquiry() { return { ok: false, reason: 'OFFLINE' }; },

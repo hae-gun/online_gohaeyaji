@@ -94,6 +94,21 @@ public final class RedisKeys {
         return "gy:stats:uv:" + date;
     }
 
+    /** Usage statistics (track/TrackService): HASH event type -> count of one day. */
+    public static String trackDay(String date) {
+        return "gy:track:day:" + date;
+    }
+
+    /** HyperLogLog of the random visitor ids that reached one funnel step that day. */
+    public static String trackVisitors(String date, String type) {
+        return "gy:track:uv:" + date + ":" + type;
+    }
+
+    /** HASH value -> count for one event type that day (place for place_enter, ...). */
+    public static String trackDimension(String date, String type) {
+        return "gy:track:dim:" + date + ":" + type;
+    }
+
     public static String booth(int channelNo, int boothId) {
         return CHANNEL_PREFIX + channelNo + ":booth:" + boothId;
     }

@@ -28,6 +28,7 @@ import com.gohaeyaji.realtime.protocol.Messages.Released;
 import com.gohaeyaji.realtime.protocol.Messages.RenameResult;
 import com.gohaeyaji.realtime.protocol.Messages.Welcome;
 import com.gohaeyaji.realtime.protocol.Messages.You;
+import com.gohaeyaji.realtime.track.TrackService;
 import com.gohaeyaji.realtime.stats.VisitStats;
 import com.gohaeyaji.realtime.session.ClientSession;
 import com.gohaeyaji.realtime.session.SessionRegistry;
@@ -74,6 +75,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     private final FaceModeration moderation;
     private final Inquiries inquiries;
     private final AnswerFeedback feedback;
+    private final TrackService track;
     private final VisitStats visits;
     private final MessageSender sender;
     private final ObjectMapper mapper;
@@ -87,7 +89,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
     public RealtimeWebSocketHandler(RealtimeProperties props, SessionRegistry registry, ChannelService channels,
                                     BoothService booths, PresenceService presence, NameService names,
                                     FaceReports faceReports, FaceModeration moderation, Inquiries inquiries, AnswerFeedback feedback, VisitStats visits, MessageSender sender,
-                                    ObjectMapper mapper, MeterRegistry meters) {
+                                    ObjectMapper mapper, MeterRegistry meters, TrackService track) {
         this.props = props;
         this.registry = registry;
         this.channels = channels;
@@ -99,6 +101,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
         this.inquiries = inquiries;
         this.feedback = feedback;
         this.visits = visits;
+        this.track = track;
         this.sender = sender;
         this.mapper = mapper;
         Gauge.builder("gohaeyaji.sessions", registry, SessionRegistry::size)
@@ -180,6 +183,7 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
             case "feedback" -> onFeedback(session, msg, reqId);
             case "switchChannel" -> onSwitchChannel(session, msg, reqId);
             case "activity" -> session.touchActivity(now());
+            case "track" -> onTrack(session, msg);
             case "resync" -> sendSnapshot(session);
             case "queueJoin", "queueLeave", "confess" ->
                     sender.send(session, new ErrorMessage(reqId, Messages.ERR_NOT_IMPLEMENTED, type + " is not available yet"));
@@ -442,6 +446,25 @@ public class RealtimeWebSocketHandler extends TextWebSocketHandler {
                 : ReportResult.ok(reqId));
         if (result == FaceReports.Result.BANNED) {
             moderation.takeDown(face);
+        }
+    }
+
+    /**
+     * Usage events (protocol section 20): { type: "track", vid, sid, events: [{ type, p }] }.
+     * No answer. Over the per-connection budget or not in the schema: dropped quietly.
+     */
+    private void onTrack(ClientSession session, JsonNode msg) {
+        if (!track.enabled()) {
+            return;
+        }
+        JsonNode events = msg.path("events");
+        if (!events.isArray() || events.isEmpty()) {
+            return;
+        }
+        long now = now();
+        int ok = session.acceptTrack(Math.min(events.size(), track.maxBatch()), now, track.perMinute());
+        if (ok > 0) {
+            track.record(msg.path("vid").asText(""), msg.path("sid").asText(""), events, ok, now);
         }
     }
 

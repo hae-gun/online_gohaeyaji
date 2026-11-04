@@ -5,6 +5,8 @@ limit_conn_zone $binary_remote_addr zone=perip:10m;
 limit_req_zone  $binary_remote_addr zone=reqs:10m rate=10r/s;
 # 관리자 페이지: 비밀번호 대입을 늦추려고 IP당 초당 2회
 limit_req_zone  $binary_remote_addr zone=admin:1m rate=2r/s;
+# 이용 통계 beacon(/api/track): 페이지를 닫을 때 한 번씩이라 IP당 초당 2회면 충분
+limit_req_zone  $binary_remote_addr zone=track:10m rate=2r/s;
 # 위즈파크 임시 중계: 학교나 통신사 NAT 뒤의 여러 사람이 같은 IP로 보여도 막히지 않게 넉넉히
 limit_req_zone  $binary_remote_addr zone=wiz:10m rate=30r/s;
 
@@ -44,6 +46,17 @@ server {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
     proxy_read_timeout 60s;   # 클라이언트 ping이 10초라 여유 있음
+  }
+
+  # 이용 통계 beacon (docs/analytics.md). 본문은 작은 JSON 하나라 4KB면 충분
+  location = /api/track {
+    limit_req zone=track burst=10 nodelay;
+    limit_except POST { deny all; }
+    client_max_body_size 8k;
+    proxy_pass http://realtime-server:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
   }
 
   # Spring 지표: ops 서버에서만

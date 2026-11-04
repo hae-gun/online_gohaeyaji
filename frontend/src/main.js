@@ -8,6 +8,7 @@ import { createWalkMarker } from './world/walk-marker.js';
 import { buildBooths, BOOTH_COUNT, CONFESSION_HALL } from './world/booths.js';
 import { makeFigure, parishioner, walkPose } from './world/figure.js';
 import { storedLook, validLook, parseLook, makeLook } from './net/looks.js';
+import { createTracker, beaconUrlFor, sourceOf, deviceOf, inAppOf } from './net/track.js';
 import { createOtherPlayers } from './world/others.js';
 import { buildConfessional } from './world/confessional.js';
 import { createKeyboard } from './controls/keyboard.js';
@@ -97,6 +98,14 @@ const rooms = REALTIME_URL
   ? createWsRoomClient({ url: REALTIME_URL })
   // fake confessors are off by default so local testing is not confused by them; ?sim=1 turns them on
   : createLocalRoomClient({ count: BOOTH_COUNT, simulate: params.get('sim') === '1' });
+
+// anonymous usage statistics (net/track.js, docs/analytics.md): ids and numbers only, never text
+const tracker = createTracker({ send: (payload) => (rooms.sendTrack ? rooms.sendTrack(payload) : false), beaconUrl: beaconUrlFor(REALTIME_URL) });
+const track = (type, p) => tracker.track(type, p);
+track('session_start', { src: sourceOf(), dev: deviceOf(), inapp: inAppOf(), first: tracker.first });
+let hallAt = 0, movedOnce = false;              // for first_move
+let boothAt = 0, boothConfessions = 0, answerNo = 0;
+let importedFace = false;                       // the face about to be saved came from a picture
 
 rooms.onChange((occupied) => {
   booths.forEach((b) => b.setOccupied(occupied.has(b.id)));
@@ -217,6 +226,7 @@ async function switchTo(no) {
     return;
   }
   chanPanel.hidden = true;
+  track('channel_switch');
   toast(`${no}채널로 옮겼습니다`);
 }
 $('#chanBtn').onclick = () => { chanPanel.hidden = false; chanList.textContent = ''; loadChannels(); };
@@ -253,10 +263,13 @@ const faceEditor = createFaceEditor({
   getFace: () => rooms.myFace,
   getLook: () => myLook || 'm',
   previewLook: (code) => wearLook(code),
-  commitLook: (code) => { setMyLook(code); toast('모습을 바꿨습니다'); },
+  commitLook: (code) => { setMyLook(code); track('look_change', { rgb: parseLook(code).skin.length === 6 }); toast('모습을 바꿨습니다'); },
+  onImport: () => { importedFace = true; track('face_import'); },
   async apply(face) {
     const r = await rooms.setFace(face);
     if (r.ok) {
+      track('face_saved', { src: importedFace ? 'import' : 'draw' });
+      importedFace = false;
       player.userData.face.setCustom(face);
       toast(face ? '새 얼굴로 바꿨습니다' : '기본 얼굴로 돌아갔습니다');
       if (face && state === 'hall') showMyFace(false);   // show the new face right away
@@ -299,6 +312,7 @@ function playEmote(id) {
   if (state !== 'hall' || myEmote.playing) return;
   if (!myEmote.start(id)) return;
   rooms.sendEmote(id);
+  track('emote', { id });
   // someone who has not moved yet is invisible to others; show up first so the emote is seen
   moveSender.now(player.position, player.rotation.y);
 }
@@ -316,6 +330,7 @@ function sitDown(bench) {
   // the seat travels with the sit, so others put me exactly there (a separate move could be
   // dropped by the server's rate limit right after walking)
   rooms.sendEmote('sit', { x: player.position.x, z: player.position.z, ry: player.rotation.y });
+  track('sit', { place });
 }
 /* ---------- things to do in the nave and the confession hall ---------- */
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
@@ -352,6 +367,7 @@ function nearAction() {
         run() {
           if (!hall.lightCandle()) { toast('초가 모두 켜져 있습니다. 하나가 꺼질 때까지 기다려 주세요'); return; }
           ambient.chime();
+          track('candle');
           toast(pick(CANDLE_LINES));
         },
       };
@@ -363,6 +379,7 @@ function nearAction() {
           offerings++;
           hall.dropCoin();
           ambient.coin();
+          track('offering');
           toast(offerings === 7 ? '일곱 번째 봉헌입니다. 하늘이 슬슬 부담스러워합니다' : pick(OFFER_LINES));
         },
       };
@@ -373,6 +390,7 @@ function nearAction() {
         run() {
           if (myEmote.playing) return;
           playEmote('cross');
+          track('font');
           toast('성수를 찍고 성호를 그었습니다');
         },
       };
@@ -393,6 +411,7 @@ function nearAction() {
         const ahead = { x: p.x + Math.sin(ry) * 1.4, z: p.z + Math.cos(ry) * 1.4 };
         if (!pigeons.feed(ahead) && !pigeons.feed(p)) { toast('여기에는 모이를 뿌릴 수 없습니다'); return; }
         fedAt = clock.elapsedTime;
+        track('pigeon');
         toast(pick(FEED_LINES));
       },
     };
@@ -454,6 +473,7 @@ $('#inquiryForm').addEventListener('submit', async (e) => {
   closeInquiry();
   hall.sendLetter();
   ambient.chime();
+  track('inquiry');
   toast('하늘로 보냈습니다. 운영자가 꼭 읽겠습니다');
 });
 let shownEmote = null;
@@ -538,6 +558,7 @@ $('#nameForm').addEventListener('submit', async (e) => {
   $('#nameSave').disabled = false;
   if (!r.ok) { showNameError(r.reason); return; }
   closeNamePanel();
+  track('rename');
   toast(`이제 ${r.name}(으)로 불립니다`);
 });
 let shownPeople = -1;
@@ -617,6 +638,7 @@ function travelTo(where) {
   const t = TRAVEL[where];
   const spot = t.at.find(([x, z]) => nav.walkable(x, z)) || t.at[0];
   travelling = true;
+  track('travel', { to: where });
   fade(true);
   setTimeout(() => {
     if (state === 'hall') {
@@ -649,7 +671,7 @@ async function tryEnter() {
   // the door opens only after the server grants the booth
   const { ok, reason } = await rooms.claim(b.id);
   if (state !== 'opening') return;
-  if (!ok) { state = 'hall'; toast(CLAIM_FAILED[reason] || BUSY_MESSAGE); return; }
+  if (!ok) { state = 'hall'; if (reason === 'OCCUPIED' || reason === 'RESERVED') track('booth_full'); toast(CLAIM_FAILED[reason] || BUSY_MESSAGE); return; }
 
   current = b;
   b.doorTarget = 1.3;
@@ -672,6 +694,8 @@ function abortEntering(message) {
 
 function enterRoom() {
   state = 'room';
+  track('booth_enter', { booth: current.id });
+  boothAt = Date.now(); boothConfessions = 0;
   myEmote.stop();   // nobody sees me inside; the gesture ends at the door
   ambient.setPlace('room');
   ambient.setMusic(false);
@@ -823,6 +847,7 @@ $('#cardBtn').onclick = async () => {
     });
     const link = lastCard.ref ? cardUrl({ ref: lastCard.ref, name: rooms.myName || '', when: lastCard.when, nth: lastCard.nth, look: myLook, face: rooms.myFace }) : '';
     await cardPanel.show(canvas, link);
+    track('card_share', { persona: lastCard.persona, cat: lastCard.cat });
   } catch (_) {
     toast('카드를 만들지 못했습니다');
   } finally {
@@ -853,11 +878,20 @@ $('#chatForm').addEventListener('submit', (e) => {
   confessional.nod();
 
   const r = engine.answer(text, priest && priest.id);
+  boothConfessions++;
+  // the kind of answer and the category id only; for a crisis reply not even which crisis it was
+  track('confess_submit', {
+    persona: r.persona, kind: r.kind, cat: r.kind === 'safety' ? '' : (r.category || ''),
+    caution: !!r.caution, len: Math.min(200, Math.floor([...text].length / 10) * 10),
+  });
   setTimeout(() => {
     if (state !== 'room') return;
     // a crisis reply is read in the same calm voice by every priest, never in the joking one
     voice.setTone(r.kind === 'safety' ? 'serious' : priest && priest.id);
     const sec = bubble.say(r.line, { safety: r.kind === 'safety' });
+    // listened to the end: still in the booth and no new confession started meanwhile
+    const no = ++answerNo;
+    if (r.kind === 'answer') setTimeout(() => { if (state === 'room' && no === answerNo) track('answer_done', { persona: r.persona, cat: r.category || '' }); }, sec * 1000);
     confessional.talk(sec, faceFor(r));
     if (r.kind === 'answer') {
       $('#penanceText').textContent = r.penance;
@@ -866,7 +900,7 @@ $('#chatForm').addEventListener('submit', (e) => {
       history.add({ t: Date.now(), q: text, c: r.category, p: r.penance, pr: r.persona });
       // for the card: how many times this sin was confessed in this browser, this one included
       const nth = history.load().filter((h) => h.c === r.category).length;
-      lastCard = { sin: r.keyword || r.category, penance: r.penance, legend: !!(priest && priest.chance), nth, when: new Date(), ref: r.ref };
+      lastCard = { sin: r.keyword || r.category, penance: r.penance, legend: !!(priest && priest.chance), nth, when: new Date(), ref: r.ref, cat: r.category, persona: r.persona };
     } else {
       $('#penance').hidden = true;
       lastCard = null;
@@ -929,6 +963,8 @@ function leaveRoom({ reason = 'USER', notifyServer = true, message = '' } = {}) 
   const b = current;
   // free the booth right away so others see the LED go off; the door animation is local only
   if (notifyServer) rooms.release(b.id, reason);
+  track('booth_leave', { sec: Math.min(86400, Math.round((Date.now() - boothAt) / 1000)), n: boothConfessions });
+  if (reason === 'IDLE') track('idle_kick', { place: 'booths' });
   state = 'leaving';
   fade(true);
   setTimeout(() => {
@@ -1001,6 +1037,9 @@ document.querySelectorAll('.lookPick button').forEach((b) => {
 });
 markLook();
 
+$('#trackOff').checked = tracker.off;
+$('#trackOff').onchange = (e) => tracker.setOff(e.target.checked);
+
 $('#startBtn').onclick = () => {
   // the first time, 형제님 or 자매님 has to be picked; after that it is remembered
   if (!myLook) { $('#lookError').hidden = false; return; }
@@ -1010,6 +1049,9 @@ $('#startBtn').onclick = () => {
   $('#intro').hidden = true;
   $('#hallUi').hidden = false;
   state = 'hall';
+  track('intro_done', { look: parseLook(myLook).clothes });
+  track('enter_hall');
+  hallAt = Date.now();
   rig.yaw = 0;   // the intro sweep leaves yaw rotated; start behind the player facing the doors
   moveSender.now(player.position, player.rotation.y);   // others start seeing me from here
   if ('ontouchstart' in window) $('#moveHint').textContent = '탭해서 이동, 드래그로 시점 회전, 두 손가락으로 확대';
@@ -1076,6 +1118,7 @@ function updateSurroundings(dt) {
   if (now !== place) {
     place = now;
     if (state === 'hall') ambient.setPlace(OUTDOORS.has(place) ? 'yard' : 'hall');
+    if (state === 'hall') track('place_enter', { place });
     showPlace();
   }
 
@@ -1171,6 +1214,7 @@ function animate() {
   if (state === 'hall' || state === 'intro') {
     const moving = updatePlayer(dt);
     if (state === 'hall') moveSender.update(player.position, player.rotation.y, moving);
+    if (moving && state === 'hall' && !movedOnce) { movedOnce = true; track('first_move', { sec: Math.round((Date.now() - hallAt) / 1000) }); }
     updateEmoteBar();
     updateSurroundings(dt);
     walkMarker.update(dt, path, player.position, state === 'hall');

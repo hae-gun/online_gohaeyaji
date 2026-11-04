@@ -25,7 +25,9 @@ RUN --mount=type=cache,target=/root/.gradle \
 # last layer (our classes, a few hundred KB), so pushing and pulling a new version is quick.
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-RUN useradd --system --uid 10001 app
+RUN useradd --system --uid 10001 app \
+ # usage event files (TRACK_DIR); a named volume mounted here starts out owned by app
+ && mkdir -p /data/track && chown app /data/track
 COPY --from=build /app/extracted/dependencies/ ./
 COPY --from=build /app/extracted/spring-boot-loader/ ./
 COPY --from=build /app/extracted/snapshot-dependencies/ ./

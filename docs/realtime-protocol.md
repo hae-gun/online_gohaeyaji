@@ -438,6 +438,7 @@
 | report | 1분에 10회, 같은 그림은 한 세션이 한 번만 (v0.6, 구현됨) |
 | emote | 앞 동작이 끝나야 다음 동작 (v0.7, 구현됨) |
 | inquiry | 성공한 문의 기준 1분에 1회, IP당 1시간에 10회 (v0.8, 구현됨) |
+| track | 접속 하나당 분당 이벤트 120개, 메시지 하나에 15개 (v0.19, 구현됨) |
 | 반복 위반 | 1분 안에 3번 넘으면 `4006` |
 
 부하테스트 결과를 보고 조정합니다.
@@ -584,6 +585,22 @@
 | 관리자 페이지 | "답변 개선함": 할 일, 카테고리 잘못, 새 주제, 무시로 분류, 삭제. "AI에 넘길 내용 만들기"는 answers.json 형식 설명, 톤, 표시한 고해 목록을 한 번에 복사. API `GET /admin/api/feedback`, `POST /admin/api/feedback/{id}/mark/{todo|wrong|new|ignore}`, `POST /admin/api/feedback/{id}/delete` |
 | 반영 | 지금은 AI가 준 JSON을 answers.json에 넣고 다시 배포. 답변 엔진을 서버로 옮기면(7단계) 관리자 페이지에서 바로 반영하고 되돌릴 수 있게 할 예정 |
 
+## 20. 이용 통계 (v0.19)
+
+어디서 빠지고 무엇에 반응하는지 보려고 익명 이용 통계를 모은다. 자세한 설명과 분석 방법은 `docs/analytics.md`.
+
+| 항목 | 값 |
+|---|---|
+| 사람 구분 | `vid`: 브라우저에서 한 번 만들어 localStorage에 두는 무작위 32자리 16진수. `sid`: 접속마다 새로 만드는 무작위 번호. IP, 세례명, 얼굴 그림과 연결하지 않음 |
+| 끄기 | 입장 화면의 "이용 통계 보내지 않기"를 고르면 이 브라우저에서는 아무것도 보내지 않음 |
+| 메시지 | `{ "type": "track", "vid": "…", "sid": "…", "events": [{ "type": "travel", "p": { "to": "nave" } }] }`. 답 없음. 5초마다 또는 15개가 쌓이면 보냄. 한 메시지 15개까지(2KB 안) |
+| 페이지를 닫을 때 | WebSocket이 먼저 끊기므로 남은 것은 `POST /api/track`(본문은 위 메시지에서 `type`만 뺀 것, `text/plain`)를 `navigator.sendBeacon`으로. 허용 Origin만 받고 항상 204 |
+| 이벤트 | `session_start`(src, dev, inapp, first), `intro_done`(look), `enter_hall`, `first_move`(sec), `place_enter`(place), `travel`(to), `booth_enter`(booth), `booth_full`, `confess_submit`(persona, kind, cat, caution, len), `answer_done`(persona, cat), `card_share`(persona, cat), `booth_leave`(sec, n), `emote`(id), `sit`(place), `candle`, `offering`, `font`, `pigeon`, `inquiry`, `face_saved`(src), `face_import`, `look_change`(rgb), `rename`, `channel_switch`, `idle_kick`(place), `session_end`(sec, place) |
+| 값 | 짧은 id(영소문자, 숫자, 밑줄 24자까지), 0과 1, 0..86400 정수만. 목록에 없는 이벤트와 키, 형식이 다른 값은 서버가 버림. 고해 원문은 보내지 않고 답변 엔진이 고른 카테고리 id만. 위기 답변(`kind: safety`)은 어떤 위기였는지도 남기지 않음 |
+| 한도 | 접속 하나당 분당 120개, beacon은 서버 전체 분당 3000개, Nginx에서 IP당 초당 2회 |
+| 저장 | Redis 숫자(날짜별 횟수, 퍼널 단계별 HyperLogLog, 값별 횟수, 90일)와 하루 한 파일(`TRACK_DIR/날짜.jsonl`, 지난 날은 gzip, 90일 뒤 삭제, 디스크 여유 2GB 밑이면 파일 쓰기 멈춤). 지표 `gohaeyaji_track_events_total{type}` |
+| 관리자 페이지 | "이용 흐름": 오늘, 최근 7일, 30일의 퍼널과 많이 나온 값. API `GET /admin/api/track?days=7` |
+
 ## 결정 기록
 
 | ID | 항목 | 결정 |
@@ -620,6 +637,7 @@
 
 | 버전 | 내용 |
 |---|---|
+| v0.19 | 이용 통계: `track` 메시지와 `POST /api/track`(sendBeacon). 예전 화면은 보내지 않을 뿐 영향 없음. 프로토콜 번호 `v`는 1 그대로 |
 | v0.18 | 동작 `praise`(찬양, 4.8초) 추가. 예전 화면은 모르는 동작을 무시. 프로토콜 번호 `v`는 1 그대로 |
 | v0.17 | 모습 값에 피부색(기본 색 0..5 또는 RGB 16진수 6자리)과 머리 모양(0..4)을 붙임(예 "f32", "mc98d5f4"). 한 글자 "m", "f"도 그대로 유효. 서버는 정규식으로 검사만 하고 그대로 전달. 프로토콜 번호 `v`는 1 그대로 |
 | v0.16 | 모습(형제님, 자매님): `hello.look`, `setLook`, `names`와 `presence.named`의 세 번째 칸. 프로토콜 번호 `v`는 1 그대로 |

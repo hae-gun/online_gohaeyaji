@@ -10,6 +10,7 @@ import com.gohaeyaji.realtime.config.RealtimeProperties;
 import com.gohaeyaji.realtime.redis.RedisKeys;
 import com.gohaeyaji.realtime.session.SessionRegistry;
 import com.gohaeyaji.realtime.stats.VisitStats;
+import com.gohaeyaji.realtime.track.TrackService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.lang.management.ManagementFactory;
@@ -50,11 +51,12 @@ public class AdminController {
     private final AnswerFeedback feedback;
     private final RealtimeProperties props;
     private final VisitStats visits;
+    private final TrackService track;
 
     public AdminController(SessionRegistry registry, ChannelService channelService, BoothService booths, FaceReports reports,
                            FaceModeration moderation, StringRedisTemplate redis, MeterRegistry meters,
                            Inquiries inquiries, AnswerFeedback feedback, RealtimeProperties props,
-                           VisitStats visits) {
+                           VisitStats visits, TrackService track) {
         this.registry = registry;
         this.channelService = channelService;
         this.booths = booths;
@@ -66,6 +68,7 @@ public class AdminController {
         this.feedback = feedback;
         this.props = props;
         this.visits = visits;
+        this.track = track;
     }
 
     @GetMapping({"/admin", "/admin/"})
@@ -108,6 +111,13 @@ public class AdminController {
         out.put("faceBansTotal", count("gohaeyaji.face.bans"));
         out.put("visits", visits.summary(14, System.currentTimeMillis()));
         return out;
+    }
+
+    /** Usage statistics (protocol section 20): funnel per day and the most common values. */
+    @GetMapping("/admin/api/track")
+    @ResponseBody
+    public Map<String, Object> track(@org.springframework.web.bind.annotation.RequestParam(defaultValue = "7") int days) {
+        return track.summary(Math.max(1, Math.min(days, 30)), System.currentTimeMillis());
     }
 
     /** Reported drawings of the last 7 days, newest report first. */

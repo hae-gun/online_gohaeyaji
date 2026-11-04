@@ -67,4 +67,13 @@ gohaeyaji:
   # private blocked word list (git-ignored), same file the browser uses; relative to the working directory.
   # The default works for ./gradlew bootRun from backend/realtime-server. In Docker, mount the file and set the variable.
   blocked-words-file: ${BLOCKED_WORDS_FILE:../../frontend/public/data/blocked.json}
+  # usage statistics (protocol section 20, docs/analytics.md): random browser ids, no IP, no text
+  track:
+    enabled: ${TRACK_ENABLED:true}
+    dir: ${TRACK_DIR:}                # daily event files (JSON lines); empty = Redis counters only
+    keep-days: 90                     # files and counters older than this are deleted
+    max-batch: 15                     # events per message (a message must stay under max-message-bytes)
+    per-minute: 120                   # events per connection per minute
+    beacon-per-minute: 3000           # /api/track beacons per server per minute, everyone together
+    min-free-mb: 2048                 # below 2 GB free disk the event files stop growing (Redis counting goes on)
   allowed-origins: ${ALLOWED_ORIGINS:https://gohaeyaji.com,https://www.gohaeyaji.com,https://hae-gun.github.io,http://localhost:5173}
