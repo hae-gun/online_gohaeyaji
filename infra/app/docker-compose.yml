@@ -15,6 +15,7 @@ services:
       - ./data/certbot-www:/var/www/certbot:z
       - wiz-data:/srv/wiz:ro
     networks: [backend]
+    depends_on: [wiz-presence]
     restart: unless-stopped
 
   # 한국시리즈 임시 수집기 (/wizpark). 시리즈가 끝나면 이 서비스와 wiz-data, nginx의 /wiz/ 를 지운다
@@ -28,6 +29,22 @@ services:
     volumes:
       - ./wiz-relay/collector.mjs:/app/collector.mjs:ro,Z
       - wiz-data:/srv/wiz
+    networks: [backend]
+    restart: unless-stopped
+
+  # 위즈파크 접속자 위치와 응원 메시지 (채널 2개, 채널당 1000명). 임시 서비스
+  wiz-presence:
+    image: node:22-alpine
+    command: ["node", "/app/presence.mjs"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    environment:
+      PORT: "8090"
+      ALLOWED_ORIGINS: https://wiz.gohaeyaji.com,https://hae-gun.github.io
+    volumes:
+      - ./wiz-relay/presence.mjs:/app/presence.mjs:ro,Z
     networks: [backend]
     restart: unless-stopped
 

@@ -80,6 +80,17 @@ server {
   }
 
   # 한국시리즈 임시 중계 파일 (infra/app/wiz-relay). Spring을 거치지 않는 정적 파일
+  # 위즈파크 접속자 위치 (infra/app/wiz-relay/presence.mjs)
+  location = /wiz/ws {
+    limit_conn perip 30;
+    proxy_pass http://wiz-presence:8090;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_read_timeout 90s;
+  }
+
   location = /wiz/state.json {
     limit_req zone=wiz burst=60 nodelay;
     limit_except GET { deny all; }

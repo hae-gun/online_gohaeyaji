@@ -66,7 +66,8 @@ ssh -i ~/.ssh/<서버키> rocky@<APP_IP> gohae-deploy
 
 - 확인: 서버에서 `cd infra/app && docker compose logs --tail 20 wiz-relay`
 - 멈추기: `docker compose stop wiz-relay` (페이지는 시연 장면이나 재시도 표시로 돌아감)
-- 시리즈 후 삭제: `wiz-relay/`, compose의 `wiz-relay`와 `wiz-data`, nginx의 `/wiz/`, `frontend/public/wizpark/`
+- 수집기나 접속자 서버 코드를 바꾸면 재시작: `docker compose restart wiz-relay wiz-presence`
+- 시리즈 후 삭제: `wiz-relay/`, compose의 `wiz-relay`, `wiz-presence`, `wiz-data`, nginx의 `/wiz/`, `frontend/public/wizpark/`
 
 ## 2-2. Redis 데이터 (영속화)
 
