@@ -18,6 +18,7 @@ public final class Emotes {
             "cross", 4_600L,
             "hooray", 3_600L,
             "doze", 5_000L,
+            "praise", 4_800L,
             "sit", 1_000L);
 
     /** Sitting: a state rather than a gesture. Its own gate, so a gesture can start right after sitting down. */

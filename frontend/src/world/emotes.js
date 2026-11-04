@@ -7,6 +7,7 @@ import * as THREE from 'three';
  *   cross  성호경: forehead, chest, left shoulder, right shoulder, hands together (own left and right)
  *   hooray 무릎 꿇고 만세: kneels and pumps both arms
  *   doze   꾸벅꾸벅: nods off like during a long homily, "Z z" floating up
+ *   praise 찬양: hums a hymn, arms raised and swaying side to side, "라랄라~ ♪" floating up
  *
  * Sitting (벤치, 장의자) is a separate layer, not a gesture: started with E next to a seat, it has
  * no end and lasts until the sitter walks (then they stand up). Gestures play on top of it: the
@@ -23,6 +24,7 @@ export const EMOTES = [
   { id: 'cross', label: '성호경', dur: 4.6 },
   { id: 'hooray', label: '만세', dur: 3.6 },
   { id: 'doze', label: '꾸벅꾸벅', dur: 5.0 },
+  { id: 'praise', label: '찬양', dur: 4.8 },
 ];
 export const EMOTE_IDS = EMOTES.map((e) => e.id);
 export const SIT = 'sit';
@@ -72,6 +74,30 @@ function zzzSprite() {
   return sp;
 }
 
+/** "라랄라~ ♪" for 찬양: the hum, in a speech-bubble font, with a note. */
+function humSprite() {
+  const cv = document.createElement('canvas');
+  cv.width = 192; cv.height = 48;
+  const c = cv.getContext('2d');
+  c.font = 'bold 26px sans-serif';
+  c.lineJoin = 'round';
+  c.fillStyle = '#ffffff';
+  c.strokeStyle = '#2a2230';
+  c.lineWidth = 5;
+  c.strokeText('라랄라~', 6, 36); c.fillText('라랄라~', 6, 36);
+  c.fillStyle = '#f2c94c';
+  c.font = 'bold 30px sans-serif';
+  c.strokeText('♪', 128, 32); c.fillText('♪', 128, 32);
+  c.font = 'bold 22px sans-serif';
+  c.strokeText('♫', 160, 20); c.fillText('♫', 160, 20);
+  const tex = new THREE.CanvasTexture(cv);
+  // not dimmed by the fog or the tone mapping: the hum reads white, like a speech bubble
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, toneMapped: false }));
+  sp.scale.set(1.15, 0.29, 1);
+  sp.visible = false;
+  return sp;
+}
+
 /**
  * Plays emotes on one kid figure. Call update() every frame AFTER the walking animation,
  * so the emote wins for the arms and head.
@@ -90,6 +116,8 @@ export function createEmotePlayer(fig) {
   const zzz = zzzSprite();
   zzz.position.set(0.3, P.headTop + 0.15, 0);
   fig.add(zzz);
+  const hum = humSprite();
+  fig.add(hum);
   const keys = crossKeys(P);
   const lap = { R: pose('R', P.lap.R), L: pose('L', P.lap.L) };
 
@@ -120,6 +148,7 @@ export function createEmotePlayer(fig) {
     u.head.rotation.set(0, 0, 0);
     u.face.set({});
     zzz.visible = false;
+    hum.visible = false;
   }
 
   function stop() {
@@ -206,6 +235,22 @@ export function createEmotePlayer(fig) {
             zzz.material.opacity = w;
             zzz.position.y = P.headTop + 0.15 + (t % 1.2) * 0.22;
             u.face.set({ eyes: c >= 1.25 && c < 1.5 ? 'wide' : 'closed' });
+          } else if (id === 'praise') {
+            // arms up in a V, swaying slowly from side to side with the head, singing along
+            const sway = Math.sin(t * Math.PI * 1.25);
+            const k = 0.5 + 0.5 * sway;
+            setArm('R', pose('R', P.halfUp.R), pose('R', P.up.R), k, w);
+            setArm('L', pose('L', P.up.L), pose('L', P.halfUp.L), k, w);
+            u.head.rotation.z = -0.2 * sway * w;
+            u.head.rotation.x = -0.12 * w;
+            // the mouth opens and closes on the beat of "라 랄 라"
+            const beat = (t * 2.5) % 1;
+            u.face.set(w > 0.4 ? { eyes: 'happy', mouth: beat < 0.55 ? 2 : 0, smile: 1 } : {});
+            // the hum drifts up and sways, appearing again every 1.6 s
+            const c = (t % 1.6) / 1.6;
+            hum.visible = true;
+            hum.material.opacity = w * smooth(c / 0.15) * smooth((1 - c) / 0.25);
+            hum.position.set(0.15 + sway * 0.12, P.headTop + 0.2 + c * 0.3, 0);
           }
         }
       }

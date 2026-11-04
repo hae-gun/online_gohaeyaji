@@ -547,7 +547,7 @@ let shownPeople = -1;
 const keys = createKeyboard((k) => {
   if (!namePanel.hidden || faceEditor.isOpen() || !inquiryPanel.hidden || !chanPanel.hidden || !fbPanel.hidden) return;   // a dialog is open: buttons inside it may hold focus
   if (k === 'e' && state === 'hall') act();
-  if (state === 'hall' && ['1', '2', '3', '4'].includes(k)) playEmote(EMOTES[Number(k) - 1].id);
+  if (state === 'hall' && /^[1-9]$/.test(k) && EMOTES[Number(k) - 1]) playEmote(EMOTES[Number(k) - 1].id);
   if (k === 'v' && state === 'hall') toggleView();
   if (k === 'f' && state === 'hall') showMyFace();
   if (k === 'escape' && state === 'room') leaveRoom();
