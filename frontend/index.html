@@ -61,7 +61,13 @@
       <div class="bubble" id="bubble" hidden><span class="who">신부</span><span id="bubbleText"></span></div>
     </div>
     <div class="roomFoot">
-      <div class="penance" id="penance" hidden><small>오늘의 보속</small><p id="penanceText"></p><button class="cardBtn" id="cardBtn" type="button">보속 카드 만들기</button></div>
+      <div class="penance" id="penance" hidden>
+        <small id="verdictHead">판결</small>
+        <div class="verdictTop"><span class="crime">죄목 <b id="verdictCrime"></b></span><span class="stamp" id="verdictStamp"></span></div>
+        <p id="penanceText"></p>
+        <span class="verdictLine" id="verdictLine"></span>
+        <button class="cardBtn" id="cardBtn" type="button">보속 카드 만들기</button>
+      </div>
       <button class="fbBtn" id="fbBtn" type="button" hidden>답이 엉뚱해요</button>
       <div class="chat">
         <div class="idleCounter" id="idleCounter" role="timer" aria-live="polite" hidden></div>

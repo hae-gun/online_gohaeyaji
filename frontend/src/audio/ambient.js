@@ -87,6 +87,23 @@ export function createAmbient() {
         o.connect(g); g.connect(ac.destination); o.start(t + d); o.stop(t + d + 0.3);
       });
     },
+    /** A rubber stamp coming down on paper: the penance verdict. */
+    stamp() {
+      if (!ac || muted) return;
+      const t = ac.currentTime;
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.12);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.5, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.25);
+      // the paper slap: a short burst of noise
+      const n = ac.createBufferSource(), buf = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.05), ac.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const ng = ac.createGain(); ng.gain.value = 0.18;
+      n.buffer = buf; n.connect(ng); ng.connect(ac.destination); n.start(t);
+    },
     /** A soft rising chime: a candle lit, a letter sent up. */
     chime() {
       if (!ac || muted) return;

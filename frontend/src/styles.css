@@ -198,6 +198,20 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 /* 보속 카드 */
 .penance .cardBtn{display:block;margin:10px auto 0;font-size:13px;padding:6px 14px;border-color:var(--gold);color:var(--gold);background:rgba(18,14,22,.55)}
 #roomUi.legend .penance .cardBtn{border-color:#f3d27a;color:#f3d27a}
+/* 보속 판결 (ui/verdict.js): crime and stamp on top, the penance rolls, then the stamp comes down */
+.verdictTop{display:flex;align-items:center;justify-content:center;gap:12px;margin:2px 0 8px}
+.verdictTop .crime{font-size:13px;color:var(--muted)}
+.verdictTop .crime b{color:var(--ink);font-weight:700}
+.stamp{display:inline-block;font-family:var(--font-display);font-weight:800;font-size:15px;letter-spacing:.06em;padding:2px 10px;border:2.5px solid currentColor;border-radius:8px;transform:rotate(-8deg);opacity:0;color:#e2584c}
+.stamp.g1{color:#7fc49a}.stamp.g2{color:#f2b233}.stamp.g3{color:#e2584c}.stamp.g4{color:#c15cf0}.stamp.legend{color:#f3d27a}
+.penance.stamped .stamp{opacity:1;animation:stampIn .32s cubic-bezier(.2,1.6,.4,1)}
+.penance.stamped{animation:verdictShake .3s .08s}
+.penance.rolling #penanceText{color:var(--muted);filter:blur(.4px)}
+.penance #penanceText{min-height:3.1em;display:flex;align-items:center;justify-content:center}
+.verdictLine{display:block;min-height:1.4em;margin-top:6px;font-size:13px;color:var(--gold)}
+@keyframes stampIn{0%{opacity:0;transform:rotate(-8deg) scale(2.6)}70%{opacity:1;transform:rotate(-8deg) scale(.92)}100%{opacity:1;transform:rotate(-8deg) scale(1)}}
+@keyframes verdictShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}50%{transform:translateX(3px)}75%{transform:translateX(-2px)}}
+@media (prefers-reduced-motion:reduce){.penance.stamped .stamp,.penance.stamped{animation:none}}
 .cardView{width:min(420px,100%);max-height:calc(100dvh - 32px);display:flex;flex-direction:column;gap:10px}
 .cardView img{display:block;width:auto;max-width:100%;max-height:calc(100dvh - 230px);aspect-ratio:9/16;margin:0 auto;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);object-fit:contain}
 .cardView .row{flex-wrap:wrap}

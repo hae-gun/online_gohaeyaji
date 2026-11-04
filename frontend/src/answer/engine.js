@@ -219,5 +219,18 @@ export function createAnswerEngine({ answers, safety, blocked }, random = Math.r
     return { penance: fillKeyword(t, k), keyword: k, persona: p, category: c };
   }
 
-  return { answer, personas, personaForBooth, penanceOf };
+  /**
+   * Other penances of the same category and priest, keyword filled in, for the verdict's slot
+   * roll (ui/verdict.js). The real one is not among them; at most n, shuffled.
+   */
+  function penanceChoices(ref, n = 6) {
+    const base = penanceOf(ref);
+    if (!base) return [];
+    const list = (base.persona.lines && base.persona.lines.penance) || listFor(base.category.penance, base.persona.id);
+    const others = list.map((t) => fillKeyword(t, base.keyword)).filter((t) => t && t !== base.penance);
+    for (let i = others.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [others[i], others[j]] = [others[j], others[i]]; }
+    return others.slice(0, n);
+  }
+
+  return { answer, personas, personaForBooth, penanceOf, penanceChoices };
 }

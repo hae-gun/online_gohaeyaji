@@ -9,6 +9,7 @@ import { buildBooths, BOOTH_COUNT, CONFESSION_HALL } from './world/booths.js';
 import { makeFigure, parishioner, walkPose } from './world/figure.js';
 import { storedLook, validLook, parseLook, makeLook } from './net/looks.js';
 import { createTracker, beaconUrlFor, sourceOf, deviceOf, inAppOf } from './net/track.js';
+import { gradeOf, verdictLine, playVerdict } from './ui/verdict.js';
 import { createOtherPlayers } from './world/others.js';
 import { buildConfessional } from './world/confessional.js';
 import { createKeyboard } from './controls/keyboard.js';
@@ -106,6 +107,7 @@ track('session_start', { src: sourceOf(), dev: deviceOf(), inapp: inAppOf(), fir
 let hallAt = 0, movedOnce = false;              // for first_move
 let boothAt = 0, boothConfessions = 0, answerNo = 0;
 let importedFace = false;                       // the face about to be saved came from a picture
+let stopVerdict = () => {};                     // cancels a verdict still playing (ui/verdict.js)
 
 rooms.onChange((occupied) => {
   booths.forEach((b) => b.setOccupied(occupied.has(b.id)));
@@ -868,6 +870,7 @@ $('#chatForm').addEventListener('submit', (e) => {
   const text = $('#confess').value.trim();
   if (!text) return;
   idle.pause();   // waiting for the priest
+  stopVerdict();
   $('#confess').value = '';
   setInputEnabled(false);
   $('#fbBtn').hidden = true;
@@ -894,13 +897,25 @@ $('#chatForm').addEventListener('submit', (e) => {
     if (r.kind === 'answer') setTimeout(() => { if (state === 'room' && no === answerNo) track('answer_done', { persona: r.persona, cat: r.category || '' }); }, sec * 1000);
     confessional.talk(sec, faceFor(r));
     if (r.kind === 'answer') {
-      $('#penanceText').textContent = r.penance;
-      $('#penance small').textContent = r.persona === 'baek' ? '전설의 보속' : '오늘의 보속';
-      $('#penance').hidden = false;
       history.add({ t: Date.now(), q: text, c: r.category, p: r.penance, pr: r.persona });
       // for the card: how many times this sin was confessed in this browser, this one included
       const nth = history.load().filter((h) => h.c === r.category).length;
-      lastCard = { sin: r.keyword || r.category, penance: r.penance, legend: !!(priest && priest.chance), nth, when: new Date(), ref: r.ref, cat: r.category, persona: r.persona };
+      const legend = !!(priest && priest.chance);
+      // 보속 판결: the stamp comes down the moment the priest says the penance
+      const grade = gradeOf(nth, legend);
+      $('#verdictHead').textContent = legend ? '전설의 판결' : '판결';
+      stopVerdict();
+      stopVerdict = playVerdict({
+        box: $('#penance'),
+        crime: r.keyword || '작은 실패',
+        grade,
+        line: verdictLine(r.persona, grade),
+        penance: r.penance,
+        choices: engine.penanceChoices ? engine.penanceChoices(r.ref) : [],
+        stampAt: sec * ((r.penanceAt || 0) / Math.max(1, r.line.length)),
+        onStamp: () => ambient.stamp(),
+      });
+      lastCard = { sin: r.keyword || r.category, penance: r.penance, legend, nth, when: new Date(), ref: r.ref, cat: r.category, persona: r.persona, grade: grade.label };
     } else {
       $('#penance').hidden = true;
       lastCard = null;
@@ -956,6 +971,7 @@ function leaveRoom({ reason = 'USER', notifyServer = true, message = '' } = {}) 
   }
   idle.pause();
   bubble.stop();
+  stopVerdict();
   confessional.reset();
   $('#fbBtn').hidden = true;
   fbPanel.hidden = true;

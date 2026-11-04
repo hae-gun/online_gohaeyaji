@@ -1,4 +1,5 @@
 import { $, toast } from './hud.js';
+import { gradeOf } from './verdict.js';
 import { paintFace, FACE_SIZE } from '../net/faces.js';
 import { drawGlassBand } from '../card/glass.js';
 
@@ -97,7 +98,7 @@ function fitFont(ctx, text, family, weight, size, min, max) {
  */
 export async function drawPenanceCard(d) {
   // the web fonts load per character range; ask for exactly the characters on this card
-  const chars = `고해야지보속카드죄목번째첫${d.sin}${d.penance}${d.name}${d.priestName}${d.site}0123456789년월일시분새벽아침오전오후저녁밤나도하러가기실제성사가아닌패러디입니다전설의오늘이로`;
+  const chars = `초범재범상습고해소단골전설의사면판결고해야지보속카드죄목번째첫${d.sin}${d.penance}${d.name}${d.priestName}${d.site}0123456789년월일시분새벽아침오전오후저녁밤나도하러가기실제성사가아닌패러디입니다전설의오늘이로`;
   try {
     await Promise.all([document.fonts.load(`80px Jua`, chars), document.fonts.load(`40px 'Gowun Dodum'`, chars)]);
   } catch (_) { /* system font then */ }
@@ -251,6 +252,26 @@ export async function drawPenanceCard(d) {
   g.fillStyle = gold;
   g.font = `400 36px ${BODY}`;
   g.fillText(d.nth > 1 ? `이 죄로 ${d.nth}번째 고해` : '이 죄로 첫 고해', W / 2, sinY + 168);
+  // the verdict stamp (ui/verdict.js), tilted over the top right of the sin, from nth alone so a
+  // shared link shows the same stamp without carrying anything new
+  {
+    const grade = gradeOf(d.nth || 1, !!d.legend);
+    const color = { g1: '#7fc49a', g2: '#f2b233', g3: '#e2584c', g4: '#c15cf0', legend: '#f3d27a' }[grade.cls];
+    g.save();
+    g.translate(W - 190, sinY + 30);
+    g.rotate(-0.16);
+    g.font = `400 46px ${DISPLAY}`;
+    const sw = g.measureText(grade.label).width + 44;
+    g.globalAlpha = 0.92;
+    g.strokeStyle = color; g.lineWidth = 7;
+    g.beginPath();
+    if (g.roundRect) g.roundRect(-sw / 2, -38, sw, 76, 14); else g.rect(-sw / 2, -38, sw, 76);   // Safari before 16
+    g.stroke();
+    g.fillStyle = color; g.textBaseline = 'middle';
+    g.fillText(grade.label, 0, 2);
+    g.restore();
+    g.textBaseline = 'alphabetic';
+  }
 
   // the penance on paper, centred in the space left above the footer
   const px = 120, pw = W - 240, top = sinY + 210, bottom = H - 250;
