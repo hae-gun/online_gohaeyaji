@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import './styles.css';
 import { makeGlassTexture } from './core/three-utils.js';
-import { buildHall } from './world/hall.js';
+import { buildHall, SIDE_DOOR } from './world/hall.js';
 import { buildExterior, FACADE_Z, FOUNTAIN } from './world/exterior.js';
 import { createPigeons, plazaPigeonSpots } from './world/pigeons.js';
 import { createWalkMarker } from './world/walk-marker.js';
@@ -72,7 +72,12 @@ const confessional = buildConfessional();
 let myLook = storedLook.load();
 const MY_SEED = 7;   // picks my clothes colours
 let player = makeFigure(parishioner(myLook || 'm', MY_SEED, { face: 'derpy' }));
-player.position.set(0, 0, 30);
+// the entry card shows the cathedral from the plaza; 입장 starts a few steps inside the confession hall's
+// door (far enough in for the camera behind to be inside too), facing the booths, so a confession is a few steps away (the plaza and the nave are one tap
+// away under 이동하기)
+const INTRO_AT = new THREE.Vector3(0, 0, 30);
+const START = { x: SIDE_DOOR.x + 7, z: (SIDE_DOOR.z0 + SIDE_DOOR.z1) / 2, ry: Math.PI / 2 };
+player.position.copy(INTRO_AT);
 player.rotation.y = Math.PI;
 world.add(player);
 
@@ -1068,7 +1073,10 @@ $('#startBtn').onclick = () => {
   track('intro_done', { look: parseLook(myLook).clothes });
   track('enter_hall');
   hallAt = Date.now();
-  rig.yaw = 0;   // the intro sweep leaves yaw rotated; start behind the player facing the doors
+  player.position.set(START.x, 0, START.z);
+  player.rotation.y = START.ry;
+  rig.yaw = START.ry - Math.PI;   // the intro sweep leaves yaw rotated; start behind the player, facing the booths
+  fade(true); setTimeout(() => fade(false), 60);   // a soft cut from the plaza view to the hall
   moveSender.now(player.position, player.rotation.y);   // others start seeing me from here
   if ('ontouchstart' in window) $('#moveHint').textContent = '탭해서 이동, 드래그로 시점 회전, 두 손가락으로 확대';
 };
@@ -1238,7 +1246,7 @@ function animate() {
     if (people !== shownPeople) { shownPeople = people; $('#people').textContent = people; }
     others.updateTags(camera, player.position, innerWidth, innerHeight, state === 'hall');
     if (state === 'intro') {
-      rig.updateIntro(t, player.position);
+      rig.updateIntro(t, INTRO_AT);
       player.visible = true;
     } else {
       player.visible = rig.update(player, dt, colliders, portrait);
