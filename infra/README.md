@@ -60,6 +60,14 @@ ssh -i ~/.ssh/<서버키> rocky@<APP_IP> gohae-deploy
 - `backend/docker-compose.yml`의 포트는 반드시 `127.0.0.1:6379:6379`, `127.0.0.1:8080:8080`처럼 묶을 것. `0.0.0.0`이면 Docker가 방화벽을 우회해서 Redis가 인터넷에 노출된다.
 - 재기동하는 몇 초 동안 접속자 연결이 끊긴다. 사람 많은 시간은 피할 것.
 
+## 2-1. 위즈파크 임시 중계 (한국시리즈 동안만)
+
+`wiz-relay` 컨테이너가 네이버를 호출해 `state.json`을 만들고, Nginx가 `https://api.gohaeyaji.com/wiz/state.json`으로 내보낸다. Spring과 Redis는 건드리지 않는다. 페이지는 `https://gohaeyaji.com/wizpark/`.
+
+- 확인: 서버에서 `cd infra/app && docker compose logs --tail 20 wiz-relay`
+- 멈추기: `docker compose stop wiz-relay` (페이지는 시연 장면이나 재시도 표시로 돌아감)
+- 시리즈 후 삭제: `wiz-relay/`, compose의 `wiz-relay`와 `wiz-data`, nginx의 `/wiz/`, `frontend/public/wizpark/`
+
 ## 3. 도메인 연결 (도메인이 생기면)
 
 1. DNS에 `api.도메인` A 레코드 → `<APP_IP>`

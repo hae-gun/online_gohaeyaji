@@ -5,6 +5,8 @@ limit_conn_zone $binary_remote_addr zone=perip:10m;
 limit_req_zone  $binary_remote_addr zone=reqs:10m rate=10r/s;
 # 관리자 페이지: 비밀번호 대입을 늦추려고 IP당 초당 2회
 limit_req_zone  $binary_remote_addr zone=admin:1m rate=2r/s;
+# 위즈파크 임시 중계: 학교나 통신사 NAT 뒤의 여러 사람이 같은 IP로 보여도 막히지 않게 넉넉히
+limit_req_zone  $binary_remote_addr zone=wiz:10m rate=30r/s;
 
 map $http_upgrade $connection_upgrade {
   default upgrade;
@@ -62,6 +64,19 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
+  }
+
+  # 한국시리즈 임시 중계 파일 (infra/app/wiz-relay). Spring을 거치지 않는 정적 파일
+  location = /wiz/state.json {
+    limit_req zone=wiz burst=60 nodelay;
+    limit_except GET { deny all; }
+    alias /srv/wiz/state.json;
+    default_type application/json;
+    gzip on;
+    gzip_types application/json;
+    gzip_min_length 256;
+    add_header Cache-Control "no-cache" always;
+    add_header Access-Control-Allow-Origin "*" always;
   }
 
   location / { return 404; }

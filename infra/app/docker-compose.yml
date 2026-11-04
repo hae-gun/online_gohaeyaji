@@ -13,6 +13,21 @@ services:
       - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro,Z
       - ./data/letsencrypt:/etc/letsencrypt:ro,z
       - ./data/certbot-www:/var/www/certbot:z
+      - wiz-data:/srv/wiz:ro
+    networks: [backend]
+    restart: unless-stopped
+
+  # 한국시리즈 임시 수집기 (/wizpark). 시리즈가 끝나면 이 서비스와 wiz-data, nginx의 /wiz/ 를 지운다
+  wiz-relay:
+    image: node:22-alpine
+    command: ["node", "/app/collector.mjs"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 64m
+    volumes:
+      - ./wiz-relay/collector.mjs:/app/collector.mjs:ro,Z
+      - wiz-data:/srv/wiz
     networks: [backend]
     restart: unless-stopped
 
@@ -33,6 +48,9 @@ services:
     volumes:
       - ./data/letsencrypt:/etc/letsencrypt:z
       - ./data/certbot-www:/var/www/certbot:z
+
+volumes:
+  wiz-data: {}
 
 networks:
   backend:
