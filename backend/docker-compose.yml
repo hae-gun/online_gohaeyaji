@@ -12,10 +12,15 @@
 services:
   redis:
     image: redis:7-alpine
-    # booth locks and channel counts are short-lived state, so no persistence
-    # at most 256 MB; when full, new writes fail instead of silently dropping keys (a dropped
+    # Persisted (AOF, written every second, in the redis-data volume): besides short-lived state
+    # (booth locks, channel counts, which expire on their own) Redis holds what must outlive a
+    # restart: the inquiry box, the answer improvement box (30 days), face reports and bans, and
+    # the visit counts. At most one second is lost when the machine stops; RDB snapshots stay off.
+    # At most 256 MB; when full, new writes fail instead of silently dropping keys (a dropped
     # booth lock would let two people into one booth)
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--save", "", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
     restart: unless-stopped
     ports:
       - "127.0.0.1:6379:6379"
@@ -45,3 +50,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+
+volumes:
+  redis-data:

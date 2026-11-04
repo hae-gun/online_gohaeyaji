@@ -68,6 +68,46 @@ ssh -i ~/.ssh/<서버키> rocky@<APP_IP> gohae-deploy
 - 멈추기: `docker compose stop wiz-relay` (페이지는 시연 장면이나 재시도 표시로 돌아감)
 - 시리즈 후 삭제: `wiz-relay/`, compose의 `wiz-relay`와 `wiz-data`, nginx의 `/wiz/`, `frontend/public/wizpark/`
 
+## 2-2. Redis 데이터 (영속화)
+
+Redis는 AOF로 디스크에 남긴다(`backend/docker-compose.yml`, `redis-data` 볼륨). 문의함, 답변 개선함, 얼굴 신고와 금지, 방문 통계가 Redis 재시작과 서버 재부팅 뒤에도 남는다. 기계가 갑자기 멈추면 마지막 1초치만 잃는다.
+
+| 하면 안 되는 것 | 이유 |
+|---|---|
+| `docker compose down -v` | `-v`가 볼륨까지 지워 위 데이터가 모두 사라짐. 내릴 때는 `-v` 없이 |
+| `docker volume prune` | 쓰지 않는 볼륨으로 보이면 지워질 수 있음 |
+
+손으로 백업하기 (지금 상태를 파일 하나로):
+
+```bash
+cd ~/gohae/online_gohaeyaji/backend
+docker compose exec -T redis redis-cli BGSAVE && sleep 2
+docker cp "$(docker compose ps -q redis)":/data/dump.rdb ~/redis-$(date +%F).rdb
+```
+
+**영속화를 처음 켤 때 한 번만:** 설정이 바뀌면 Redis 컨테이너가 새로 만들어지면서 그때까지의 데이터는 비워진다. 남길 것이 있으면 배포 전에 받아 두고 배포 뒤 되돌린다. AOF를 켠 Redis는 dump.rdb가 있어도 읽지 않으므로(Redis 7에서 확인), 되돌릴 때는 AOF를 끈 채 dump.rdb로 띄운 뒤 AOF를 켜서 지금 데이터로 AOF를 새로 쓰게 한다.
+
+```bash
+# 1) 배포 전: 지금 데이터를 파일로 (예전 설정은 save가 꺼져 있어도 SAVE 명령은 됨)
+cd ~/gohae/online_gohaeyaji/backend
+docker compose exec -T redis redis-cli SAVE
+docker cp "$(docker compose ps -q redis)":/data/dump.rdb ~/redis-before-aof.rdb
+# 2) 배포
+gohae-deploy
+# 3) 되돌리기 (Redis가 몇 초 멈춰 접속이 끊겼다 다시 붙음)
+docker compose stop redis
+docker compose run --rm --no-deps -v ~/redis-before-aof.rdb:/restore.rdb:ro,z --entrypoint sh redis -c '
+  rm -rf /data/appendonlydir && cp /restore.rdb /data/dump.rdb && chown -R redis:redis /data &&
+  redis-server --dir /data --appendonly no --save "" --daemonize yes && sleep 1 &&
+  redis-cli CONFIG SET appendonly yes &&
+  until redis-cli INFO persistence | grep -q "aof_rewrite_in_progress:0" &&
+        redis-cli INFO persistence | grep -q "aof_rewrite_scheduled:0"; do sleep 1; done &&
+  redis-cli INFO persistence | grep aof_last_bgrewrite_status && redis-cli DBSIZE && redis-cli SHUTDOWN'
+docker compose start redis
+docker compose exec -T redis redis-cli DBSIZE                                  # 위와 같은 수면 되돌아온 것
+docker compose exec -T redis redis-cli INFO persistence | grep aof_enabled     # aof_enabled:1
+```
+
 ## 3. 도메인 연결 (도메인이 생기면)
 
 1. DNS에 `api.도메인` A 레코드 → `<APP_IP>`

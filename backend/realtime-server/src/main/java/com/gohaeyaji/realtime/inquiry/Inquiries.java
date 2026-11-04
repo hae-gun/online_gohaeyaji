@@ -26,7 +26,8 @@ import org.springframework.stereotype.Service;
  *   gy:inquiry:ip:{hash}    INCR with a 1 h TTL, the per-IP limit. Only a hash of the IP, and
  *                           only for that hour: the IP is never stored with the message.
  *
- * Redis must persist (appendonly) in production, or the box empties on a restart.
+ * Redis persists with AOF (backend/docker-compose.yml, the redis-data volume), so the box
+ * survives restarts; without it the box would empty whenever Redis restarts.
  */
 @Service
 public class Inquiries {
