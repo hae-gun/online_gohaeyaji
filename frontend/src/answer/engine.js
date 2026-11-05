@@ -232,5 +232,31 @@ export function createAnswerEngine({ answers, safety, blocked }, random = Math.r
     return others.slice(0, n);
   }
 
-  return { answer, personas, personaForBooth, penanceOf, penanceChoices };
+  /**
+   * The card ref of a confession saved before refs were kept (storage/history.js): found by
+   * matching the saved penance sentence against the category's penances for that priest, with
+   * each keyword filled in. null when the data changed and nothing matches.
+   * @param {{ c: string, pr: string, p: string }} h
+   */
+  function refFor(h) {
+    if (!h || !h.c || !h.pr || !h.p) return null;
+    const c = categories.find((x) => x.id === h.c) || (generic && generic.id === h.c ? generic : null);
+    const p = personas.find((x) => x.id === h.pr);
+    if (!c || !p) return null;
+    const list = (p.lines && p.lines.penance) || listFor(c.penance, p.id);
+    const keys = c.keys || [];
+    for (let pi = 0; pi < list.length; pi++) {
+      const t = list[pi];
+      if (typeof t !== 'string') continue;
+      if (fillKeyword(t, c.word || '') === h.p) return { c: c.id, p: p.id, pi, ki: -1 };
+      if (!t.includes('{k')) continue;
+      for (let ki = 0; ki < keys.length; ki++) {
+        const k = keys[ki].split('|')[1] || keys[ki].split('|')[0];
+        if (fillKeyword(t, k) === h.p) return { c: c.id, p: p.id, pi, ki };
+      }
+    }
+    return null;
+  }
+
+  return { answer, personas, personaForBooth, penanceOf, penanceChoices, refFor };
 }

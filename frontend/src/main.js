@@ -127,8 +127,14 @@ initHistoryPanel(history, {
     const p = engine && engine.personas.find((x) => x.id === id);
     return p ? p.name : '';
   },
-  // the card page of that confession, with my current name, clothes and drawn face
-  cardLink: (h) => cardUrl({ ref: h.ref, name: rooms.myName || '', when: new Date(h.t), nth: h.n || 1, look: myLook, face: rooms.myFace }),
+  // the card page of that confession, with my current name, clothes and drawn face. Entries saved
+  // before refs were kept get theirs rebuilt from the penance sentence (engine.refFor)
+  cardLink: (h) => {
+    const ref = h.ref || (engine && engine.refFor ? engine.refFor(h) : null);
+    if (!ref) return '';
+    const nth = h.n || history.load().filter((x) => x.c === h.c && x.t <= h.t).length || 1;
+    return cardUrl({ ref, name: rooms.myName || '', when: new Date(h.t), nth, look: myLook, face: rooms.myFace });
+  },
   onOpen: (n) => track('history_open', { n: Math.min(50, n) }),
   onCard: (h) => track('history_card', { persona: h.pr || '', cat: h.c || '', grade: h.gc || '' }),
 });
@@ -936,7 +942,7 @@ $('#chatForm').addEventListener('submit', (e) => {
         stampAt: sec * ((r.penanceAt || 0) / Math.max(1, r.line.length)),
         onStamp: () => ambient.stamp(),
       });
-      lastCard = { sin: r.keyword || r.category, penance: r.penance, legend, nth, when: new Date(), ref: r.ref, cat: r.category, persona: r.persona, grade: grade.label, gradeCls: grade.cls };
+      lastCard = { sin: r.keyword || '작은 실패', penance: r.penance, legend, nth, when: new Date(), ref: r.ref, cat: r.category, persona: r.persona, grade: grade.label, gradeCls: grade.cls };
     } else {
       $('#penance').hidden = true;
       lastCard = null;

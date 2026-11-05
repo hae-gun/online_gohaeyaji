@@ -104,7 +104,7 @@ export function initHistoryPanel(history, { priestName = () => '', cardLink = ()
         m.textContent = meta.join('  |  ');
         article.insertBefore(m, q);
       }
-      const link = r.ref ? cardLink(r) : '';
+      const link = cardLink(r);   // '' when the card cannot be rebuilt (very old entry, changed data)
       if (link) {
         const b = document.createElement('a');
         b.className = 'histCard';

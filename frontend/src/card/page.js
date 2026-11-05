@@ -40,7 +40,7 @@ async function main() {
   $('#pcWhen').textContent = whenText(d.when);
   $('#pcPriestName').textContent = got.persona.name || '신부님';
   $('#pcName').textContent = name;
-  $('#pcSin').textContent = got.keyword || got.category.word || '';
+  $('#pcSin').textContent = got.keyword || got.category.word || '작은 실패';
   $('#pcNth').textContent = d.nth > 1 ? `이 죄로 ${d.nth}번째 고해` : '이 죄로 첫 고해';
   { const g = gradeOf(d.nth, legend); const st = $('#pcStamp'); st.textContent = g.label; st.className = `pcStamp ${g.cls}`; }
   $('#pcLabel').textContent = legend ? '전설의 보속' : '오늘의 보속';
@@ -57,7 +57,7 @@ async function main() {
     try {
       const canvas = await drawPenanceCard({
         priestImage: priest.snapshot(), priestFramed: true, priestName: got.persona.name || '신부님', legend,
-        sin: got.keyword || got.category.word || '', nth: d.nth, penance: got.penance,
+        sin: got.keyword || got.category.word || '작은 실패', nth: d.nth, penance: got.penance,
         name, face: d.face, when: d.when, site: location.host,
       });
       const a = document.createElement('a');
