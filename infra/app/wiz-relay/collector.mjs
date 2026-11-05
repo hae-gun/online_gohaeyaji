@@ -74,23 +74,86 @@ export function ownText(source) {
   return name ? `${name} ${label}` : label;
 }
 
-export function parsePlays(html) {
+function liveLines(html) {
   const groups = new Map();
   for (const m of html.matchAll(/<span\b[^>]*id="rptLiveText(\d+)_spanLiveText_\d+"[^>]*>([\s\S]*?)<\/span>/g)) {
     const n = Number(m[1]);
     const text = clean(m[2]).replace(/^\s*-\s*/, '').replace(/\s*-{3,}$/, '').trim();
     groups.set(n, [...(groups.get(n) ?? []), text]);
   }
-  const plays = [];
+  const lines = [];
   let inn = 1;
   let half = '0';
   for (const [, texts] of [...groups].sort((a, b) => a[0] - b[0])) {
     for (const text of [...texts].reverse()) {
       const head = text.match(/^(\d+)회(초|말)\s+.+?\s+공격$/);
       if (head) { inn = Number(head[1]); half = head[2] === '초' ? '0' : '1'; continue; }
-      const own = ownText(text);
-      if (own) plays.push({ inn, homeOrAway: half, text: own });
+      lines.push({ inn, half, text });
     }
+  }
+  return lines;
+}
+
+const FIELD = { 투수: 1, 포수: 2, '1루수': 3, '2루수': 4, '3루수': 5, 유격수: 6, 좌익수: 7, 중견수: 8, 우익수: 9 };
+const FIELD_RE = /투수|포수|1루수|2루수|3루수|유격수|좌익수|중견수|우익수/g;
+const positions = (s) => (s.match(FIELD_RE) ?? []).map((w) => FIELD[w]);
+
+export function parsePitch(text) {
+  for (const [re, code] of [[/파울/, 'F'], [/헛스윙/, 'W'], [/타격/, 'X'], [/스트라이크/, 'S'], [/볼/, 'B']]) if (re.test(text)) return code;
+  return null;
+}
+
+export function parseResult(text) {
+  const type = [
+    [/병살/, 'dp'], [/홈런/, 'hr'], [/3루타/, 'triple'], [/2루타/, 'double'], [/1루타|안타/, 'single'],
+    [/삼진/, 'k'], [/볼넷|고의4구/, 'bb'], [/몸에 맞/, 'hbp'], [/실책/, 'error'], [/야수선택/, 'fc'],
+    [/번트/, 'bunt'], [/땅볼/, 'ground'], [/플라이|뜬공/, 'fly'], [/직선타|라인드라이브/, 'line'], [/아웃/, 'ground'],
+  ].find(([re]) => re.test(text))?.[1];
+  if (!type) return null;
+  const chain = text.match(/\(([^)]*->[^)]*)\)/)?.[1];
+  const dir = [[/좌중간/, 'lc'], [/우중간/, 'rc'], [/좌전|좌익|좌월|좌측/, 'lf'], [/우전|우익|우월|우측/, 'rf'], [/중전|중견|중월|중앙/, 'cf']].find(([re]) => re.test(text))?.[1];
+  const to = text.match(/([23])루까지/)?.[1];
+  return {
+    type, field: positions(text.replace(/\([^)]*\)/g, ''))[0] ?? 0, relay: chain ? positions(chain) : [],
+    dir: dir ?? null, foul: /파울/.test(text), sac: /희생/.test(text), to: to ? Number(to) : null,
+  };
+}
+
+function parseRunner(text) {
+  const m = text.match(/^([123])루주자\s+\S+\s*:\s*(.+)$/);
+  if (!m) return null;
+  const to = /아웃/.test(m[2]) ? 0 : /홈인/.test(m[2]) ? 4 : Number(m[2].match(/([123])루/)?.[1] ?? 0);
+  return to || /아웃/.test(m[2]) ? { from: Number(m[1]), to } : null;
+}
+
+// One entry per plate appearance, built from facts only, for the demo that replays a game on the field.
+export function parseEvents(html) {
+  const events = [];
+  let cur = null;
+  let pitcher = '';
+  const close = () => { if (cur && (cur.res || cur.mid.length)) events.push(cur); cur = null; };
+  for (const { inn, half, text } of liveLines(html)) {
+    const change = text.match(/투수\s+(\S+?)\s*(?:\(으\)로|으로|로)\s*교체/);
+    if (change) { pitcher = change[1]; continue; }
+    if (/교체/.test(text)) continue;
+    const up = text.match(/^(\d+)번타자\s+(\S+)$/);
+    if (up) { close(); cur = { inn, top: half === '0', order: Number(up[1]), batter: up[2], pitcher, pitches: [], mid: [], res: null, runners: [] }; continue; }
+    if (!cur) continue;
+    const pitch = text.match(/^\d+구\s+(.+)$/);
+    if (pitch) { const code = parsePitch(pitch[1]); if (code) cur.pitches.push(code); continue; }
+    const runner = parseRunner(text);
+    if (runner) { (cur.res ? cur.runners : cur.mid).push(runner); continue; }
+    if (!cur.res && text.startsWith(`${cur.batter} :`)) cur.res = parseResult(text);
+  }
+  close();
+  return events;
+}
+
+export function parsePlays(html) {
+  const plays = [];
+  for (const { inn, half, text } of liveLines(html)) {
+    const own = ownText(text);
+    if (own) plays.push({ inn, homeOrAway: half, text: own });
   }
   return plays.slice(-14).map((p, i) => ({
     no: plays.length - Math.min(14, plays.length) + i + 1, inn: p.inn, homeOrAway: p.homeOrAway,
@@ -207,6 +270,20 @@ function publish(game, relay, series) {
   renameSync(tmp, file); // atomic, so Nginx never serves half a file
 }
 
+let lastReplay = '';
+function publishReplay(raw, game, view2) {
+  const teams = parseTeams(view2);
+  const body = JSON.stringify({
+    gameId: game.gameId, home: game.homeTeamName, away: game.awayTeamName, homeCode: game.homeTeamCode, awayCode: game.awayTeamCode,
+    lineup: teams, events: parseEvents(view2),
+  });
+  if (body === lastReplay) return;
+  lastReplay = body;
+  const file = join(OUT, 'replay.json');
+  writeFileSync(`${file}.tmp`, body, { mode: 0o644 });
+  renameSync(`${file}.tmp`, file);
+}
+
 export async function tick(previous) {
   const today = kstDate();
   const todayGames = await fetchGames(today);
@@ -217,6 +294,8 @@ export async function tick(previous) {
   if (game && game.statusCode !== 'BEFORE') {
     const [view1, view2] = await fetchViews(raw);
     relay = buildRelay(raw, view1, view2);
+    // the replay is an extra: a parsing surprise here must never stop the live feed
+    try { publishReplay(raw, game, view2); } catch (e) { console.error('replay', e.message); }
   }
   publish(game, relay, series);
   return { game, relay };

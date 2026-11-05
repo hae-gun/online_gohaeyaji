@@ -117,6 +117,19 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
   }
 
+  # 위즈파크 경기 재연 기록. 지금은 ?demo=1 에서만 읽는다
+  location = /wiz/replay.json {
+    limit_req zone=wiz burst=60 nodelay;
+    limit_except GET { deny all; }
+    alias /srv/wiz/replay.json;
+    default_type application/json;
+    gzip on;
+    gzip_types application/json;
+    gzip_min_length 256;
+    add_header Cache-Control "no-cache" always;
+    add_header Access-Control-Allow-Origin "*" always;
+  }
+
   location = /wiz/state.json {
     limit_req zone=wiz burst=60 nodelay;
     limit_except GET { deny all; }
