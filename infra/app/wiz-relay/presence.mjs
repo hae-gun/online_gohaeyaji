@@ -220,7 +220,7 @@ function stepBench(now) {
 
 export function tick() {
   stepBench(Date.now());
-  const benchState = (c) => [bench.phase, bench.joined.size, config.need, Math.max(0, Math.ceil((bench.until - Date.now()) / 1000)), bench.joined.has(c.id) ? 1 : 0];
+  const benchState = (c) => [bench.phase, bench.joined.size, config.need, Math.max(0, Math.ceil((bench.until - Date.now()) / 1000)), bench.joined.has(c.id) ? 1 : 0, bench.phase >= 2 ? [...bench.joined].slice(0, 200) : []];
   for (const list of Object.values(channels)) {
     const placed = [...list.values()].filter((c) => c.placed);
     const grid = new Map();
