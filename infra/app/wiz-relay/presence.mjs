@@ -16,7 +16,7 @@ const MAX_FRAME = 256;
 const IDLE_MS = 60_000;
 const MSG_GAP_MS = 2_000;
 const BUFFER_LIMIT = 64 * 1024;
-const MESSAGE_COUNT = 8;
+const MESSAGE_COUNT = 13; // 8 cheer messages, then 5 big reactions
 
 const channels = Object.fromEntries(CHANNELS.map((c) => [c, new Map()]));
 let nextId = 1;

@@ -1003,7 +1003,7 @@ $('#chatForm').addEventListener('submit', (e) => {
       lastAnswer = { text, persona: r.persona, category: r.category || 'generic', answer: r.line };
       $('#fbBtn').hidden = false;
     }
-    $('#guide').textContent = '더 고해하실 것이 있으면 작성하세요';
+    $('#guide').textContent = '더 고해할 것이 있으면 쓰거나 예시를 누르세요';
     setInputEnabled(true);
     idle.start();
   }, 2200);

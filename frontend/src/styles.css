@@ -51,7 +51,7 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .roomTop{display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:none}
 .roomTop>*{pointer-events:auto}
 .roomTop .sign b{font-size:17px}
-.bubble{align-self:center;margin-top:8px;max-width:min(560px,100%);background:#f6efe2;color:#241b14;border-radius:20px;padding:14px 18px;font-family:var(--font-display);font-size:18px;line-height:1.6;position:relative;box-shadow:0 8px 24px rgba(0,0,0,.4);text-wrap:pretty}
+.bubble{align-self:center;margin-top:8px;max-width:min(560px,100%);background:#f6efe2;color:#241b14;border-radius:18px;padding:10px 16px;font-family:var(--font-display);font-size:16px;line-height:1.5;position:relative;box-shadow:0 8px 24px rgba(0,0,0,.4);text-wrap:pretty}
 .bubble::after{content:"";position:absolute;left:50%;bottom:-9px;margin-left:-9px;border:9px solid transparent;border-bottom:0;border-top-color:#f6efe2}
 .bubble{min-height:3.2em}
 .bubble.safety{background:#fff;border:2px solid #c0392b}
@@ -60,13 +60,14 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .chat .guide{font-size:13px;color:var(--gold);text-align:center}
 .chat form{display:flex;gap:8px}
 /* example confessions (ui/samples.js): one tap sends it */
-.samples{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.samples{display:flex;gap:6px;flex-wrap:nowrap;justify-content:safe center;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.samples::-webkit-scrollbar{display:none}
 .samples button{font:inherit;font-size:12.5px;color:var(--ink);background:rgba(18,14,22,.72);border:1px dashed var(--gold);border-radius:999px;padding:6px 12px;cursor:pointer;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .samples button:hover{border-style:solid}
-@media (max-width:520px){.samples{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}.samples button{flex:0 0 auto}}
+.samples button{flex:0 0 auto}
 .chat input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:12px 14px}
 .chat input:disabled{opacity:.5}
-.penance{align-self:center;width:min(360px,100%);border:1px solid var(--gold);border-radius:16px;padding:12px 16px;background:linear-gradient(180deg,rgba(58,38,82,.96),rgba(28,23,33,.96));text-align:center}
+.penance{align-self:center;width:min(440px,100%);border:1px solid var(--gold);border-radius:14px;padding:8px 14px;background:linear-gradient(180deg,rgba(58,38,82,.96),rgba(28,23,33,.96));text-align:center}
 .penance small{display:block;font-size:11.5px;letter-spacing:.14em;color:var(--gold);margin-bottom:4px}
 .penance p{margin:0;font-family:var(--font-display);font-size:16px;line-height:1.55}
 
@@ -90,7 +91,7 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 #fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .35s;z-index:25}
 @media (prefers-reduced-motion:reduce){#fade{transition:none}}
-@media (max-width:520px){.bubble{font-size:16px}.card h1{font-size:26px}}
+@media (max-width:520px){.bubble{font-size:15px}.card h1{font-size:26px}}
 
 .logo{letter-spacing:.02em}
 .logo em{font-style:normal;color:var(--gold)}
@@ -206,10 +207,11 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .card .fbAnswer{color:var(--ink);font-size:13.5px;border-left:3px solid var(--line);padding-left:10px;max-height:120px;overflow-y:auto}
 
 /* 보속 카드 */
-.penance .cardBtn{display:block;margin:10px auto 0;font-size:13px;padding:6px 14px;border-color:var(--gold);color:var(--gold);background:rgba(18,14,22,.55)}
+.penance .cardBtn{display:block;margin:6px auto 0;font-size:12.5px;padding:4px 12px;border-color:var(--gold);color:var(--gold);background:rgba(18,14,22,.55)}
 #roomUi.legend .penance .cardBtn{border-color:#f3d27a;color:#f3d27a}
 /* 보속 판결 (ui/verdict.js): crime and stamp on top, the penance rolls, then the stamp comes down */
-.verdictTop{display:flex;align-items:center;justify-content:center;gap:12px;margin:2px 0 8px}
+.verdictTop{display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 4px}
+.verdictTop small{margin:0 !important}
 .verdictTop .crime{font-size:13px;color:var(--muted)}
 .verdictTop .crime b{color:var(--ink);font-weight:700}
 .stamp{display:inline-block;font-family:var(--font-display);font-weight:800;font-size:15px;letter-spacing:.06em;padding:2px 10px;border:2.5px solid currentColor;border-radius:8px;transform:rotate(-8deg);opacity:0;color:#e2584c}
@@ -217,8 +219,8 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .penance.stamped .stamp{opacity:1;animation:stampIn .32s cubic-bezier(.2,1.6,.4,1)}
 .penance.stamped{animation:verdictShake .3s .08s}
 .penance.rolling #penanceText{color:var(--muted);filter:blur(.4px)}
-.penance #penanceText{min-height:3.1em;display:flex;align-items:center;justify-content:center}
-.verdictLine{display:block;min-height:1.4em;margin-top:6px;font-size:13px;color:var(--gold)}
+.penance #penanceText{min-height:2.6em;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1.45}
+.verdictLine{display:block;min-height:1.3em;margin-top:2px;font-size:12.5px;color:var(--gold)}
 @keyframes stampIn{0%{opacity:0;transform:rotate(-8deg) scale(2.6)}70%{opacity:1;transform:rotate(-8deg) scale(.92)}100%{opacity:1;transform:rotate(-8deg) scale(1)}}
 @keyframes verdictShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}50%{transform:translateX(3px)}75%{transform:translateX(-2px)}}
 @media (prefers-reduced-motion:reduce){.penance.stamped .stamp,.penance.stamped{animation:none}}
