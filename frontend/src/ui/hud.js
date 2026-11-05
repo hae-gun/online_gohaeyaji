@@ -65,8 +65,13 @@ export function createBubble(voice) {
   };
 }
 
-/** "나의 고해 기록" panel. Clearing asks for a second tap instead of a confirm() dialog. */
-export function initHistoryPanel(history) {
+/**
+ * "나의 고해 기록" panel. Clearing asks for a second tap instead of a confirm() dialog.
+ * Each confession shows the priest who heard it and the verdict, and "보속 카드 보기" opens that
+ * confession's card page (card.html) again.
+ * @param {{ priestName?: (id: string) => string, cardLink?: (entry: object) => string, onOpen?: (n: number) => void, onCard?: (entry: object) => void }} [opts]
+ */
+export function initHistoryPanel(history, { priestName = () => '', cardLink = () => '', onOpen = () => {}, onCard = () => {} } = {}) {
   let armed = false;
   const clearBtn = $('#clearBtn');
 
@@ -90,12 +95,31 @@ export function initHistoryPanel(history) {
       q.className = 'q'; q.textContent = r.q;
       a.className = 'a'; a.textContent = `보속: ${r.p}`;
       article.append(time, q, a);
+      // who heard it and what the verdict was (older entries may not have these)
+      const who = r.pr ? priestName(r.pr) : '';
+      const meta = [who, r.k ? `죄목 ${r.k}` : '', r.g || ''].filter(Boolean);
+      if (meta.length) {
+        const m = document.createElement('p');
+        m.className = 'meta';
+        m.textContent = meta.join('  |  ');
+        article.insertBefore(m, q);
+      }
+      const link = r.ref ? cardLink(r) : '';
+      if (link) {
+        const b = document.createElement('a');
+        b.className = 'histCard';
+        b.href = link; b.target = '_blank'; b.rel = 'noopener';
+        b.textContent = '보속 카드 보기';
+        b.onclick = () => onCard(r);
+        article.appendChild(b);
+      }
       box.appendChild(article);
     }
   }
 
   $('#histBtn').onclick = () => {
     render();
+    onOpen(history.load().length);
     armed = false;
     clearBtn.textContent = '기록 모두 지우기';
     $('#histPanel').hidden = false;

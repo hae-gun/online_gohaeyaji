@@ -7,6 +7,7 @@ import { paintFace, FACE_SIZE } from '../net/faces.js';
 import { drawPenanceCard, whenText } from '../ui/penance-card.js';
 import { decodeCard } from './link.js';
 import { glassBorderImage } from './glass.js';
+import { gradeOf } from '../ui/verdict.js';
 
 /**
  * card.html: a 보속 카드 someone shared, as a web page. Everything on it is rebuilt from the
@@ -41,6 +42,7 @@ async function main() {
   $('#pcName').textContent = name;
   $('#pcSin').textContent = got.keyword || got.category.word || '';
   $('#pcNth').textContent = d.nth > 1 ? `이 죄로 ${d.nth}번째 고해` : '이 죄로 첫 고해';
+  { const g = gradeOf(d.nth, legend); const st = $('#pcStamp'); st.textContent = g.label; st.className = `pcStamp ${g.cls}`; }
   $('#pcLabel').textContent = legend ? '전설의 보속' : '오늘의 보속';
   $('#pcPenance').textContent = got.penance;
   document.title = `${got.keyword ? `${got.keyword}의 죄, ` : ''}오늘의 보속 | 고해야지`;

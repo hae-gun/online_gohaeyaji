@@ -28,6 +28,10 @@ html,body{margin:0;min-height:100%}
 .pcSin small{font-size:14px;color:rgba(243,236,224,.7)}
 .pcSin strong{font-family:var(--font-display);font-weight:400;font-size:clamp(42px,13vw,60px);line-height:1.15}
 .pcSin em{font-style:normal;color:var(--gold);font-size:15px}
+/* the verdict stamp (ui/verdict.js), tilted over the top right of the sin */
+.pcSin{position:relative}
+.pcStamp{position:absolute;right:6%;top:2px;font-family:'Jua',sans-serif;font-size:16px;letter-spacing:.04em;padding:2px 10px;border:2.5px solid currentColor;border-radius:8px;transform:rotate(-9deg);opacity:.92}
+.pcStamp.g1{color:#7fc49a}.pcStamp.g2{color:#f2b233}.pcStamp.g3{color:#e2584c}.pcStamp.g4{color:#c15cf0}.pcStamp.legend{color:#f3d27a}
 .pcPaper{position:relative;border-radius:16px;padding:22px 22px 24px;color:var(--ink);
   background:radial-gradient(ellipse at 50% 50%,#fbf5e8,#eadcc0);box-shadow:0 10px 26px rgba(0,0,0,.5)}
 .pcPaper::before{content:'';position:absolute;inset:7px;border:1.5px solid #c8a35a;border-radius:11px;pointer-events:none}

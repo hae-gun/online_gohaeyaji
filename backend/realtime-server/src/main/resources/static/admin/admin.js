@@ -136,7 +136,7 @@
   };
   const TOP_TEXT = {
     session_start: '유입 경로', session_start_dev: '기기', place_enter: '들른 장소', travel: '이동하기 목적지',
-    confess_submit: '고해 카테고리', answer_done: '신부님(답변 끝까지)', card_share: '카드를 만든 카테고리',
+    confess_submit: '고해 카테고리', answer_done: '신부님(답변 끝까지)', card_share: '카드를 만든 카테고리', history_card: '기록에서 다시 본 카드',
     emote: '감정표현', face_saved: '얼굴 저장 방법', idle_kick: '자리 비움으로 나간 장소', session_end: '마지막 장소',
   };
   const RANGES = [[1, '오늘'], [7, '최근 7일'], [30, '최근 30일']];

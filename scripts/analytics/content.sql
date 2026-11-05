@@ -18,7 +18,15 @@ SELECT p->>'persona' AS priest,
   count(*) FILTER (WHERE type = 'card_share') AS cards
 FROM events WHERE type IN ('answer_done', 'card_share') GROUP BY priest ORDER BY heard DESC;
 
+-- verdict stamps: how far people got with each (answers heard, cards made)
+SELECT p->>'grade' AS grade,
+  count(*) FILTER (WHERE type = 'answer_done') AS heard,
+  count(*) FILTER (WHERE type = 'card_share') AS cards,
+  count(*) FILTER (WHERE type = 'history_card') AS reopened
+FROM events WHERE type IN ('answer_done', 'card_share', 'history_card') AND coalesce(p->>'grade', '') <> ''
+GROUP BY grade ORDER BY heard DESC;
+
 -- emotes and other things done in the cathedral
 SELECT CASE WHEN type = 'emote' THEN 'emote:' || (p->>'id') ELSE type END AS what, count(*) AS n, count(DISTINCT sid) AS visits
-FROM events WHERE type IN ('emote', 'sit', 'candle', 'offering', 'font', 'pigeon', 'travel', 'face_saved', 'face_import', 'look_change', 'inquiry')
+FROM events WHERE type IN ('emote', 'sit', 'candle', 'offering', 'font', 'pigeon', 'travel', 'face_saved', 'face_import', 'look_change', 'inquiry', 'history_open', 'history_card')
 GROUP BY what ORDER BY n DESC;

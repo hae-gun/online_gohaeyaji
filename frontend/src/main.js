@@ -122,7 +122,16 @@ rooms.onChange((occupied) => {
 const ambient = createAmbient();
 const voice = createVoice();
 const bubble = createBubble(voice);
-initHistoryPanel(history);
+initHistoryPanel(history, {
+  priestName: (id) => {
+    const p = engine && engine.personas.find((x) => x.id === id);
+    return p ? p.name : '';
+  },
+  // the card page of that confession, with my current name, clothes and drawn face
+  cardLink: (h) => cardUrl({ ref: h.ref, name: rooms.myName || '', when: new Date(h.t), nth: h.n || 1, look: myLook, face: rooms.myFace }),
+  onOpen: (n) => track('history_open', { n: Math.min(50, n) }),
+  onCard: (h) => track('history_card', { persona: h.pr || '', cat: h.c || '', grade: h.gc || '' }),
+});
 
 let engine = null;
 loadAnswerData()
@@ -861,7 +870,7 @@ $('#cardBtn').onclick = async () => {
     });
     const link = lastCard.ref ? cardUrl({ ref: lastCard.ref, name: rooms.myName || '', when: lastCard.when, nth: lastCard.nth, look: myLook, face: rooms.myFace }) : '';
     await cardPanel.show(canvas, link);
-    track('card_share', { persona: lastCard.persona, cat: lastCard.cat });
+    track('card_share', { persona: lastCard.persona, cat: lastCard.cat, grade: lastCard.gradeCls });
   } catch (_) {
     toast('카드를 만들지 못했습니다');
   } finally {
@@ -906,15 +915,15 @@ $('#chatForm').addEventListener('submit', (e) => {
     const sec = bubble.say(r.line, { safety: r.kind === 'safety' });
     // listened to the end: still in the booth and no new confession started meanwhile
     const no = ++answerNo;
-    if (r.kind === 'answer') setTimeout(() => { if (state === 'room' && no === answerNo) track('answer_done', { persona: r.persona, cat: r.category || '' }); }, sec * 1000);
+    if (r.kind === 'answer') setTimeout(() => { if (state === 'room' && no === answerNo) track('answer_done', { persona: r.persona, cat: r.category || '', grade: lastCard ? lastCard.gradeCls : '' }); }, sec * 1000);
     confessional.talk(sec, faceFor(r));
     if (r.kind === 'answer') {
-      history.add({ t: Date.now(), q: text, c: r.category, p: r.penance, pr: r.persona });
       // for the card: how many times this sin was confessed in this browser, this one included
-      const nth = history.load().filter((h) => h.c === r.category).length;
+      const nth = history.load().filter((h) => h.c === r.category).length + 1;
       const legend = !!(priest && priest.chance);
       // 보속 판결: the stamp comes down the moment the priest says the penance
       const grade = gradeOf(nth, legend);
+      history.add({ t: Date.now(), q: text, c: r.category, p: r.penance, pr: r.persona, k: r.keyword || '', n: nth, g: grade.label, gc: grade.cls, lg: legend, ref: r.ref });
       $('#verdictHead').textContent = legend ? '전설의 판결' : '판결';
       stopVerdict();
       stopVerdict = playVerdict({
@@ -927,7 +936,7 @@ $('#chatForm').addEventListener('submit', (e) => {
         stampAt: sec * ((r.penanceAt || 0) / Math.max(1, r.line.length)),
         onStamp: () => ambient.stamp(),
       });
-      lastCard = { sin: r.keyword || r.category, penance: r.penance, legend, nth, when: new Date(), ref: r.ref, cat: r.category, persona: r.persona, grade: grade.label };
+      lastCard = { sin: r.keyword || r.category, penance: r.penance, legend, nth, when: new Date(), ref: r.ref, cat: r.category, persona: r.persona, grade: grade.label, gradeCls: grade.cls };
     } else {
       $('#penance').hidden = true;
       lastCard = null;
