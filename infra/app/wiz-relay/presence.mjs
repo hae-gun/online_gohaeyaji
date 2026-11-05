@@ -67,7 +67,7 @@ const MAX_FAILS = 5;
 const LOCK_MS = 10 * 60_000;
 const fails = new Map();
 const here = dirname(fileURLToPath(import.meta.url));
-const SEED = [{"team": "KT", "name": "최원준", "videoId": "7N2QcJ6bIRU", "start": 0, "note": "2026, 등장곡 포함"}, {"team": "KT", "name": "김민혁", "videoId": "WJimV9xauKA", "start": 0, "note": "2025 치어리더 직캠"}, {"team": "KT", "name": "안현민", "videoId": "ROC9t1m_X70", "start": 0, "note": "2026 치어리더 직캠"}, {"team": "KT", "name": "힐리어드", "videoId": "2kJf0pbtajA", "start": 1785, "note": "공식 전곡 29:45"}, {"team": "KT", "name": "김현수", "videoId": "2kJf0pbtajA", "start": 1523, "note": "공식 전곡 25:23"}, {"team": "KT", "name": "허경민", "videoId": "Yb0UeA1Mp-c", "start": 0, "note": "2025 관중"}, {"team": "KT", "name": "김상수", "videoId": "dUAzZ4xFgh4", "start": 0, "note": "2026 치어리더 직캠"}, {"team": "SS", "name": "김지찬", "videoId": "ZgsjF9aNDK0", "start": 0, "note": "2026 쇼츠 직캠"}, {"team": "SS", "name": "박승규", "videoId": "HpI8Zb-AZ5k", "start": 0, "note": "공식"}, {"team": "SS", "name": "구자욱", "videoId": "LINJoA_Dnr4", "start": 0, "note": "2024 관중"}, {"team": "SS", "name": "디아즈", "videoId": "NxW7toGTejU", "start": 0, "note": "2024"}, {"team": "SS", "name": "김영웅", "videoId": "rf400n5awmk", "start": 0, "note": "KBO 공식, 관중 떼창"}, {"team": "SS", "name": "류지혁", "videoId": "YTSrmx6Z3Do", "start": 0, "note": "2025 현장 추정"}, {"team": "SS", "name": "이재현", "videoId": "XB3ZJY_RVWQ", "start": 0, "note": "2023 직캠"}];
+const SEED = [{"team": "KT", "name": "최원준", "videoId": "7N2QcJ6bIRU", "start": 0, "note": "2026, 등장곡 포함"}, {"team": "KT", "name": "김민혁", "videoId": "WJimV9xauKA", "start": 0, "note": "2025 치어리더 직캠"}, {"team": "KT", "name": "안현민", "videoId": "ROC9t1m_X70", "start": 0, "note": "2026 치어리더 직캠"}, {"team": "KT", "name": "힐리어드", "videoId": "2kJf0pbtajA", "start": 1785, "end": 1855, "note": "공식 전곡 29:45"}, {"team": "KT", "name": "김현수", "videoId": "2kJf0pbtajA", "start": 1523, "end": 1593, "note": "공식 전곡 25:23"}, {"team": "KT", "name": "허경민", "videoId": "Yb0UeA1Mp-c", "start": 0, "note": "2025 관중"}, {"team": "KT", "name": "김상수", "videoId": "dUAzZ4xFgh4", "start": 0, "note": "2026 치어리더 직캠"}, {"team": "SS", "name": "김지찬", "videoId": "ZgsjF9aNDK0", "start": 0, "note": "2026 쇼츠 직캠"}, {"team": "SS", "name": "박승규", "videoId": "HpI8Zb-AZ5k", "start": 0, "note": "공식"}, {"team": "SS", "name": "구자욱", "videoId": "LINJoA_Dnr4", "start": 0, "note": "2024 관중"}, {"team": "SS", "name": "디아즈", "videoId": "NxW7toGTejU", "start": 0, "note": "2024"}, {"team": "SS", "name": "김영웅", "videoId": "rf400n5awmk", "start": 0, "note": "KBO 공식, 관중 떼창"}, {"team": "SS", "name": "류지혁", "videoId": "YTSrmx6Z3Do", "start": 0, "note": "2025 현장 추정"}, {"team": "SS", "name": "이재현", "videoId": "XB3ZJY_RVWQ", "start": 0, "note": "2023 직캠"}];
 let cheers = SEED;
 
 function saveJson(name, value) {
@@ -83,12 +83,13 @@ function loadData() {
 }
 function publishCheers() {
   saveJson('cheers-admin.json', cheers);
-  saveJson('cheers.json', { cheers: cheers.map(({ team, name, videoId, start }) => ({ team, name, videoId, start })) });
+  saveJson('cheers.json', { cheers: cheers.map(({ team, name, videoId, start, end }) => ({ team, name, videoId, start, end: end || 0 })) });
 }
 export function validCheers(list) {
   return Array.isArray(list) && list.length <= 200 && list.every((r) => r && ['KT', 'SS'].includes(r.team)
     && typeof r.name === 'string' && r.name.length >= 1 && r.name.length <= 16
     && /^[\w-]{11}$/.test(r.videoId) && Number.isInteger(r.start) && r.start >= 0 && r.start < 36000
+    && (r.end === undefined || (Number.isInteger(r.end) && r.end >= 0 && r.end < 36000 && (r.end === 0 || r.end > r.start)))
     && (r.note === undefined || (typeof r.note === 'string' && r.note.length <= 60)));
 }
 export function validConfig(v) {
