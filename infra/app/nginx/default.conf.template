@@ -91,6 +91,32 @@ server {
     proxy_read_timeout 90s;
   }
 
+  # 위즈파크 응원가 목록과 관리자 페이지 (로그인은 presence.mjs)
+  location = /wiz/cheers.json {
+    limit_req zone=wiz burst=60 nodelay;
+    limit_except GET { deny all; }
+    alias /srv/wiz/cheers.json;
+    default_type application/json;
+    add_header Cache-Control "no-cache" always;
+    add_header Access-Control-Allow-Origin "*" always;
+  }
+
+  # 위즈파크 익명 방문 집계. IP는 presence.mjs에 넘기지 않는다
+  location = /wiz/hit {
+    limit_req zone=wiz burst=60 nodelay;
+    limit_except GET { deny all; }
+    access_log off;
+    add_header Access-Control-Allow-Origin "*" always;
+    proxy_pass http://wiz-presence:8090;
+  }
+
+  location /wiz/admin {
+    limit_req zone=admin burst=20 nodelay;
+    proxy_pass http://wiz-presence:8090;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+  }
+
   location = /wiz/state.json {
     limit_req zone=wiz burst=60 nodelay;
     limit_except GET { deny all; }

@@ -42,9 +42,12 @@ services:
     mem_limit: 512m
     environment:
       PORT: "8090"
+      WIZ_ADMIN_PASSWORD: ${WIZ_ADMIN_PASSWORD:-}
       ALLOWED_ORIGINS: https://wiz.gohaeyaji.com,http://wiz.gohaeyaji.com,https://hae-gun.github.io
     volumes:
       - ./wiz-relay/presence.mjs:/app/presence.mjs:ro,Z
+      - ./wiz-relay/admin.html:/app/admin.html:ro,Z
+      - wiz-data:/srv/wiz
     networks: [backend]
     restart: unless-stopped
 
