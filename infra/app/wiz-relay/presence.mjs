@@ -1,12 +1,12 @@
 // Temporary presence server for the Magic Wiz Park page. Delete after the series.
-// Two channels of up to 1000 people. Each client hears only its nearest neighbours, twice a second,
+// One shared park of up to 2000 people. Each client hears only its nearest neighbours, twice a second,
 // so traffic grows with the audience instead of with its square. No free text is ever accepted.
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 
 const PORT = Number(process.env.PORT || 8090);
-const CHANNELS = ['kt', 'samsung'];
-const CAP = Number(process.env.CHANNEL_CAP || 1000);
+const CHANNELS = ['all'];
+const CAP = Number(process.env.CHANNEL_CAP || 2000);
 const NEAR = Number(process.env.NEAR || 40);
 const TICK_MS = 500;
 const CELL = 40;
@@ -16,7 +16,13 @@ const MAX_FRAME = 256;
 const IDLE_MS = 60_000;
 const MSG_GAP_MS = 2_000;
 const BUFFER_LIMIT = 64 * 1024;
-const MESSAGE_COUNT = 13; // 8 cheer messages, then 5 big reactions
+const MESSAGE_COUNT = 21; // 8 KT messages, 8 Samsung messages, 5 big reactions
+const BENCH_NEED = Number(process.env.BENCH_NEED || 5);
+const BENCH_GATHER_MS = 45_000;
+const BENCH_FIGHT_MS = 12_000;
+const BENCH_SHAKE_MS = 7_000;
+const BENCH_COOLDOWN_MS = Number(process.env.BENCH_COOLDOWN_MS || 180_000);
+const bench = { phase: 0, joined: new Set(), until: 0, ready: 0 }; // 0 idle, 1 gathering, 2 brawl, 3 handshake
 
 const channels = Object.fromEntries(CHANNELS.map((c) => [c, new Map()]));
 let nextId = 1;
@@ -58,6 +64,10 @@ export function handle(c, raw) {
     c.yaw = Math.round(m[3] * 100) / 100; c.cheer = m[4] ? 1 : 0; c.placed = true;
   } else if (m[0] === 'u' && ID_RE.test(m[1]) && ID_RE.test(m[2])) {
     c.look = [m[1], m[2]]; c.rev += 1;
+  } else if (m[0] === 'b' && bench.phase < 2 && c.seen >= bench.ready) {
+    if (bench.phase === 0) { bench.phase = 1; bench.until = c.seen + BENCH_GATHER_MS; bench.joined.clear(); }
+    bench.joined.add(c.id);
+    if (bench.joined.size >= BENCH_NEED) { bench.phase = 2; bench.until = c.seen + BENCH_FIGHT_MS; }
   } else if (m[0] === 's' && Number.isInteger(m[1]) && m[1] >= 0 && m[1] < MESSAGE_COUNT && c.seen - c.lastMsg >= MSG_GAP_MS) {
     c.lastMsg = c.seen;
     c.bubble = m[1];
@@ -75,7 +85,16 @@ function neighbours(list, grid, c) {
   return near.map((o) => [o, (o.x - c.x) ** 2 + (o.z - c.z) ** 2]).sort((a, b) => a[1] - b[1]).slice(0, NEAR).map((p) => p[0]);
 }
 
+function stepBench(now) {
+  for (const id of bench.joined) if (!channels.all.has(id)) bench.joined.delete(id);
+  if (bench.phase === 1 && (now >= bench.until || bench.joined.size === 0)) { bench.phase = 0; bench.joined.clear(); }
+  if (bench.phase === 2 && now >= bench.until) { bench.phase = 3; bench.until = now + BENCH_SHAKE_MS; }
+  if (bench.phase === 3 && now >= bench.until) { bench.phase = 0; bench.joined.clear(); bench.ready = now + BENCH_COOLDOWN_MS; }
+}
+
 export function tick() {
+  stepBench(Date.now());
+  const benchState = (c) => [bench.phase, bench.joined.size, BENCH_NEED, Math.max(0, Math.ceil((bench.until - Date.now()) / 1000)), bench.joined.has(c.id) ? 1 : 0];
   for (const list of Object.values(channels)) {
     const placed = [...list.values()].filter((c) => c.placed);
     const grid = new Map();
@@ -90,7 +109,7 @@ export function tick() {
       for (const o of looks) c.known.set(o.id, o.rev);
       if (c.known.size > NEAR * 6) c.known = new Map(near.map((o) => [o.id, o.rev]));
       send(c, ['p', list.size, near.map((o) => [o.id, o.x, o.z, o.yaw, o.cheer, o.bubble ?? -1]),
-        looks.map((o) => [o.id, o.look[0], o.look[1]])]);
+        looks.map((o) => [o.id, o.look[0], o.look[1]]), benchState(c)]);
     }
     for (const c of placed) c.bubble = undefined;
   }
