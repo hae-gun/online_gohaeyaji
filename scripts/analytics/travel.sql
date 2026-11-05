@@ -5,4 +5,8 @@ SELECT travelled, count(*) AS visits,
   round(100.0 * count(*) FILTER (WHERE confessed) / count(*), 1) AS confessed_pct
 FROM visits WHERE entered GROUP BY travelled;
 
+-- 고해하기 button: visits that used it, and how many of those reached a booth
+SELECT count(DISTINCT sid) AS visits_used, count(DISTINCT sid) FILTER (WHERE sid IN (SELECT sid FROM events WHERE type = 'booth_enter')) AS reached_booth
+FROM events WHERE type = 'go_confess';
+
 SELECT p->>'to' AS destination, count(*) AS n FROM events WHERE type = 'travel' GROUP BY destination ORDER BY n DESC;

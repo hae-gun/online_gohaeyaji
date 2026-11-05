@@ -10,6 +10,7 @@ import { makeFigure, parishioner, walkPose } from './world/figure.js';
 import { storedLook, validLook, parseLook, makeLook } from './net/looks.js';
 import { createTracker, beaconUrlFor, sourceOf, deviceOf, inAppOf } from './net/track.js';
 import { gradeOf, verdictLine, playVerdict } from './ui/verdict.js';
+import { pickSamples } from './ui/samples.js';
 import { createOtherPlayers } from './world/others.js';
 import { buildConfessional } from './world/confessional.js';
 import { createKeyboard } from './controls/keyboard.js';
@@ -683,6 +684,30 @@ function travelTo(where) {
   }, 380);
 }
 
+/* ---------- 고해하기: walk to the nearest free booth and go in ---------- */
+// from anywhere: outside the confession hall it first moves there (이동하기), then walks to the
+// closest free booth and enters on arrival. Moving by hand or tapping elsewhere cancels it.
+let autoEnter = null;
+function goConfess() {
+  if (state !== 'hall' || travelling) return;
+  if (myEmote.seated) { myEmote.stop(); mySeat = null; }
+  track('go_confess');
+  const walk = () => {
+    if (state !== 'hall') return;
+    const dist = (b) => Math.hypot(b.spot.x - player.position.x, b.spot.z - player.position.z);
+    const free = booths.filter((b) => !b.occupied).sort((a, b) => dist(a) - dist(b));
+    if (!free.length) { toast('지금은 모든 고해소가 사용 중입니다. 잠시 후 다시 눌러 주세요.'); return; }
+    const b = free[0];
+    path = nav.planPath(player.position, b.spot);
+    walkBooth = b;
+    autoEnter = b;
+    stuck = 0;
+    walkMarker.tapped(path, b.spot);
+  };
+  if (place !== 'booths') { travelTo('booths'); setTimeout(walk, 450); } else walk();
+}
+$('#goConfessBtn').onclick = goConfess;
+
 /* ---------- booth flow ---------- */
 const CLAIM_FAILED = {
   OCCUPIED: BUSY_MESSAGE,
@@ -758,7 +783,7 @@ function readyForConfession() {
     const hello = priest.greeting[Math.floor(Math.random() * priest.greeting.length)];
     confessional.talk(bubble.say(hello), { script: [[0, 'smile']], after: 'smile', hold: 2 });
   }
-  $('#guide').textContent = '고해하실 내용을 작성하세요';
+  $('#guide').textContent = '직접 쓰거나 아래 예시를 눌러 고해하세요';
   setInputEnabled(true);
   idle.start();
   try { $('#confess').focus({ preventScroll: true }); } catch (_) { /* older browsers */ }
@@ -884,9 +909,33 @@ $('#cardBtn').onclick = async () => {
   }
 };
 
+// example confessions under the input: shown whenever a confession can be made, a new set each time
+let shownSamples = [];
+let fromSample = false;
+const samplesEl = $('#samples');
+function showSamples(on) {
+  samplesEl.hidden = !on;
+  if (!on) return;
+  shownSamples = pickSamples(3, shownSamples);
+  samplesEl.textContent = '';
+  for (const s of shownSamples) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = s;
+    b.onclick = () => {
+      if ($('#confess').disabled) return;
+      $('#confess').value = s;
+      fromSample = true;
+      $('#chatForm').requestSubmit();
+    };
+    samplesEl.appendChild(b);
+  }
+}
+
 function setInputEnabled(on) {
   $('#confess').disabled = !on;
   $('#sendBtn').disabled = !on;
+  showSamples(on);
 }
 
 setInterval(() => idle.tick(), 250);
@@ -912,8 +961,9 @@ $('#chatForm').addEventListener('submit', (e) => {
   // the kind of answer and the category id only; for a crisis reply not even which crisis it was
   track('confess_submit', {
     persona: r.persona, kind: r.kind, cat: r.kind === 'safety' ? '' : (r.category || ''),
-    caution: !!r.caution, len: Math.min(200, Math.floor([...text].length / 10) * 10),
+    caution: !!r.caution, len: Math.min(200, Math.floor([...text].length / 10) * 10), sample: fromSample,
   });
+  fromSample = false;
   setTimeout(() => {
     if (state !== 'room') return;
     // a crisis reply is read in the same calm voice by every priest, never in the joking one
@@ -1177,6 +1227,17 @@ function updateSurroundings(dt) {
     }
   }
   nearBooth = nb;
+  // 고해하기 in progress: go in on arrival, or give up if someone took that booth on the way
+  if (autoEnter && state === 'hall') {
+    if (autoEnter.occupied) {
+      autoEnter = null; path = []; walkBooth = null;
+      toast('가던 고해소에 다른 분이 먼저 들어갔습니다. 고해하기를 다시 눌러 주세요.');
+    } else if (!walkBooth && !path.length) {
+      const b = autoEnter;
+      autoEnter = null;
+      if (nb === b) tryEnter();   // arrived; anywhere else means it was cancelled
+    }
+  }
   // a free bench or pew next to me (not while something else is playing); a seat someone is
   // already sitting on is skipped, and only mentioned when there is no free one nearby
   let bench = null, taken = false;

@@ -59,6 +59,11 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .chat{align-self:center;width:min(560px,100%);display:flex;flex-direction:column;gap:8px}
 .chat .guide{font-size:13px;color:var(--gold);text-align:center}
 .chat form{display:flex;gap:8px}
+/* example confessions (ui/samples.js): one tap sends it */
+.samples{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.samples button{font:inherit;font-size:12.5px;color:var(--ink);background:rgba(18,14,22,.72);border:1px dashed var(--gold);border-radius:999px;padding:6px 12px;cursor:pointer;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.samples button:hover{border-style:solid}
+@media (max-width:520px){.samples{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}.samples button{flex:0 0 auto}}
 .chat input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:12px 14px}
 .chat input:disabled{opacity:.5}
 .penance{align-self:center;width:min(360px,100%);border:1px solid var(--gold);border-radius:16px;padding:12px 16px;background:linear-gradient(180deg,rgba(58,38,82,.96),rgba(28,23,33,.96));text-align:center}
@@ -178,6 +183,8 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .chanBtn:hover{border-color:var(--gold)}
 .travel{margin-top:6px}
 .travel .travelBtn{margin-top:0}
+.travel .goConfess{margin-top:0;margin-right:6px;background:var(--gold);border-color:var(--gold);color:#1c1721;font-weight:700}
+.travel .goConfess:hover{filter:brightness(1.08)}
 .travelBtn[aria-expanded="true"]{border-color:var(--gold);color:var(--gold)}
 .travelList{display:flex;gap:6px;margin-top:6px}
 .travelList[hidden]{display:none}

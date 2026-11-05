@@ -23,6 +23,7 @@
     <div class="top">
       <div class="sign"><b id="placeName">성당 앞마당</b><span><i class="dot"></i>사용 중 <span id="occ">0</span> / 21<span id="peopleWrap" hidden>, 함께 있는 사람 <span id="people">1</span>명</span></span><button class="chanBtn" id="chanBtn" type="button" hidden><span id="chanNo">1</span>채널 바꾸기</button>
         <div class="travel">
+          <button class="chanBtn goConfess" id="goConfessBtn" type="button" title="가장 가까운 빈 고해소로 걸어가서 들어갑니다">고해하기</button>
           <button class="chanBtn travelBtn" id="travelBtn" type="button" aria-expanded="false" aria-controls="travelList">이동하기</button>
           <div class="travelList" id="travelList" role="group" aria-label="바로 가기" hidden>
             <button type="button" data-go="yard">광장</button>
@@ -72,6 +73,7 @@
       <div class="chat">
         <div class="idleCounter" id="idleCounter" role="timer" aria-live="polite" hidden></div>
         <div class="guide" id="guide">신부님이 기도를 시작합니다</div>
+        <div class="samples" id="samples" role="group" aria-label="예시 고해 (누르면 바로 고해)" hidden></div>
         <form id="chatForm" autocomplete="off">
           <input id="confess" maxlength="200" placeholder="예) 시험 전날인데 쇼츠만 3시간 봤어요" disabled>
           <button class="primary" id="sendBtn" type="submit" disabled>고해</button>

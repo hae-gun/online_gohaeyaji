@@ -8,6 +8,11 @@ SELECT p->>'cat' AS category,
 FROM events WHERE type IN ('confess_submit', 'answer_done', 'card_share') AND coalesce(p->>'cat', '') <> ''
 GROUP BY category ORDER BY confessed DESC LIMIT 40;
 
+-- example buttons versus typed confessions: how many, and how many got a card afterwards in the same visit
+SELECT coalesce(e.p->>'sample', '0') = '1' AS from_sample, count(*) AS confessions,
+  count(DISTINCT e.sid) FILTER (WHERE v.card) AS visits_with_card
+FROM events e JOIN visits v USING (sid) WHERE e.type = 'confess_submit' GROUP BY from_sample;
+
 -- answers by kind (answer, chat, safety, blocked, tooShort) and how many were cautious
 SELECT p->>'kind' AS kind, count(*) AS n, count(*) FILTER (WHERE p->>'caution' = '1') AS cautious
 FROM events WHERE type = 'confess_submit' GROUP BY kind ORDER BY n DESC;
