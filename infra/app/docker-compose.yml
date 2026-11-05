@@ -42,7 +42,7 @@ services:
     mem_limit: 256m
     environment:
       PORT: "8090"
-      ALLOWED_ORIGINS: https://wiz.gohaeyaji.com,http://wiz.gohaeyaji.com,https://hae-gun.github.io
+      ALLOWED_ORIGINS: https://wiz.gohaeyaji.com,https://hae-gun.github.io
     volumes:
       - ./wiz-relay/presence.mjs:/app/presence.mjs:ro,Z
     networks: [backend]

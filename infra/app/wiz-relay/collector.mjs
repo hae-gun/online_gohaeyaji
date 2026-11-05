@@ -12,8 +12,6 @@ const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
 const HEARTBEAT_MS = 30_000;
 const MAX_BACKOFF_MS = 120_000;
 const MAX_HTML = 2_000_000;
-const SERIES_ID = '7'; // Korean Series in KBO's game list
-const SERIES_FROM = process.env.SERIES_FROM || '20261025';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const kstDate = () => new Date(Date.now() + 9 * 36e5).toISOString().slice(0, 10).replaceAll('-', '');
@@ -55,7 +53,6 @@ const count = (s) => (/^\d+$/.test(s) ? Number(s) : 0);
 
 const RESULTS = [
   [/홈런/, '홈런'], [/3루타/, '3루타'], [/2루타/, '2루타'], [/안타|1루타/, '안타'],
-  [/실책/, '실책'],
   [/삼진/, '삼진'], [/볼넷/, '볼넷'], [/몸에 맞/, '몸에 맞는 공'], [/병살/, '병살타'],
   [/뜬공|땅볼|플라이|직선타|아웃/, '아웃'],
 ];
@@ -159,32 +156,6 @@ export function buildRelay(raw, view1, view2) {
   };
 }
 
-const toResult = (raw) => ({
-  date: raw.G_DT, homeTeamName: raw.HOME_NM, awayTeamName: raw.AWAY_NM, homeTeamCode: raw.HOME_ID, awayTeamCode: raw.AWAY_ID,
-  homeScore: parseInt(raw.B_SCORE_CN, 10) || 0, awayScore: parseInt(raw.T_SCORE_CN, 10) || 0,
-});
-export const seriesResults = (games, team = TEAM) => (games || []).filter((g) => String(g.SR_ID) === SERIES_ID
-  && String(g.GAME_STATE_SC) === '3' && !(Number(g.CANCEL_SC_ID) > 0) && (g.HOME_ID === team || g.AWAY_ID === team)).map(toResult);
-
-// finished days never change, so each past date is read once
-const seriesDays = new Map();
-function dateRange(from, to) {
-  const out = [];
-  const d = new Date(`${from.slice(0, 4)}-${from.slice(4, 6)}-${from.slice(6, 8)}T00:00:00Z`);
-  for (;;) {
-    const s = d.toISOString().slice(0, 10).replaceAll('-', '');
-    if (s >= to) return out;
-    out.push(s);
-    d.setUTCDate(d.getUTCDate() + 1);
-  }
-}
-async function collectSeries(today, todayGames) {
-  for (const date of dateRange(SERIES_FROM, today)) {
-    if (!seriesDays.has(date)) { seriesDays.set(date, seriesResults(await fetchGames(date))); await sleep(200); }
-  }
-  return [...seriesDays.values(), seriesResults(todayGames)].flat().sort((a, b) => a.date.localeCompare(b.date)).map((g, i) => ({ no: i + 1, ...g }));
-}
-
 const delayFor = (g) => {
   if (!g) return 600_000;
   if (g.statusCode === 'STARTED') return 8_000;
@@ -194,8 +165,8 @@ const delayFor = (g) => {
 
 let lastBody = '';
 let lastWrite = 0;
-function publish(game, relay, series) {
-  const body = JSON.stringify({ game, relay, series });
+function publish(game, relay) {
+  const body = JSON.stringify({ game, relay });
   const now = Date.now();
   // unchanged content keeps the same ETag, so browsers get a cheap 304 between pitches
   if (body === lastBody && now - lastWrite < HEARTBEAT_MS) return;
@@ -203,22 +174,19 @@ function publish(game, relay, series) {
   lastWrite = now;
   const file = join(OUT, 'state.json');
   const tmp = `${file}.tmp`;
-  writeFileSync(tmp, JSON.stringify({ checkedAt: now, game, relay, series }), { mode: 0o644 });
+  writeFileSync(tmp, JSON.stringify({ checkedAt: now, game, relay }), { mode: 0o644 });
   renameSync(tmp, file); // atomic, so Nginx never serves half a file
 }
 
 export async function tick(previous) {
-  const today = kstDate();
-  const todayGames = await fetchGames(today);
-  const series = await collectSeries(today, todayGames);
-  const raw = pickGame(todayGames);
+  const raw = pickGame(await fetchGames(kstDate()));
   const game = raw ? mapGame(raw) : null;
   let relay = previous?.game?.gameId === game?.gameId ? previous?.relay ?? null : null;
   if (game && game.statusCode !== 'BEFORE') {
     const [view1, view2] = await fetchViews(raw);
     relay = buildRelay(raw, view1, view2);
   }
-  publish(game, relay, series);
+  publish(game, relay);
   return { game, relay };
 }
 
