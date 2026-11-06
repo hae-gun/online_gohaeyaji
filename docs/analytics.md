@@ -38,7 +38,8 @@ Redis는 AOF로 영속화되어(`redis-data` 볼륨) 관리자 페이지 숫자�
 | session_start | 페이지를 열 때 | src(유입 경로), dev(mobile, pc, tablet), inapp(인앱 브라우저), first(처음 온 브라우저) |
 | intro_done | 입장 버튼 | look(m, f) |
 | enter_hall | 성당 마당에 들어섬 | |
-| first_move | 처음 움직임 | sec(입장 후 몇 초) |
+| first_move | 처음 움직임 | sec(입장 후 몇 초), by(keys, joystick, tap) |
+| joystick | 메뉴에서 조이스틱을 켜거나 끔 | on |
 | place_enter | 장소가 바뀜 | place(yard, around, trail, event, nave, booths) |
 | travel | 이동하기 | to(yard, nave, booths) |
 | booth_enter | 고해소에 들어감 | booth(번호) |

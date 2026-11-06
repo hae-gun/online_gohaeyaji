@@ -11,6 +11,7 @@ import { storedLook, validLook, parseLook, makeLook } from './net/looks.js';
 import { createTracker, beaconUrlFor, sourceOf, deviceOf, inAppOf } from './net/track.js';
 import { gradeOf, verdictLine, playVerdict } from './ui/verdict.js';
 import { pickSamples } from './ui/samples.js';
+import { createJoystick, joystickDefault, saveJoystick } from './controls/joystick.js';
 import { createOtherPlayers } from './world/others.js';
 import { buildConfessional } from './world/confessional.js';
 import { createKeyboard } from './controls/keyboard.js';
@@ -1150,20 +1151,48 @@ $('#startBtn').onclick = () => {
   rig.yaw = START.ry - Math.PI;   // the intro sweep leaves yaw rotated; start behind the player, facing the booths
   fade(true); setTimeout(() => fade(false), 60);   // a soft cut from the plaza view to the hall
   moveSender.now(player.position, player.rotation.y);   // others start seeing me from here
-  if ('ontouchstart' in window) $('#moveHint').textContent = '탭해서 이동, 드래그로 시점 회전, 두 손가락으로 확대';
+  applyJoystick();   // the move hint for this screen
 };
 
 /* ---------- frame loop ---------- */
 const clock = new THREE.Clock();
 
+// on-screen joystick: on by default on touch screens, switched in the menu (controls/joystick.js)
+const joy = createJoystick($('#joystick'));
+let joyOn = joystickDefault();
+let pace = 1;            // 0..1: the joystick can walk slowly; keys and taps walk at full speed
+let movedBy = '';        // keys, joystick or tap: how the first move was made (first_move)
+const TOUCH = 'ontouchstart' in window || matchMedia('(pointer: coarse)').matches;
+function applyJoystick() {
+  $('#joystick').hidden = !joyOn;
+  $('#joyBtn').textContent = joyOn ? '조이스틱 끄기' : '조이스틱 켜기';
+  if (!joyOn) joy.reset();
+  if (TOUCH) $('#moveHint').textContent = joyOn ? '조이스틱이나 탭으로 이동, 드래그로 시점 회전, 두 손가락으로 확대' : '탭해서 이동, 드래그로 시점 회전, 두 손가락으로 확대';
+}
+applyJoystick();
+$('#joyBtn').onclick = () => {
+  joyOn = !joyOn;
+  saveJoystick(joyOn);
+  applyJoystick();
+  track('joystick', { on: joyOn });
+  toast(joyOn ? '왼쪽 아래 조이스틱으로 움직일 수 있습니다' : '조이스틱을 껐습니다. 탭해서 이동합니다');
+};
+
 function updatePlayer(dt) {
   let vx = 0, vz = 0;
+  pace = 1;
   if (state === 'hall' && namePanel.hidden && !faceEditor.isOpen() && inquiryPanel.hidden && chanPanel.hidden) {
     let f = 0, r = 0;
     if (keys.w || keys.arrowup) f += 1;
     if (keys.s || keys.arrowdown) f -= 1;
     if (keys.d || keys.arrowright) r += 1;
     if (keys.a || keys.arrowleft) r -= 1;
+    if (f || r) movedBy = 'keys';
+    else if (joyOn && joy.active) {
+      f = joy.y; r = joy.x;
+      pace = Math.min(1, Math.hypot(f, r) * 1.25);   // most of the ring is full speed, the middle walks
+      movedBy = 'joystick';
+    }
     if (f || r) {
       // keys move relative to where the camera looks
       path = []; walkBooth = null;
@@ -1174,13 +1203,13 @@ function updatePlayer(dt) {
       if (d < 0.15) {
         path.shift();
         if (!path.length && walkBooth) { player.rotation.y = walkBooth.facing; walkBooth = null; }
-      } else { vx = dx / d; vz = dz / d; }
+      } else { vx = dx / d; vz = dz / d; movedBy = 'tap'; }
     }
   }
 
   let moving = !!(vx || vz);
   if (moving) {
-    const n = Math.hypot(vx, vz), sp = 3.4 * dt, ox = player.position.x, oz = player.position.z;
+    const n = Math.hypot(vx, vz), sp = 3.4 * dt * pace, ox = player.position.x, oz = player.position.z;
     const [nx, nz] = nav.step(ox, oz, (vx / n) * sp, (vz / n) * sp, sp);
     const moved = Math.hypot(nx - ox, nz - oz);
     if (path.length && moved < sp * 0.25) {
@@ -1321,7 +1350,7 @@ function animate() {
   if (state === 'hall' || state === 'intro') {
     const moving = updatePlayer(dt);
     if (state === 'hall') moveSender.update(player.position, player.rotation.y, moving);
-    if (moving && state === 'hall' && !movedOnce) { movedOnce = true; track('first_move', { sec: Math.round((Date.now() - hallAt) / 1000) }); }
+    if (moving && state === 'hall' && !movedOnce) { movedOnce = true; track('first_move', { sec: Math.round((Date.now() - hallAt) / 1000), by: movedBy || 'tap' }); }
     updateEmoteBar();
     updateSurroundings(dt);
     walkMarker.update(dt, path, player.position, state === 'hall');

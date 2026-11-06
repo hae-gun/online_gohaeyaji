@@ -39,6 +39,13 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .prompt{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px 16px;text-align:center;max-width:min(520px,100%);line-height:1.5}
 .prompt kbd{font-family:var(--font-body);font-weight:600;border:1px solid var(--gold);color:var(--gold);border-radius:8px;padding:0 6px;margin-right:4px}
 .hint{font-size:12.5px;color:var(--muted);text-align:center}
+/* on-screen joystick (controls/joystick.js): bottom left, above the emote bar on phones */
+.joystick{position:fixed;left:calc(16px + env(safe-area-inset-left));bottom:calc(150px + env(safe-area-inset-bottom));width:120px;height:120px;border-radius:50%;background:rgba(18,14,22,.35);border:2px solid rgba(212,173,85,.45);pointer-events:auto;touch-action:none;z-index:6;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.joystick[hidden]{display:none}
+.joystick .knob{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:rgba(212,173,85,.85);box-shadow:0 2px 8px rgba(0,0,0,.4);transition:transform .1s}
+.joystick.on{background:rgba(18,14,22,.5)}
+.joystick.on .knob{transition:none}
+@media (min-width:900px){.joystick{bottom:calc(40px + env(safe-area-inset-bottom))}}
 #toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 76px);transform:translateX(-50%);max-width:min(460px,calc(100% - 32px));background:#2a1e1e;border:1px solid rgba(255,74,61,.5);border-radius:16px;padding:12px 16px;line-height:1.55;text-align:center;font-size:14px;z-index:20}
 
 /* confessional room UI */
