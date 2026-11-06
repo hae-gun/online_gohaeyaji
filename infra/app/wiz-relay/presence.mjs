@@ -25,7 +25,7 @@ const MESSAGE_COUNT = 21; // 8 KT messages, 8 Samsung messages, 5 big reactions
 const config = { need: Number(process.env.BENCH_NEED || 5), gatherSec: 30, cooldownSec: Number(process.env.BENCH_COOLDOWN_MS || 30_000) / 1000 };
 const BENCH_FIGHT_MS = 16_000; // about 5s of that is fans running in from the stands
 const BENCH_SHAKE_MS = 7_000;
-const newBench = () => ({ phase: 0, joined: new Set(), until: 0, ready: 0 }); // 0 idle, 1 gathering, 2 brawl, 3 handshake
+const newBench = () => ({ phase: 0, joined: new Set(), until: 0, ready: 0, result: '', resultAt: 0 }); // 0 idle, 1 gathering, 2 brawl, 3 handshake
 
 const channels = {}, benches = {};
 for (let n = 1; n <= MAX_CHANNELS; n += 1) { channels[n] = new Map(); benches[n] = newBench(); }
@@ -50,6 +50,18 @@ function today() {
     for (const old of Object.keys(stats).sort().slice(0, -KEEP_DAYS)) delete stats[old];
   }
   return stats[key];
+}
+// Team cheering score for the day. Points come only from actions the server already rate limits,
+// and the smaller side gets up to double so a smaller crowd can still win.
+const CHEER_EVERY_MS = 2_000;
+const BENCH_JOIN_PT = 5, BENCH_WIN_PT = 30;
+const teamOf = (c) => c.team || (c.look[0].startsWith('ss-') ? 'samsung' : 'kt');
+let crowd = { kt: 0, samsung: 0 };
+function score() { const d = today(); if (!d.score) d.score = { kt: 0, samsung: 0 }; return d.score; }
+export function award(team, points) {
+  const other = team === 'kt' ? 'samsung' : 'kt';
+  const boost = Math.min(2, Math.max(1, Math.sqrt((crowd[other] || 1) / (crowd[team] || 1))));
+  score()[team] += Math.round(points * boost * 10) / 10;
 }
 function noteEnter(c) { const d = today(); d.enters += 1; d.teams[c.look[0].startsWith('ss-') ? 'samsung' : 'kt'] += 1; c.enteredAt = Date.now(); }
 function noteLeave(c) {
@@ -195,19 +207,22 @@ export function handle(c, raw) {
   if (m[0] === 'm' && finite(m[1], -300, 300) && finite(m[2], -300, 300) && finite(m[3], -10, 10)) {
     c.x = Math.round(m[1] * 10) / 10; c.z = Math.round(m[2] * 10) / 10;
     c.yaw = Math.round(m[3] * 100) / 100; c.cheer = m[4] ? 1 : 0;
+    if (c.cheer && c.placed && c.seen - (c.lastPoint || 0) >= CHEER_EVERY_MS) { c.lastPoint = c.seen; award(teamOf(c), 1); }
     if (!c.placed) noteEnter(c);
     c.placed = true;
   } else if (m[0] === 'u' && ID_RE.test(m[1]) && ID_RE.test(m[2])) {
     c.look = [m[1], m[2], typeof m[3] === 'string' && /^\d{1,2}$/.test(m[3]) ? m[3] : '', JERSEY_NAMES.has(m[4]) ? m[4] : '']; c.rev += 1;
+    if (m[5] === 'kt' || m[5] === 'samsung') c.team = m[5];
   } else if (m[0] === 'b' && bench.phase < 2 && c.seen >= bench.ready) {
-    if (bench.phase === 0) { bench.phase = 1; bench.until = c.seen + config.gatherSec * 1000; bench.joined.clear(); }
-    if (!bench.joined.has(c.id)) today().bench += 1;
+    if (bench.phase === 0) { bench.phase = 1; bench.until = c.seen + config.gatherSec * 1000; bench.joined.clear(); bench.result = ''; }
+    if (!bench.joined.has(c.id)) { today().bench += 1; award(teamOf(c), BENCH_JOIN_PT); }
     bench.joined.add(c.id);
     if (bench.joined.size >= config.need) { bench.phase = 2; bench.until = c.seen + BENCH_FIGHT_MS; }
   } else if (m[0] === 's' && Number.isInteger(m[1]) && m[1] >= 0 && m[1] < MESSAGE_COUNT && c.seen - c.lastMsg >= MSG_GAP_MS) {
     c.lastMsg = c.seen;
     c.bubble = m[1];
     today()[m[1] >= 16 ? 'acts' : 'msgs'] += 1;
+    if (c.placed) award(teamOf(c), m[1] >= 16 ? 3 : 1);
   }
 }
 
@@ -223,6 +238,14 @@ function neighbours(list, grid, c) {
 }
 
 function stepBench(bench, list, now) {
+  if (bench.phase === 2 && !bench.result) {
+    const n = { kt: 0, samsung: 0 };
+    for (const id of bench.joined) { const c = list.get(id); if (c) n[teamOf(c)] += 1; }
+    bench.result = n.kt > n.samsung ? 'kt' : n.samsung > n.kt ? 'samsung' : 'draw';
+    bench.resultAt = now;
+    if (bench.result !== 'draw') award(bench.result, BENCH_WIN_PT);
+  }
+  if (bench.phase === 0 && bench.result && now - bench.resultAt > 60_000) bench.result = '';
   for (const id of bench.joined) if (!list.has(id)) bench.joined.delete(id);
   if (bench.phase === 1 && (now >= bench.until || bench.joined.size === 0)) { bench.phase = 0; bench.joined.clear(); }
   if (bench.phase === 2 && now >= bench.until) { bench.phase = 3; bench.until = now + BENCH_SHAKE_MS; }
@@ -230,6 +253,9 @@ function stepBench(bench, list, now) {
 }
 
 export function tick() {
+  crowd = { kt: 0, samsung: 0 };
+  for (const list of Object.values(channels)) for (const c of list.values()) if (c.placed) crowd[teamOf(c)] += 1;
+  const sc = score(), board = (bench) => [Math.floor(sc.kt), Math.floor(sc.samsung), crowd.kt, crowd.samsung, bench.result, bench.resultAt];
   const benchState = (bench, c) => [bench.phase, bench.joined.size, config.need, Math.max(0, Math.ceil(((bench.phase ? bench.until : bench.ready) - Date.now()) / 1000)), [...bench.joined].indexOf(c.id) + 1, bench.phase >= 2 ? [...bench.joined].slice(0, 200) : []];
   for (const [n, list] of Object.entries(channels)) {
     const bench = benches[n];
@@ -247,7 +273,7 @@ export function tick() {
       for (const o of looks) c.known.set(o.id, o.rev);
       if (c.known.size > NEAR * 6) c.known = new Map(near.map((o) => [o.id, o.rev]));
       send(c, ['p', list.size, near.map((o) => [o.id, o.x, o.z, o.yaw, o.cheer, o.bubble ?? -1]),
-        looks.map((o) => [o.id, o.look[0], o.look[1], o.look[2], o.look[3]]), benchState(bench, c)]);
+        looks.map((o) => [o.id, o.look[0], o.look[1], o.look[2], o.look[3]]), benchState(bench, c), board(bench)]);
     }
     for (const c of placed) c.bubble = undefined;
   }
