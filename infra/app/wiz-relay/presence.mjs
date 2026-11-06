@@ -28,7 +28,7 @@ const BENCH_SHAKE_MS = 7_000;
 const newBench = () => ({ phase: 0, joined: new Set(), until: 0, ready: 0, result: '', resultAt: 0 }); // 0 idle, 1 gathering, 2 brawl, 3 handshake
 
 const channels = {}, benches = {};
-for (let n = 1; n <= MAX_CHANNELS; n += 1) { channels[n] = new Map(); benches[n] = newBench(); }
+for (let n = 1; n <= MAX_CHANNELS; n += 1) { channels[n] = new Map(); benches[n] = { ...newBench(), n }; }
 const onlineTotal = () => Object.values(channels).reduce((sum, list) => sum + list.size, 0);
 // Keep a reconnecting visitor in their channel when it has room, otherwise take the first channel with room
 function pickChannel(wanted) {
@@ -63,6 +63,90 @@ export function award(team, points) {
   const boost = Math.min(2, Math.max(1, Math.sqrt((crowd[other] || 1) / (crowd[team] || 1))));
   score()[team] += Math.round(points * boost * 10) / 10;
 }
+
+// Ambient fans so the stands never look empty. They are counted in the crowd numbers people see,
+// but never in stats, the team score or who wins a bench clearing.
+const NPC_COUNT = { kt: Number(process.env.NPC_KT ?? 13), samsung: Number(process.env.NPC_SAMSUNG ?? 37) };
+const NPC_SEATS = {"kt":[[-35.5,6],[-37.9,4.3],[-40.4,2.5],[-42.9,0.8],[-45.3,-0.9],[-47.8,-2.6],[-50.3,-4.3],[-38.5,10.3],[-41,8.6],[-43.4,6.9],[-45.9,5.1],[-48.3,3.4],[-50.8,1.7],[-53.3,0],[-40.5,13.2],[-43,11.5],[-45.5,9.8],[-47.9,8.1],[-50.4,6.4],[-52.9,4.7],[-55.3,2.9],[-43.6,17.7],[-46.1,16],[-48.6,14.3],[-51,12.5],[-53.5,10.8],[-56,9.1],[-58.4,7.4],[-47.7,23.6],[-50.2,21.9],[-52.6,20.2],[-55.1,18.5],[-57.6,16.9],[-60.1,15.2],[-62.6,13.5],[-52.7,31],[-55.2,29.4],[-57.7,27.7],[-60.2,26.1],[-62.7,24.4],[-65.2,22.8],[-67.7,21.1],[-60.7,42.6],[-63.2,40.9],[-65.6,39.1],[-68,37.4],[-70.5,35.6],[-72.9,33.9],[-75.3,32.1],[-72.2,59.7],[-74.8,58.2],[-77.4,56.7],[-80,55.2],[-82.6,53.7],[-85.2,52.2],[-87.8,50.8],[-74.4,76.8],[-77.1,78.1],[-79.8,79.5],[-82.5,80.8],[-85.2,82.1],[-87.9,83.4],[-90.6,84.7],[-71.6,83.2],[-74.3,84.4],[-77.1,85.7],[-79.8,86.9],[-82.5,88.1],[-85.3,89.4],[-88,90.6],[-68.1,90.1],[-70.6,91.6],[-73.2,93.1],[-75.8,94.6],[-78.4,96.1],[-81,97.6],[-83.6,99.1]],"samsung":[[68.5,89.3],[71.1,90.8],[73.7,92.3],[76.3,93.8],[78.9,95.2],[81.5,96.7],[84.2,98.2],[71.9,82.4],[74.7,83.6],[77.4,84.8],[80.2,86],[82.9,87.2],[85.7,88.5],[88.4,89.7],[74.9,75.8],[77.7,77],[80.5,78.2],[83.2,79.4],[86,80.5],[88.7,81.7],[91.5,82.9],[72.7,60.6],[75.4,59.2],[78,57.8],[80.6,56.3],[83.3,54.9],[85.9,53.5],[88.5,52],[61.3,43.5],[63.7,41.7],[66.2,40],[68.6,38.2],[71.1,36.5],[73.5,34.7],[75.9,33],[53.2,31.8],[55.7,30.2],[58.2,28.5],[60.7,26.9],[63.2,25.2],[65.7,23.6],[68.2,21.9],[48.3,24.4],[50.7,22.7],[53.2,21.1],[55.7,19.4],[58.2,17.7],[60.7,16],[63.2,14.3],[44.2,18.5],[46.7,16.8],[49.1,15.1],[51.6,13.4],[54.1,11.7],[56.5,10],[59,8.3],[41.1,14.1],[43.6,12.3],[46,10.6],[48.5,8.9],[51,7.2],[53.4,5.5],[55.9,3.8],[38,9.6],[40.5,7.9],[43,6.2],[45.4,4.5],[47.9,2.8],[50.3,1.1],[52.8,-0.7],[36,6.8],[38.5,5],[40.9,3.3],[43.4,1.6],[45.9,-0.1],[48.3,-1.8],[50.8,-3.5]]};
+const NPC_ROSTER = {kt:[["투수","1 고영표,11 스기모토,12 우규민,19 배제성,29 전용주,30 소형준,36 대니엘,38 주권,41 손동현,43 로건,47 오원석,60 박영현,61 김정운"],["포수","22 장성우,42 조대현,45 한승택"],["내야수","4 오윤석,7 김상수,9 류현인,13 허경민,34 힐리어드,52 권동진,56 장준원"],["외야수","3 최원준,10 김현수,23 안현민,27 배정대,33 이정훈,51 장진혁,53 김민혁"]],
+ samsung:[["투수","17 이재희,18 원태인,20 최원태,26 이승현,57 이승현,27 김태훈,28 이승민,38 임기영,42 양창섭,55 배찬승,59 페덱,60 장찬희,74 사토시,75 후라도"],["포수","24 김도환,46 장승현,47 강민호"],["내야수","0 디아즈,7 이재현,9 박계범,16 류지혁,30 김영웅,56 김상준,61 전병우"],["외야수","5 구자욱,32 김헌곤,34 최형우,39 김성윤,44 김현준,58 김지찬,66 박승규"]]};
+const NPC_LOOKS = {
+  kt: { uniforms: [['jj2026', 6], ['home', 5], ['away', 3], ['mil2026', 2], ['jj2025', 1], ['found-home', 1], ['black25', 1], ['victory', 1]], gear: [['none', 4], ['wizbat', 5], ['balloon', 2], ['towel', 1], ['flag', 1], ['led', 1]] },
+  samsung: { uniforms: [['ss-home', 7], ['ss-away', 4], ['ss-2014h', 1], ['ss-sanb', 1], ['ss-1985', 1], ['ss-camo', 1]], gear: [['none', 4], ['towel', 4], ['balloon', 3], ['clapper', 1], ['flag', 1]] },
+};
+const rnd = (a, b) => a + Math.random() * (b - a);
+const weighted = (list) => { let r = Math.random() * list.reduce((t, x) => t + x[1], 0); for (const [v, w] of list) if ((r -= w) <= 0) return v; return list[0][0]; };
+function npcLook(team) {
+  const L = NPC_LOOKS[team], roll = Math.random();
+  let num = '', name = '';
+  if (roll < 0.6) { const rows = NPC_ROSTER[team].flatMap(([, l]) => l.split(',')); const row = rows[Math.floor(Math.random() * Math.min(rows.length, roll < 0.35 ? 12 : rows.length))].split(' '); [num, name] = row; }
+  else if (roll < 0.8) num = String(Math.floor(rnd(1, 100)));
+  return [weighted(L.uniforms), weighted(L.gear), num, name];
+}
+function makeNpc(team, now) {
+  const seat = NPC_SEATS[team][Math.floor(Math.random() * NPC_SEATS[team].length)];
+  const x = seat[0] + rnd(-0.6, 0.6), z = seat[1] + rnd(-0.6, 0.6);
+  return { id: nextId++, npc: true, team, placed: true, x, z, home: [x, z], tx: null, tz: null, yaw: Math.atan2(-x, 18 - z), cheer: 0, look: npcLook(team), rev: 1,
+    nextCheer: now + rnd(2e3, 40e3), cheerUntil: 0, nextSay: now + rnd(20e3, 120e3), nextMove: now + rnd(60e3, 300e3), leaveAt: now + rnd(10, 60) * 60e3, benchSlot: 0 };
+}
+const npcs = {};
+function fillNpcs(n, now) {
+  const list = npcs[n] || (npcs[n] = new Map());
+  for (const team of ['kt', 'samsung']) {
+    let have = [...list.values()].filter((o) => o.team === team).length;
+    while (have < NPC_COUNT[team]) { const o = makeNpc(team, now); list.set(o.id, o); have += 1; }
+  }
+  return list;
+}
+const SPEED = 1.6;
+function walk(o, dt, speed = SPEED) {
+  if (o.tx == null) return true;
+  const dx = o.tx - o.x, dz = o.tz - o.z, d = Math.hypot(dx, dz), step = speed * dt;
+  if (d <= step) { o.x = o.tx; o.z = o.tz; o.tx = o.tz = null; return true; }
+  o.x += dx / d * step; o.z += dz / d * step; o.yaw = Math.atan2(dx, dz);
+  return false;
+}
+function stepNpcs(n, bench, now, dt, live) {
+  const list = fillNpcs(n, now);
+  for (const o of [...list.values()]) {
+    const inBench = bench.joined.has(o.id);
+    if (inBench && bench.phase === 2) { if (o.tx == null) { o.tx = rnd(-4, 4); o.tz = 18.4 + rnd(-4, 4); } walk(o, dt, 7); o.cheer = 1; continue; }
+    if (inBench && bench.phase === 3) {
+      const side = o.team === 'kt' ? -1 : 1, i = o.benchSlot;
+      o.tx = side * (4.6 + Math.floor(i / 7) * 2.2); o.tz = 11.5 + (i % 7) * 2;
+      if (walk(o, dt, 5)) { o.yaw = side * -Math.PI / 2; o.cheer = Math.random() < 0.2 ? 1 : 0; }
+      continue;
+    }
+    if (o.benchSlot && !inBench) { o.benchSlot = 0; o.tx = o.home[0]; o.tz = o.home[1]; o.speed = 5; }
+    if (o.tx != null) { if (walk(o, dt, o.speed || SPEED)) { o.speed = 0; o.yaw = Math.atan2(-o.x, 18 - o.z); } continue; }
+    if (now >= o.leaveAt && !inBench) { list.delete(o.id); continue; } // someone leaves, fillNpcs brings a new face
+    if (o.cheer && now >= o.cheerUntil) { o.cheer = 0; o.nextCheer = now + rnd(live ? 8e3 : 20e3, live ? 40e3 : 90e3); }
+    else if (!o.cheer && now >= o.nextCheer) { o.cheer = 1; o.cheerUntil = now + rnd(2e3, 9e3); }
+    if (now >= o.nextSay) { o.nextSay = now + rnd(live ? 40e3 : 90e3, live ? 150e3 : 300e3); o.bubble = Math.random() < 0.15 ? 16 + Math.floor(Math.random() * 5) : (o.team === 'kt' ? 0 : 8) + Math.floor(Math.random() * 8); }
+    if (now >= o.nextMove) {
+      o.nextMove = now + rnd(120e3, 600e3);
+      const seat = NPC_SEATS[o.team][Math.floor(Math.random() * NPC_SEATS[o.team].length)];
+      if (Math.hypot(seat[0] - o.x, seat[1] - o.z) < 25) { o.tx = seat[0] + rnd(-0.6, 0.6); o.tz = seat[1] + rnd(-0.6, 0.6); o.home = [o.tx, o.tz]; }
+    }
+  }
+  if (bench.phase === 1 && bench.npcPlan) {
+    for (const p of bench.npcPlan) if (!p.done && now >= p.at) {
+      p.done = true;
+      const o = list.get(p.id);
+      if (!o || bench.joined.size >= config.need) continue;
+      bench.joined.add(o.id); o.benchSlot = 1 + [...bench.joined].filter((id) => list.get(id)?.team === o.team).length; o.tx = null;
+      if (bench.joined.size >= config.need) { bench.phase = 2; bench.until = now + BENCH_FIGHT_MS; }
+    }
+  }
+  return list;
+}
+function planNpcJoin(n, bench, now) {
+  const list = npcs[n]; if (!list || !list.size) return;
+  const pool = [...list.values()].filter((o) => o.tx == null).sort(() => Math.random() - 0.5);
+  const k = Math.floor(rnd(2, config.need)); // never enough on their own: one real fan plus a few of them
+  bench.npcPlan = pool.slice(0, k).map((o) => ({ id: o.id, at: now + rnd(2e3, config.gatherSec * 700) }));
+}
+
 function noteEnter(c) { const d = today(); d.enters += 1; d.teams[c.look[0].startsWith('ss-') ? 'samsung' : 'kt'] += 1; c.enteredAt = Date.now(); }
 function noteLeave(c) {
   if (!c.enteredAt) return;
@@ -214,7 +298,7 @@ export function handle(c, raw) {
     c.look = [m[1], m[2], typeof m[3] === 'string' && /^\d{1,2}$/.test(m[3]) ? m[3] : '', JERSEY_NAMES.has(m[4]) ? m[4] : '']; c.rev += 1;
     if (m[5] === 'kt' || m[5] === 'samsung') c.team = m[5];
   } else if (m[0] === 'b' && bench.phase < 2 && c.seen >= bench.ready) {
-    if (bench.phase === 0) { bench.phase = 1; bench.until = c.seen + config.gatherSec * 1000; bench.joined.clear(); bench.result = ''; }
+    if (bench.phase === 0) { bench.phase = 1; bench.until = c.seen + config.gatherSec * 1000; bench.joined.clear(); bench.result = ''; planNpcJoin(c.channel, bench, c.seen); }
     if (!bench.joined.has(c.id)) { today().bench += 1; award(teamOf(c), BENCH_JOIN_PT); }
     bench.joined.add(c.id);
     if (bench.joined.size >= config.need) { bench.phase = 2; bench.until = c.seen + BENCH_FIGHT_MS; }
@@ -246,8 +330,8 @@ function stepBench(bench, list, now) {
     if (bench.result !== 'draw') award(bench.result, BENCH_WIN_PT);
   }
   if (bench.phase === 0 && bench.result && now - bench.resultAt > 60_000) bench.result = '';
-  for (const id of bench.joined) if (!list.has(id)) bench.joined.delete(id);
-  if (bench.phase === 1 && (now >= bench.until || bench.joined.size === 0)) { bench.phase = 0; bench.joined.clear(); }
+  for (const id of bench.joined) if (!list.has(id) && !npcs[bench.n]?.has(id)) bench.joined.delete(id);
+  if (bench.phase === 1 && (now >= bench.until || ![...bench.joined].some((id) => list.has(id)))) { bench.phase = 0; bench.joined.clear(); }
   if (bench.phase === 2 && now >= bench.until) { bench.phase = 3; bench.until = now + BENCH_SHAKE_MS; }
   if (bench.phase === 3 && now >= bench.until) { bench.phase = 0; bench.joined.clear(); bench.ready = now + config.cooldownSec * 1000; }
 }
@@ -255,30 +339,34 @@ function stepBench(bench, list, now) {
 export function tick() {
   crowd = { kt: 0, samsung: 0 };
   for (const list of Object.values(channels)) for (const c of list.values()) if (c.placed) crowd[teamOf(c)] += 1;
-  const sc = score(), board = (bench) => [Math.floor(sc.kt), Math.floor(sc.samsung), crowd.kt, crowd.samsung, bench.result, bench.resultAt];
+  const now = Date.now(), dt = TICK_MS / 1000, hour = Number(kstNow().slice(11, 13)), lively = hour >= 17 && hour <= 22;
+  const shown = { ...crowd };
+  for (const [n, list] of Object.entries(channels)) if (list.size) { const l = fillNpcs(n, now); for (const o of l.values()) shown[o.team] += 1; }
+  const sc = score(), board = (bench) => [Math.floor(sc.kt), Math.floor(sc.samsung), shown.kt, shown.samsung, bench.result, bench.resultAt];
   const benchState = (bench, c) => [bench.phase, bench.joined.size, config.need, Math.max(0, Math.ceil(((bench.phase ? bench.until : bench.ready) - Date.now()) / 1000)), [...bench.joined].indexOf(c.id) + 1, bench.phase >= 2 ? [...bench.joined].slice(0, 200) : []];
   for (const [n, list] of Object.entries(channels)) {
+    if (!list.size) continue;
     const bench = benches[n];
-    stepBench(bench, list, Date.now());
-    const placed = [...list.values()].filter((c) => c.placed);
+    stepBench(bench, list, now);
+    const crowdNpcs = stepNpcs(n, bench, now, dt, lively);
+    const real = [...list.values()].filter((c) => c.placed), placed = [...real, ...crowdNpcs.values()];
     const grid = new Map();
     for (const c of placed) {
       const key = `${Math.floor(c.x / CELL)},${Math.floor(c.z / CELL)}`;
       if (!grid.has(key)) grid.set(key, []);
       grid.get(key).push(c);
     }
-    for (const c of placed) {
+    for (const c of real) {
       const near = neighbours(list, grid, c);
       const looks = near.filter((o) => c.known.get(o.id) !== o.rev);
       for (const o of looks) c.known.set(o.id, o.rev);
       if (c.known.size > NEAR * 6) c.known = new Map(near.map((o) => [o.id, o.rev]));
-      send(c, ['p', list.size, near.map((o) => [o.id, o.x, o.z, o.yaw, o.cheer, o.bubble ?? -1]),
+      send(c, ['p', list.size + crowdNpcs.size, near.map((o) => [o.id, o.x, o.z, o.yaw, o.cheer, o.bubble ?? -1]),
         looks.map((o) => [o.id, o.look[0], o.look[1], o.look[2], o.look[3]]), benchState(bench, c), board(bench)]);
     }
     for (const c of placed) c.bubble = undefined;
   }
   notePeak(onlineTotal());
-  const now = Date.now();
   for (const list of Object.values(channels)) for (const c of [...list.values()]) if (now - c.seen > IDLE_MS) drop(c, 4000);
 }
 
@@ -320,7 +408,7 @@ export function start(port = PORT) {
     if (!list) { send(c, ['full']); drop(c, 4001); return; }
     list.set(c.id, c);
     socket.on('data', (d) => { if (!c.gone) readFrames(c, d); });
-    send(c, ['hi', c.id, list.size, name]);
+    send(c, ['hi', c.id, list.size + (npcs[name]?.size || 0), name]);
   });
   const timer = setInterval(tick, TICK_MS);
   const save = () => { try { saveJson('stats.json', stats); } catch (e) { console.error('stats write failed', e.message); } };
