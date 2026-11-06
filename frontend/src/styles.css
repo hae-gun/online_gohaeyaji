@@ -214,7 +214,8 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .card .fbAnswer{color:var(--ink);font-size:13.5px;border-left:3px solid var(--line);padding-left:10px;max-height:120px;overflow-y:auto}
 
 /* 보속 카드 */
-.penance .cardBtn{display:block;margin:6px auto 0;font-size:12.5px;padding:4px 12px;border-color:var(--gold);color:var(--gold);background:rgba(18,14,22,.55)}
+.penanceActions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.penance .cardBtn{display:block;margin:0;font-size:12.5px;padding:4px 12px;border-color:var(--gold);color:var(--gold);background:rgba(18,14,22,.55)}
 #roomUi.legend .penance .cardBtn{border-color:#f3d27a;color:#f3d27a}
 /* 보속 판결 (ui/verdict.js): crime and stamp on top, the penance rolls, then the stamp comes down */
 .verdictTop{display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 4px}

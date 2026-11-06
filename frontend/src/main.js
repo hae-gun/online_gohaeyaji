@@ -342,7 +342,7 @@ function playEmote(id) {
 }
 /** Sit on the bench or pew next to me (protocol section 16, emote 'sit'). Walking stands up again. */
 let mySeat = null;   // the bench or pew I sit on
-function sitDown(bench) {
+function sitDown(bench, where = place) {   // where: 기도하러 가기 sits before place catches up
   if (state !== 'hall' || myEmote.seated) return;
   if (others.sitterAt(bench.seat.x, bench.seat.z) !== null) { toast('이미 누가 앉아 있는 자리입니다'); return; }
   mySeat = bench;
@@ -354,7 +354,7 @@ function sitDown(bench) {
   // the seat travels with the sit, so others put me exactly there (a separate move could be
   // dropped by the server's rate limit right after walking)
   rooms.sendEmote('sit', { x: player.position.x, z: player.position.z, ry: player.rotation.y });
-  track('sit', { place });
+  track('sit', { place: where });
 }
 /* ---------- things to do in the nave and the confession hall ---------- */
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
@@ -1041,10 +1041,10 @@ function faceFor(r) {
  * @param {{ reason?: 'USER'|'IDLE', notifyServer?: boolean, message?: string }} opts
  *   notifyServer=false when the server already took the booth away
  */
-function leaveRoom({ reason = 'USER', notifyServer = true, message = '' } = {}) {
+function leaveRoom({ reason = 'USER', notifyServer = true, message = '', then = null } = {}) {
   if (state !== 'room') return;
   // the legendary priest says goodbye when you walk out on your own
-  if (reason === 'USER' && !message && priest && priest.farewell && priest.farewell.length) {
+  if (reason === 'USER' && !message && !then && priest && priest.farewell && priest.farewell.length) {
     message = `${priest.name}: ${priest.farewell[Math.floor(Math.random() * priest.farewell.length)]}`;
   }
   idle.pause();
@@ -1074,10 +1074,48 @@ function leaveRoom({ reason = 'USER', notifyServer = true, message = '' } = {}) 
     b.doorTarget = 0;
     current = null;
     moveSender.now(player.position, player.rotation.y);   // reappear in front of the door
+    if (then) then();   // still behind the fade: 기도하러 가기 moves on to a pew from here
     fade(false);
     if (message) toast(message);
   }, 380);
 }
+
+/* ---------- 기도하러 가기: from the verdict straight to a pew in the nave, praying ---------- */
+// One fade: out of the booth, onto a free pew in the front row (camera facing me from the altar side), seated and praying (the seated pray
+// pose others already see, protocol section 16). The prayer repeats a few times unless I move.
+// Only my own screen shows the penance; others just see someone praying.
+const PRAY_TIMES = 3;
+function freePew() {
+  const free = hall.seats.filter((s) => others.sitterAt(s.seat.x, s.seat.z) === null);
+  if (!free.length) return null;
+  const front = Math.min(...free.map((s) => s.seat.z));
+  const near = free.filter((s) => s.seat.z < front + 0.5);   // the front-most free row: nothing in front hides me
+  return near[Math.floor(Math.random() * near.length)];
+}
+function goPray() {
+  if (state !== 'room' || !lastCard) return;
+  const card = lastCard;
+  track('go_pray', { persona: card.persona || '', cat: card.cat || '', grade: card.gradeCls || '' });
+  leaveRoom({
+    then: () => {
+      const pew = freePew();
+      if (!pew) { toast('본당 자리가 모두 찼습니다. 잠시 뒤 다시 와 주세요'); return; }
+      player.position.copy(pew.seat);
+      moveSender.now(player.position, pew.rot);
+      sitDown(pew, 'nave');
+      rig.yaw = pew.rot + 0.45;   // from the altar side, a little to one side: the folded hands and bowed head show
+      let n = 0;
+      const again = () => {
+        if (state !== 'hall' || mySeat !== pew || !myEmote.seated) return;   // stood up or left
+        if (!myEmote.playing) { playEmote('pray'); n++; }
+        if (n < PRAY_TIMES) setTimeout(again, 4300);
+      };
+      setTimeout(again, 500);
+      toast(`보속을 마음에 새기며 기도합니다. ${card.penance}`, 6500);
+    },
+  });
+}
+$('#prayBtn').onclick = goPray;
 
 $('#exitBtn').onclick = () => leaveRoom();
 $('#actBtn').onclick = act;

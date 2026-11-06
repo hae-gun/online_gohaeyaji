@@ -1,12 +1,12 @@
 export const $ = (sel) => document.querySelector(sel);
 
 let toastTimer;
-export function toast(message) {
+export function toast(message, ms = 3200) {
   const el = $('#toast');
   el.textContent = message;
   el.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, 3200);
+  toastTimer = setTimeout(() => { el.hidden = true; }, ms);
 }
 
 export function fade(on) {
