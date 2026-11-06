@@ -15,6 +15,8 @@ const TICK_MS = 500;
 const CELL = 40;
 const ORIGINS = new Set((process.env.ALLOWED_ORIGINS || 'https://wiz.gohaeyaji.com,https://hae-gun.github.io,http://localhost:8000').split(','));
 const ID_RE = /^[a-z0-9-]{1,16}$/;
+// Jersey names other people see: only the Korean Series entries, never free text
+const JERSEY_NAMES = new Set('강민호 고영표 구자욱 권동진 김도환 김민혁 김상수 김상준 김성윤 김영웅 김정운 김지찬 김태훈 김헌곤 김현수 김현준 대니엘 디아즈 로건 류지혁 류현인 박계범 박승규 박영현 배정대 배제성 배찬승 사토시 소형준 손동현 스기모토 안현민 양창섭 오원석 오윤석 우규민 원태인 이승민 이승현 이재현 이재희 이정훈 임기영 장성우 장승현 장준원 장진혁 장찬희 전병우 전용주 조대현 주권 최원준 최원태 최형우 페덱 한승택 허경민 후라도 힐리어드'.split(' '));
 const MAX_FRAME = 256;
 const IDLE_MS = 60_000;
 const MSG_GAP_MS = 2_000;
@@ -187,7 +189,7 @@ export function handle(c, raw) {
     if (!c.placed) noteEnter(c);
     c.placed = true;
   } else if (m[0] === 'u' && ID_RE.test(m[1]) && ID_RE.test(m[2])) {
-    c.look = [m[1], m[2], typeof m[3] === 'string' && /^\d{1,2}$/.test(m[3]) ? m[3] : '']; c.rev += 1;
+    c.look = [m[1], m[2], typeof m[3] === 'string' && /^\d{1,2}$/.test(m[3]) ? m[3] : '', JERSEY_NAMES.has(m[4]) ? m[4] : '']; c.rev += 1;
   } else if (m[0] === 'b' && bench.phase < 2 && c.seen >= bench.ready) {
     if (bench.phase === 0) { bench.phase = 1; bench.until = c.seen + config.gatherSec * 1000; bench.joined.clear(); }
     if (!bench.joined.has(c.id)) today().bench += 1;
@@ -235,7 +237,7 @@ export function tick() {
       for (const o of looks) c.known.set(o.id, o.rev);
       if (c.known.size > NEAR * 6) c.known = new Map(near.map((o) => [o.id, o.rev]));
       send(c, ['p', list.size, near.map((o) => [o.id, o.x, o.z, o.yaw, o.cheer, o.bubble ?? -1]),
-        looks.map((o) => [o.id, o.look[0], o.look[1], o.look[2]]), benchState(c)]);
+        looks.map((o) => [o.id, o.look[0], o.look[1], o.look[2], o.look[3]]), benchState(c)]);
     }
     for (const c of placed) c.bubble = undefined;
   }
@@ -275,7 +277,7 @@ export function start(port = PORT) {
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
     socket.setNoDelay(true);
     const now = Date.now();
-    const c = { id: nextId++, channel: name, socket, buffer: Buffer.alloc(0), x: 0, z: 0, yaw: 0, cheer: 0, placed: false, look: ['home', 'none', ''], rev: 0, known: new Map(), seen: now, last: now, tokens: 12, lastMsg: 0 };
+    const c = { id: nextId++, channel: name, socket, buffer: Buffer.alloc(0), x: 0, z: 0, yaw: 0, cheer: 0, placed: false, look: ['home', 'none', '', ''], rev: 0, known: new Map(), seen: now, last: now, tokens: 12, lastMsg: 0 };
     socket.on('error', () => drop(c));
     socket.on('close', () => drop(c));
     if (list.size >= CAP) { send(c, ['full']); drop(c, 4001); return; }
