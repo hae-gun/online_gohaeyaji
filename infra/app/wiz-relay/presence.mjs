@@ -1,5 +1,5 @@
 // Temporary presence server for the Magic Wiz Park page. Delete after the series.
-// One shared park of up to 2000 people. Each client hears only its nearest neighbours, twice a second,
+// Up to 10 parks of 1000 people each, filled from the first; each has its own bench-clearing. Each client hears only its nearest neighbours, twice a second,
 // so traffic grows with the audience instead of with its square. No free text is ever accepted.
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -8,8 +8,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PORT = Number(process.env.PORT || 8090);
-const CHANNELS = ['all'];
-const CAP = Number(process.env.CHANNEL_CAP || 2000);
+const MAX_CHANNELS = Number(process.env.MAX_CHANNELS || 10);
+const CAP = Number(process.env.CHANNEL_CAP || 1000);
 const NEAR = Number(process.env.NEAR || 40);
 const TICK_MS = 500;
 const CELL = 40;
@@ -25,9 +25,17 @@ const MESSAGE_COUNT = 21; // 8 KT messages, 8 Samsung messages, 5 big reactions
 const config = { need: Number(process.env.BENCH_NEED || 5), gatherSec: 30, cooldownSec: Number(process.env.BENCH_COOLDOWN_MS || 30_000) / 1000 };
 const BENCH_FIGHT_MS = 16_000; // about 5s of that is fans running in from the stands
 const BENCH_SHAKE_MS = 7_000;
-const bench = { phase: 0, joined: new Set(), until: 0, ready: 0 }; // 0 idle, 1 gathering, 2 brawl, 3 handshake
+const newBench = () => ({ phase: 0, joined: new Set(), until: 0, ready: 0 }); // 0 idle, 1 gathering, 2 brawl, 3 handshake
 
-const channels = Object.fromEntries(CHANNELS.map((c) => [c, new Map()]));
+const channels = {}, benches = {};
+for (let n = 1; n <= MAX_CHANNELS; n += 1) { channels[n] = new Map(); benches[n] = newBench(); }
+const onlineTotal = () => Object.values(channels).reduce((sum, list) => sum + list.size, 0);
+// Keep a reconnecting visitor in their channel when it has room, otherwise take the first channel with room
+function pickChannel(wanted) {
+  if (channels[wanted] && channels[wanted].size < CAP) return Number(wanted);
+  for (let n = 1; n <= MAX_CHANNELS; n += 1) if (channels[n].size < CAP) return n;
+  return 0;
+}
 let nextId = 1;
 
 // ---- anonymous daily usage: counts only, no IP and no visitor ID is kept ----
@@ -135,7 +143,7 @@ async function adminRoute(req, res) {
   } else if (req.method === 'GET' && path === '/wiz/admin') {
     res.writeHead(301, { location: '/wiz/admin/' }); res.end();
   } else if (req.method === 'GET' && path === '/wiz/admin/api/state') {
-    today(); sendJson(res, 200, { cheers, seed: SEED, config, online: channels.all.size, benchPhase: bench.phase, stats });
+    today(); sendJson(res, 200, { cheers, seed: SEED, config, online: onlineTotal(), byChannel: Object.values(channels).map((list) => list.size), benchPhase: Math.max(...Object.values(benches).map((b) => b.phase)), stats });
   } else if (req.method === 'PUT' && (path === '/wiz/admin/api/cheers' || path === '/wiz/admin/api/config')) {
     let body;
     try { body = JSON.parse(await readBody(req)); } catch { sendJson(res, 400, { error: 'body' }); return; }
@@ -183,6 +191,7 @@ export function handle(c, raw) {
   let m;
   try { m = JSON.parse(raw); } catch { return; }
   if (!Array.isArray(m)) return;
+  const bench = benches[c.channel];
   if (m[0] === 'm' && finite(m[1], -300, 300) && finite(m[2], -300, 300) && finite(m[3], -10, 10)) {
     c.x = Math.round(m[1] * 10) / 10; c.z = Math.round(m[2] * 10) / 10;
     c.yaw = Math.round(m[3] * 100) / 100; c.cheer = m[4] ? 1 : 0;
@@ -213,17 +222,18 @@ function neighbours(list, grid, c) {
   return near.map((o) => [o, (o.x - c.x) ** 2 + (o.z - c.z) ** 2]).sort((a, b) => a[1] - b[1]).slice(0, NEAR).map((p) => p[0]);
 }
 
-function stepBench(now) {
-  for (const id of bench.joined) if (!channels.all.has(id)) bench.joined.delete(id);
+function stepBench(bench, list, now) {
+  for (const id of bench.joined) if (!list.has(id)) bench.joined.delete(id);
   if (bench.phase === 1 && (now >= bench.until || bench.joined.size === 0)) { bench.phase = 0; bench.joined.clear(); }
   if (bench.phase === 2 && now >= bench.until) { bench.phase = 3; bench.until = now + BENCH_SHAKE_MS; }
   if (bench.phase === 3 && now >= bench.until) { bench.phase = 0; bench.joined.clear(); bench.ready = now + config.cooldownSec * 1000; }
 }
 
 export function tick() {
-  stepBench(Date.now());
-  const benchState = (c) => [bench.phase, bench.joined.size, config.need, Math.max(0, Math.ceil(((bench.phase ? bench.until : bench.ready) - Date.now()) / 1000)), [...bench.joined].indexOf(c.id) + 1, bench.phase >= 2 ? [...bench.joined].slice(0, 200) : []];
-  for (const list of Object.values(channels)) {
+  const benchState = (bench, c) => [bench.phase, bench.joined.size, config.need, Math.max(0, Math.ceil(((bench.phase ? bench.until : bench.ready) - Date.now()) / 1000)), [...bench.joined].indexOf(c.id) + 1, bench.phase >= 2 ? [...bench.joined].slice(0, 200) : []];
+  for (const [n, list] of Object.entries(channels)) {
+    const bench = benches[n];
+    stepBench(bench, list, Date.now());
     const placed = [...list.values()].filter((c) => c.placed);
     const grid = new Map();
     for (const c of placed) {
@@ -237,11 +247,11 @@ export function tick() {
       for (const o of looks) c.known.set(o.id, o.rev);
       if (c.known.size > NEAR * 6) c.known = new Map(near.map((o) => [o.id, o.rev]));
       send(c, ['p', list.size, near.map((o) => [o.id, o.x, o.z, o.yaw, o.cheer, o.bubble ?? -1]),
-        looks.map((o) => [o.id, o.look[0], o.look[1], o.look[2], o.look[3]]), benchState(c)]);
+        looks.map((o) => [o.id, o.look[0], o.look[1], o.look[2], o.look[3]]), benchState(bench, c)]);
     }
     for (const c of placed) c.bubble = undefined;
   }
-  notePeak(channels.all.size);
+  notePeak(onlineTotal());
   const now = Date.now();
   for (const list of Object.values(channels)) for (const c of [...list.values()]) if (now - c.seen > IDLE_MS) drop(c, 4000);
 }
@@ -269,21 +279,22 @@ export function start(port = PORT) {
   const server = createServer((req, res) => { adminRoute(req, res).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); });
   server.on('upgrade', (req, socket) => {
     const url = new URL(req.url, 'http://x');
-    const name = url.searchParams.get('c');
-    const list = channels[name];
+    const asked = url.searchParams.get('c');
     const key = req.headers['sec-websocket-key'];
-    if (!list || !key || !ORIGINS.has(req.headers.origin)) { socket.end('HTTP/1.1 403 Forbidden\r\n\r\n'); return; }
+    if (!(asked === 'auto' || asked === 'all' || channels[asked]) || !key || !ORIGINS.has(req.headers.origin)) { socket.end('HTTP/1.1 403 Forbidden\r\n\r\n'); return; }
     const accept = createHash('sha1').update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64');
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
     socket.setNoDelay(true);
     const now = Date.now();
+    const name = pickChannel(asked), list = channels[name];
     const c = { id: nextId++, channel: name, socket, buffer: Buffer.alloc(0), x: 0, z: 0, yaw: 0, cheer: 0, placed: false, look: ['home', 'none', '', ''], rev: 0, known: new Map(), seen: now, last: now, tokens: 12, lastMsg: 0 };
     socket.on('error', () => drop(c));
     socket.on('close', () => drop(c));
-    if (list.size >= CAP) { send(c, ['full']); drop(c, 4001); return; }
+    socket.on('end', () => drop(c));
+    if (!list) { send(c, ['full']); drop(c, 4001); return; }
     list.set(c.id, c);
     socket.on('data', (d) => { if (!c.gone) readFrames(c, d); });
-    send(c, ['hi', c.id, list.size]);
+    send(c, ['hi', c.id, list.size, name]);
   });
   const timer = setInterval(tick, TICK_MS);
   const save = () => { try { saveJson('stats.json', stats); } catch (e) { console.error('stats write failed', e.message); } };
