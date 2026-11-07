@@ -106,7 +106,7 @@ export function parsePitch(text) {
 export function parseResult(text) {
   const type = [
     [/병살/, 'dp'], [/홈런/, 'hr'], [/3루타/, 'triple'], [/2루타/, 'double'], [/1루타|안타/, 'single'],
-    [/삼진/, 'k'], [/볼넷|고의4구/, 'bb'], [/몸에 맞/, 'hbp'], [/실책/, 'error'], [/야수선택/, 'fc'],
+    [/삼진/, 'k'], [/볼넷|고의4구/, 'bb'], [/몸에 맞/, 'hbp'], [/실책/, 'error'], [/야수선택|(땅볼|번트)\S{0,2}\s?출루/, 'fc'],
     [/번트/, 'bunt'], [/땅볼/, 'ground'], [/플라이|뜬공/, 'fly'], [/직선타|라인드라이브/, 'line'], [/아웃/, 'ground'],
   ].find(([re]) => re.test(text))?.[1];
   if (!type) return null;
@@ -143,9 +143,19 @@ export function parseEvents(html) {
     if (pitch) { const code = parsePitch(pitch[1]); if (code) cur.pitches.push(code); continue; }
     const runner = parseRunner(text);
     if (runner) { (cur.res ? cur.runners : cur.mid).push(runner); continue; }
-    if (!cur.res && text.startsWith(`${cur.batter} :`)) cur.res = parseResult(text);
+    if (!cur.res && text.startsWith(`${cur.batter} :`)) { cur.res = parseResult(text); continue; }
+    // a pinch hitter can come up without a "N번타자" line: start his plate appearance from the result itself
+    const other = text.match(/^(\S+)\s*:\s*(.+)$/);
+    const res = other && other[1] !== cur.batter && !/주자/.test(other[1]) ? parseResult(other[2]) : null;
+    if (res) {
+      const order = cur.order % 9 + 1, top = half === '0';
+      if (cur.res) { close(); cur = { inn, top, order, batter: other[1], pitcher, pitches: [], mid: [], res, runners: [] }; }
+      else { cur.batter = other[1]; cur.res = res; }
+    }
   }
   close();
+  // a ground ball with a runner forced out and no double play: the batter reached on a fielder's choice
+  for (const e of events) if (e.res?.type === 'ground' && e.runners.some((q) => q.to === 0)) e.res.type = 'fc';
   return events;
 }
 
