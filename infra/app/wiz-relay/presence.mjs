@@ -147,30 +147,48 @@ function planNpcJoin(n, bench, now) {
   bench.npcPlan = pool.slice(0, k).map((o) => ({ id: o.id, at: now + rnd(2e3, config.gatherSec * 700) }));
 }
 
-// ---- training minigame: a daily top list per drill. Scores are capped and need a plausible play time. ----
+// ---- training minigame: a daily top list per drill. Scores are checked against play time. ----
 const TRAIN_MAX = [5000, 3000, 15000];
 // a drill now runs until the first miss, so the check is points per second of play instead of a fixed length
 const TRAIN_RATE = [2.4, 1.5, 4]; // best possible points per second, with room to spare
 const TRAIN_TOP = 20, TRAIN_SHOW = 10;
 function trainBoard(g) { const d = today(); if (!d.rank) d.rank = [[], [], []]; if (!d.train) d.train = [0, 0, 0]; return d.rank[g]; }
+// Rankings carry a nickname typed at the end of a run. Short, letters and digits only, and checked against a word list.
+const NICK_RE = /^[가-힣A-Za-z0-9]{2,8}$/;
+const NICK_BLOCK = ['시발', '씨발', '씨바', '시바', '병신', '븅신', '좆', '존나', '졸라', '개새', '새끼', '섹스', '보지', '자지', '애미', '애비', '느금', '니미', '엠창', '미친', '지랄', '꺼져', '죽어', '죽여', '닥쳐', '틀딱', '한남', '한녀', '운영', '관리자', '공식', '구단', '감독', '심판', 'admin', 'fuck', 'shit', 'sex', 'bitch', 'nigger'];
+let nickBlockExtra = [];
+try { nickBlockExtra = JSON.parse(readFileSync(process.env.WIZ_BLOCKED_WORDS || join(process.env.DATA_DIR || '/srv/wiz', 'blocked-words.json'), 'utf8')).map((w) => String(w).toLowerCase()); } catch { /* optional private list */ }
+export function nickProblem(nick) {
+  if (typeof nick !== 'string' || !NICK_RE.test(nick)) return 'INVALID';
+  const n = nick.toLowerCase();
+  return [...NICK_BLOCK, ...nickBlockExtra].some((w) => w && n.includes(w)) ? 'BLOCKED' : '';
+}
 export function trainList(g, c) {
   const list = trainBoard(g);
-  const mine = list.findIndex((e) => e.id === c.id) + 1;
-  return ['rk', g, list.slice(0, TRAIN_SHOW).map((e) => [e.s, e.t, e.n, e.nm, e.p]), mine > 0 && mine <= TRAIN_SHOW ? mine : 0, mine];
+  const mine = c.trainNick ? list.findIndex((e) => e.nick === c.trainNick) + 1 : 0;
+  return ['rk', g, list.slice(0, TRAIN_SHOW).map((e) => [e.s, e.t, e.nick || '팬', e.p]), mine > 0 && mine <= TRAIN_SHOW ? mine : 0, mine];
 }
+// a finished run waits here until its nickname arrives
 export function trainSubmit(c, g, s, who, now) {
   const started = c.trainStart?.[g];
   if (!started || s > 5 + (now - started) / 1000 * TRAIN_RATE[g]) return false;
   c.trainStart[g] = 0;
-  const list = trainBoard(g);
-  today().train[g] += 1;
-  const old = list.find((e) => e.id === c.id);
-  if (!s || (old && old.s >= s)) return true;
+  trainBoard(g); today().train[g] += 1;
+  (c.trainDone ||= [null, null, null])[g] = s > 0 ? { s, who, at: now } : null;
+  return true;
+}
+export function trainName(c, g, nick, now) {
+  const done = c.trainDone?.[g];
+  if (!done || now - done.at > 10 * 60_000) return 'EXPIRED';
+  const bad = nickProblem(nick); if (bad) return bad;
+  c.trainDone[g] = null; c.trainNick = nick;
+  const list = trainBoard(g), old = list.find((e) => (e.nick || '').toLowerCase() === nick.toLowerCase());
+  if (old && old.s >= done.s) return '';
   if (old) list.splice(list.indexOf(old), 1);
-  list.push({ s, t: teamOf(c), n: c.look[2], nm: c.look[3], p: who, id: c.id, at: now });
+  list.push({ s: done.s, t: teamOf(c), nick, p: done.who, at: now });
   list.sort((a, b) => b.s - a.s || a.at - b.at);
   list.length = Math.min(list.length, TRAIN_TOP);
-  return true;
+  return '';
 }
 
 function noteEnter(c) { const d = today(); d.enters += 1; d.teams[c.look[0].startsWith('ss-') ? 'samsung' : 'kt'] += 1; c.enteredAt = Date.now(); }
@@ -335,6 +353,10 @@ export function handle(c, raw) {
   } else if (m[0] === 'tr' && Number.isInteger(m[1]) && TRAIN_MAX[m[1]] !== undefined && Number.isInteger(m[2]) && m[2] >= 0 && m[2] <= TRAIN_MAX[m[1]] && JERSEY_NAMES.has(m[3])) {
     trainSubmit(c, m[1], m[2], m[3], c.seen);
     send(c, trainList(m[1], c));
+  } else if (m[0] === 'tn' && Number.isInteger(m[1]) && TRAIN_MAX[m[1]] !== undefined && c.seen - (c.lastNick || 0) >= 1_000) {
+    c.lastNick = c.seen;
+    const bad = trainName(c, m[1], m[2], c.seen);
+    send(c, bad ? ['tne', m[1], bad] : trainList(m[1], c));
   } else if (m[0] === 's' && Number.isInteger(m[1]) && m[1] >= 0 && m[1] < MESSAGE_COUNT && c.seen - c.lastMsg >= MSG_GAP_MS) {
     c.lastMsg = c.seen;
     c.bubble = m[1];
