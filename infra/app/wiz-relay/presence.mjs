@@ -147,6 +147,31 @@ function planNpcJoin(n, bench, now) {
   bench.npcPlan = pool.slice(0, k).map((o) => ({ id: o.id, at: now + rnd(2e3, config.gatherSec * 700) }));
 }
 
+// ---- training minigame: a daily top list per drill. Scores are capped and need a plausible play time. ----
+const TRAIN_MAX = [40, 30, 150];
+const TRAIN_MIN_MS = [20_000, 15_000, 30_000]; // ten tries cannot be faster than this
+const TRAIN_TOP = 20, TRAIN_SHOW = 10;
+function trainBoard(g) { const d = today(); if (!d.rank) d.rank = [[], [], []]; if (!d.train) d.train = [0, 0, 0]; return d.rank[g]; }
+export function trainList(g, c) {
+  const list = trainBoard(g);
+  const mine = list.findIndex((e) => e.id === c.id) + 1;
+  return ['rk', g, list.slice(0, TRAIN_SHOW).map((e) => [e.s, e.t, e.n, e.nm, e.p]), mine > 0 && mine <= TRAIN_SHOW ? mine : 0, mine];
+}
+export function trainSubmit(c, g, s, who, now) {
+  const started = c.trainStart?.[g];
+  if (!started || now - started < TRAIN_MIN_MS[g]) return false;
+  c.trainStart[g] = 0;
+  const list = trainBoard(g);
+  today().train[g] += 1;
+  const old = list.find((e) => e.id === c.id);
+  if (!s || (old && old.s >= s)) return true;
+  if (old) list.splice(list.indexOf(old), 1);
+  list.push({ s, t: teamOf(c), n: c.look[2], nm: c.look[3], p: who, id: c.id, at: now });
+  list.sort((a, b) => b.s - a.s || a.at - b.at);
+  list.length = Math.min(list.length, TRAIN_TOP);
+  return true;
+}
+
 function noteEnter(c) { const d = today(); d.enters += 1; d.teams[c.look[0].startsWith('ss-') ? 'samsung' : 'kt'] += 1; c.enteredAt = Date.now(); }
 function noteLeave(c) {
   if (!c.enteredAt) return;
@@ -302,6 +327,13 @@ export function handle(c, raw) {
     if (!bench.joined.has(c.id)) { today().bench += 1; award(teamOf(c), BENCH_JOIN_PT); }
     bench.joined.add(c.id);
     if (bench.joined.size >= config.need) { bench.phase = 2; bench.until = c.seen + BENCH_FIGHT_MS; }
+  } else if (m[0] === 'tg' && Number.isInteger(m[1]) && TRAIN_MAX[m[1]] !== undefined) {
+    (c.trainStart ||= [0, 0, 0])[m[1]] = c.seen;
+  } else if (m[0] === 'tq' && Number.isInteger(m[1]) && TRAIN_MAX[m[1]] !== undefined) {
+    send(c, trainList(m[1], c));
+  } else if (m[0] === 'tr' && Number.isInteger(m[1]) && TRAIN_MAX[m[1]] !== undefined && Number.isInteger(m[2]) && m[2] >= 0 && m[2] <= TRAIN_MAX[m[1]] && JERSEY_NAMES.has(m[3])) {
+    trainSubmit(c, m[1], m[2], m[3], c.seen);
+    send(c, trainList(m[1], c));
   } else if (m[0] === 's' && Number.isInteger(m[1]) && m[1] >= 0 && m[1] < MESSAGE_COUNT && c.seen - c.lastMsg >= MSG_GAP_MS) {
     c.lastMsg = c.seen;
     c.bubble = m[1];
