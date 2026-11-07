@@ -25,6 +25,15 @@
 
   <!-- yard and corridor HUD -->
   <div class="hud" id="hallUi" hidden>
+    <!-- first visit, until the first confession: what to do here (main.js firstGuide) -->
+    <div class="firstGuide" id="firstGuide" role="note" hidden>
+      <p class="fgTitle">비어 있는 고해소에 들어가<br>신부님께 솔직하게 말해 보세요</p>
+      <p class="fgSub">빨간불이 꺼진 고해소가 비어 있습니다. 한 줄이면 충분합니다</p>
+      <div class="fgRow">
+        <button class="fgGo" id="guideGo" type="button">빈 고해소로 가기</button>
+        <button class="fgClose" id="guideClose" type="button">둘러볼게요</button>
+      </div>
+    </div>
     <div class="top">
       <div class="sign"><b id="placeName">성당 앞마당</b><span><i class="dot"></i>사용 중 <span id="occ">0</span> / 21<span id="peopleWrap" hidden>, 함께 있는 사람 <span id="people">1</span>명</span></span><button class="chanBtn" id="chanBtn" type="button" hidden><span id="chanNo">1</span>채널 바꾸기</button>
         <div class="travel">

@@ -45,6 +45,7 @@ Redis는 AOF로 영속화되어(`redis-data` 볼륨) 관리자 페이지 숫자�
 | booth_enter | 고해소에 들어감 | booth(번호) |
 | booth_full | 들어가려는데 사용 중 | |
 | go_confess | 고해하기 버튼(빈 고해소로 걸어가 들어감) | |
+| first_guide | 첫 방문 안내 카드가 닫힘 | act(go 빈 고해소로 가기, close 둘러볼게요, enter 직접 걸어 들어감) |
 | confess_submit | 고해를 보냄 | persona, kind(answer, chat, safety, blocked, tooShort), cat(카테고리 id), caution, len(10자 단위), sample(예시 버튼으로 보냄) |
 | answer_done | 신부님 답을 끝까지 들음 | persona, cat, grade(판결 도장: g1 초범, g2 재범, g3 상습범, g4 고해소 단골, legend) |
 | card_share | 보속 카드를 만듦 | persona, cat, grade |

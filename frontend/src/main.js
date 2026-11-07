@@ -709,6 +709,24 @@ function goConfess() {
 }
 $('#goConfessBtn').onclick = goConfess;
 
+/* ---------- first-visit guide ---------- */
+// Until this browser has confessed once: a card over the booths saying what this place is for.
+// Gone once I head for a booth (either button or walking in), or say I'd rather look around;
+// it does not come back in the same visit.
+let guideDone = false;
+function showFirstGuide() {
+  if (guideDone || history.load().length) return;
+  $('#firstGuide').hidden = false;
+}
+function closeFirstGuide(act) {
+  if (guideDone) return;
+  guideDone = true;
+  if (!$('#firstGuide').hidden) track('first_guide', { act });
+  $('#firstGuide').hidden = true;
+}
+$('#guideGo').onclick = () => { closeFirstGuide('go'); goConfess(); };
+$('#guideClose').onclick = () => closeFirstGuide('close');
+
 /* ---------- booth flow ---------- */
 const CLAIM_FAILED = {
   OCCUPIED: BUSY_MESSAGE,
@@ -749,6 +767,7 @@ function abortEntering(message) {
 
 function enterRoom() {
   state = 'room';
+  closeFirstGuide('enter');
   track('booth_enter', { booth: current.id });
   boothAt = Date.now(); boothConfessions = 0;
   myEmote.stop();   // nobody sees me inside; the gesture ends at the door
@@ -1190,6 +1209,7 @@ $('#startBtn').onclick = () => {
   fade(true); setTimeout(() => fade(false), 60);   // a soft cut from the plaza view to the hall
   moveSender.now(player.position, player.rotation.y);   // others start seeing me from here
   applyJoystick();   // the move hint for this screen
+  setTimeout(showFirstGuide, 700);   // after the cut from the plaza view settles
 };
 
 /* ---------- frame loop ---------- */

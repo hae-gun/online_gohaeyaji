@@ -46,6 +46,16 @@ button.primary{background:var(--gold);color:#1d160c;border-color:var(--gold);fon
 .joystick.on{background:rgba(18,14,22,.5)}
 .joystick.on .knob{transition:none}
 @media (min-width:900px){.joystick{bottom:calc(40px + env(safe-area-inset-bottom))}}
+/* first-visit guide (main.js firstGuide): under the toast line, above the booths */
+.firstGuide{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 132px);transform:translateX(-50%);width:min(380px,calc(100% - 32px));background:rgba(28,23,33,.9);border:1px solid rgba(212,173,85,.6);border-radius:16px;padding:14px 16px 12px;text-align:center;pointer-events:auto;z-index:7;box-shadow:0 6px 24px rgba(0,0,0,.35);animation:fgIn .5s ease-out}
+.firstGuide[hidden]{display:none}
+.firstGuide .fgTitle{margin:0;font-size:16.5px;font-weight:700;line-height:1.45;color:#f3e6c4}
+.firstGuide .fgSub{margin:6px 0 10px;font-size:12.5px;color:var(--muted)}
+.firstGuide .fgRow{display:flex;justify-content:center;gap:8px}
+.firstGuide button{border-radius:999px;padding:8px 14px;font-size:13.5px;cursor:pointer;border:1px solid rgba(212,173,85,.6);background:transparent;color:#f3e6c4}
+.firstGuide .fgGo{background:var(--gold);border-color:var(--gold);color:#1c1721;font-weight:700}
+@keyframes fgIn{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+@media (max-width:640px){.firstGuide{top:calc(env(safe-area-inset-top,0px) + 150px)}}
 #toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 76px);transform:translateX(-50%);max-width:min(460px,calc(100% - 32px));background:#2a1e1e;border:1px solid rgba(255,74,61,.5);border-radius:16px;padding:12px 16px;line-height:1.55;text-align:center;font-size:14px;z-index:20}
 
 /* confessional room UI */
