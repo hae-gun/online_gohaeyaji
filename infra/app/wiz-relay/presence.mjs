@@ -72,7 +72,7 @@ const NPC_ROSTER = {kt:[["투수","1 고영표,11 스기모토,12 우규민,19 �
  samsung:[["투수","17 이재희,18 원태인,20 최원태,26 이승현,57 이승현,27 김태훈,28 이승민,38 임기영,42 양창섭,55 배찬승,59 페덱,60 장찬희,74 사토시,75 후라도"],["포수","24 김도환,46 장승현,47 강민호"],["내야수","0 디아즈,7 이재현,9 박계범,16 류지혁,30 김영웅,56 김상준,61 전병우"],["외야수","5 구자욱,32 김헌곤,34 최형우,39 김성윤,44 김현준,58 김지찬,66 박승규"]]};
 const NPC_LOOKS = {
   kt: { uniforms: [['jj2026', 6], ['home', 5], ['away', 3], ['mil2026', 2], ['jj2025', 1], ['found-home', 1], ['black25', 1], ['victory', 1]], gear: [['none', 4], ['wizbat', 5], ['balloon', 2], ['towel', 1], ['flag', 1], ['led', 1]] },
-  samsung: { uniforms: [['ss-home', 7], ['ss-away', 4], ['ss-2014h', 1], ['ss-sanb', 1], ['ss-1985', 1], ['ss-camo', 1]], gear: [['none', 4], ['towel', 4], ['balloon', 3], ['clapper', 1], ['flag', 1]] },
+  samsung: { uniforms: [['ss-home', 7], ['ss-away', 4], ['ss-2014h', 1], ['ss-sanb', 1], ['ss-1985', 1], ['ss-camo', 1]], gear: [['none', 4], ['towel', 4], ['balloon', 3], ['axe', 2], ['clapper', 1], ['flag', 1]] },
 };
 const rnd = (a, b) => a + Math.random() * (b - a);
 const weighted = (list) => { let r = Math.random() * list.reduce((t, x) => t + x[1], 0); for (const [v, w] of list) if ((r -= w) <= 0) return v; return list[0][0]; };
