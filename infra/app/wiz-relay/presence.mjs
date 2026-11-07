@@ -148,8 +148,9 @@ function planNpcJoin(n, bench, now) {
 }
 
 // ---- training minigame: a daily top list per drill. Scores are capped and need a plausible play time. ----
-const TRAIN_MAX = [40, 30, 150];
-const TRAIN_MIN_MS = [20_000, 15_000, 30_000]; // ten tries cannot be faster than this
+const TRAIN_MAX = [5000, 3000, 15000];
+// a drill now runs until the first miss, so the check is points per second of play instead of a fixed length
+const TRAIN_RATE = [2.4, 1.5, 4]; // best possible points per second, with room to spare
 const TRAIN_TOP = 20, TRAIN_SHOW = 10;
 function trainBoard(g) { const d = today(); if (!d.rank) d.rank = [[], [], []]; if (!d.train) d.train = [0, 0, 0]; return d.rank[g]; }
 export function trainList(g, c) {
@@ -159,7 +160,7 @@ export function trainList(g, c) {
 }
 export function trainSubmit(c, g, s, who, now) {
   const started = c.trainStart?.[g];
-  if (!started || now - started < TRAIN_MIN_MS[g]) return false;
+  if (!started || s > 5 + (now - started) / 1000 * TRAIN_RATE[g]) return false;
   c.trainStart[g] = 0;
   const list = trainBoard(g);
   today().train[g] += 1;
