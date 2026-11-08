@@ -148,11 +148,13 @@ function planNpcJoin(n, bench, now) {
 }
 
 // ---- training minigame: a daily top list per drill. Scores are checked against play time. ----
-const TRAIN_MAX = [5000, 3000, 15000];
+const TRAIN_MAX = [5000, 3000, 15000, 300];
 // a drill now runs until the first miss, so the check is points per second of play instead of a fixed length
-const TRAIN_RATE = [2.4, 1.5, 4]; // best possible points per second, with room to spare
+const TRAIN_RATE = [2.4, 1.5, 4, 25]; // best possible points per second, with room to spare
 const TRAIN_TOP = 20, TRAIN_SHOW = 10;
-function trainBoard(g) { const d = today(); if (!d.rank) d.rank = [[], [], []]; if (!d.train) d.train = [0, 0, 0]; return d.rank[g]; }
+function trainBoard(g) { const d = today(); d.rank ||= []; d.train ||= []; while (d.rank.length < TRAIN_MAX.length) d.rank.push([]); while (d.train.length < TRAIN_MAX.length) d.train.push(0); return d.rank[g]; }
+// people a fan can pick for training: the jersey names plus each team's manager
+const TRAINEES = new Set([...JERSEY_NAMES, '이강철', '박진만']);
 // Rankings carry a nickname typed at the end of a run. Short, letters and digits only, and checked against a word list.
 const NICK_RE = /^[가-힣A-Za-z0-9]{2,8}$/;
 const NICK_BLOCK = ['시발', '씨발', '씨바', '시바', '병신', '븅신', '좆', '존나', '졸라', '개새', '새끼', '섹스', '보지', '자지', '애미', '애비', '느금', '니미', '엠창', '미친', '지랄', '꺼져', '죽어', '죽여', '닥쳐', '틀딱', '한남', '한녀', '운영', '관리자', '공식', '구단', '감독', '심판', 'admin', 'fuck', 'shit', 'sex', 'bitch', 'nigger'];
@@ -174,7 +176,7 @@ export function trainSubmit(c, g, s, who, now) {
   if (!started || s > 5 + (now - started) / 1000 * TRAIN_RATE[g]) return false;
   c.trainStart[g] = 0;
   trainBoard(g); today().train[g] += 1;
-  (c.trainDone ||= [null, null, null])[g] = s > 0 ? { s, who, at: now } : null;
+  (c.trainDone ||= [])[g] = s > 0 ? { s, who, at: now } : null;
   return true;
 }
 export function trainName(c, g, nick, now) {
@@ -347,10 +349,10 @@ export function handle(c, raw) {
     bench.joined.add(c.id);
     if (bench.joined.size >= config.need) { bench.phase = 2; bench.until = c.seen + BENCH_FIGHT_MS; }
   } else if (m[0] === 'tg' && Number.isInteger(m[1]) && TRAIN_MAX[m[1]] !== undefined) {
-    (c.trainStart ||= [0, 0, 0])[m[1]] = c.seen;
+    (c.trainStart ||= [])[m[1]] = c.seen;
   } else if (m[0] === 'tq' && Number.isInteger(m[1]) && TRAIN_MAX[m[1]] !== undefined) {
     send(c, trainList(m[1], c));
-  } else if (m[0] === 'tr' && Number.isInteger(m[1]) && TRAIN_MAX[m[1]] !== undefined && Number.isInteger(m[2]) && m[2] >= 0 && m[2] <= TRAIN_MAX[m[1]] && JERSEY_NAMES.has(m[3])) {
+  } else if (m[0] === 'tr' && Number.isInteger(m[1]) && TRAIN_MAX[m[1]] !== undefined && Number.isInteger(m[2]) && m[2] >= 0 && m[2] <= TRAIN_MAX[m[1]] && TRAINEES.has(m[3])) {
     trainSubmit(c, m[1], m[2], m[3], c.seen);
     send(c, trainList(m[1], c));
   } else if (m[0] === 'tn' && Number.isInteger(m[1]) && TRAIN_MAX[m[1]] !== undefined && c.seen - (c.lastNick || 0) >= 1_000) {
