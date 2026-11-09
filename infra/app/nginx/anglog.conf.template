@@ -1,0 +1,60 @@
+# 앵로그 (github.com/hae-gun/anglog) 앞단. 고해야지 infra/app/nginx/ 에 함께 두는 파일이고,
+# 원본은 anglog 저장소 infra/front-nginx/anglog.conf.template.
+# ${ANGLOG_DOMAIN} 은 컨테이너 시작 때 infra/app/.env 값으로 바뀐다 (api.anglog.nobody-asked.dev).
+# 화면은 GitHub Pages(anglog.nobody-asked.dev)에 있고, 여기로는 API, 사진, 앵파크 실시간만 온다.
+#
+# 앵로그 쪽은 anglog-edge 네트워크의 anglog-web 컨테이너 하나로 모두 넘긴다 (안쪽 프록시는 앵로그가 한다).
+# anglog-web이 내려가 있어도 이 Nginx는 떠야 하므로, 주소를 시작할 때가 아니라 요청 때마다 찾는다.
+# (limit_conn perip, limit_req reqs, $connection_upgrade 는 default.conf.template 에 정의돼 있다)
+
+server {
+  listen 80;
+  server_name ${ANGLOG_DOMAIN};
+
+  location /.well-known/acme-challenge/ { root /var/www/certbot; }
+  location / { return 301 https://$host$request_uri; }
+}
+
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name ${ANGLOG_DOMAIN};
+
+  ssl_certificate     /etc/letsencrypt/live/${ANGLOG_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${ANGLOG_DOMAIN}/privkey.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+
+  resolver 127.0.0.11 valid=10s ipv6=off;
+  set $anglog http://anglog-web:80;
+
+  # 일기 사진 여러 장 (앵로그 API가 한 번에 80 MB까지 받는다)
+  client_max_body_size 80m;
+
+  # 앵파크 실시간
+  location = /ws {
+    limit_conn perip 20;
+    limit_req  zone=reqs burst=20 nodelay;
+
+    proxy_pass $anglog;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_read_timeout 60s;   # 클라이언트 ping이 10초라 여유 있음
+  }
+
+  location / {
+    # 피드를 열면 사진이 한꺼번에 오므로 넉넉히
+    limit_req zone=reqs burst=80 nodelay;
+
+    proxy_pass $anglog;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_read_timeout 60s;
+  }
+}
