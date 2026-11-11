@@ -1,0 +1,51 @@
+# 몇 대 몇? (github.com/hae-gun/whose-fault) API 앞단. 고해야지 infra/app/nginx/ 에 함께 두는 파일.
+# ${WHOSE_FAULT_DOMAIN} 은 컨테이너 시작 때 infra/app/.env 값으로 바뀐다 (api.whose-fault.nobody-asked.dev).
+# 화면은 GitHub Pages(whose-fault.nobody-asked.dev)에 있고, 여기로는 /api/ 만 온다.
+#
+# whose-fault-edge 네트워크의 whose-fault-api 컨테이너 하나로 넘긴다.
+# API가 내려가 있어도 이 Nginx는 떠야 하므로, 주소를 요청 때마다 찾는다.
+# (limit_req reqs 는 default.conf.template 에 정의돼 있다)
+
+server {
+  listen 80;
+  server_name ${WHOSE_FAULT_DOMAIN};
+
+  location /.well-known/acme-challenge/ { root /var/www/certbot; }
+  location / { return 301 https://$host$request_uri; }
+}
+
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name ${WHOSE_FAULT_DOMAIN};
+
+  ssl_certificate     /etc/letsencrypt/live/${WHOSE_FAULT_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${WHOSE_FAULT_DOMAIN}/privkey.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+
+  resolver 127.0.0.11 valid=10s ipv6=off;
+  set $whosefault http://whose-fault-api:8080;
+
+  # 사고 하나의 경로 데이터가 최대 30KB
+  client_max_body_size 64k;
+
+  location /api/ {
+    # 사고 화면은 5초마다 상태를 폴링한다
+    limit_req zone=reqs burst=40 nodelay;
+
+    proxy_pass $whosefault;
+    proxy_set_header Host $host;
+    # Cloudflare 프록시를 쓰지 않으므로 클라이언트가 보낸 IP 헤더는 믿지 않고 덮어쓴다
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header CF-Connecting-IP "";
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_read_timeout 30s;
+  }
+
+  location = /actuator/health {
+    proxy_pass $whosefault;
+  }
+
+  location / { return 404; }
+}

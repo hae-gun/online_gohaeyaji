@@ -77,6 +77,33 @@ ssh -i ~/.ssh/<서버키> rocky@<APP_IP> gohae-deploy
 - 앵로그 컨테이너가 내려가 있어도 이 Nginx는 뜬다 (주소를 요청 때마다 찾음). 그때 앵로그 주소만 502
 - 앵로그를 다른 서버로 옮기면 `app/nginx/anglog.conf.template`, compose의 `ANGLOG_DOMAIN`, `anglog-edge`를 지운다
 
+## 2-1-2. 몇 대 몇? 앞단 (같은 Nginx를 같이 씀)
+
+몇 대 몇?(github.com/hae-gun/whose-fault)은 이 서버에서 `~/whose-fault/backend`의 Docker Compose 스택(`whose-fault` 프로젝트: api, db)으로 돌고, 이 Nginx는 `api.whose-fault.nobody-asked.dev`의 TLS만 맡아 `whose-fault-edge` 네트워크의 `whose-fault-api`로 넘긴다 (`app/nginx/whose-fault.conf.template`). 화면은 GitHub Pages.
+
+처음 연결 순서 (순서를 바꾸면 인증서 파일이 없어 Nginx 전체가 안 뜬다):
+
+```bash
+docker network create whose-fault-edge
+# 1) API를 edge 네트워크에 붙이기
+cd ~/whose-fault/backend && git pull
+grep -q '^COMPOSE_FILE=' .env || echo 'COMPOSE_FILE=docker-compose.yml:docker-compose.edge.yml' >> .env
+docker compose up -d
+# 2) 인증서 (Nginx가 떠 있는 상태라 webroot로)
+cd ~/gohae/online_gohaeyaji/infra/app
+set -a; . ./.env; set +a
+docker compose run --rm certbot certonly --webroot -w /var/www/certbot \
+  -d api.whose-fault.nobody-asked.dev -m "$CERT_EMAIL" --agree-tos -n
+# 3) 주소를 넣고 배포
+echo 'WHOSE_FAULT_DOMAIN=api.whose-fault.nobody-asked.dev' >> .env
+gohae-deploy
+curl -s https://api.whose-fault.nobody-asked.dev/actuator/health
+```
+
+- 갱신은 기존 certbot 크론이 함께 처리한다
+- API 컨테이너가 내려가 있어도 이 Nginx는 뜬다. 그때 몇 대 몇 주소만 502
+- 다른 서버로 옮기면 `app/nginx/whose-fault.conf.template`, compose의 `WHOSE_FAULT_DOMAIN`, `whose-fault-edge`를 지운다
+
 ## 2-2. Redis 데이터 (영속화)
 
 Redis는 AOF로 디스크에 남긴다(`backend/docker-compose.yml`, `redis-data` 볼륨). 문의함, 답변 개선함, 얼굴 신고와 금지, 방문 통계가 Redis 재시작과 서버 재부팅 뒤에도 남는다. 기계가 갑자기 멈추면 마지막 1초치만 잃는다.

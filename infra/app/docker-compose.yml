@@ -11,14 +11,18 @@ services:
       OPS_IP: ${OPS_IP}
       # 앵로그 (github.com/hae-gun/anglog/infra). 인증서를 먼저 받은 뒤 .env에 넣을 것
       ANGLOG_DOMAIN: ${ANGLOG_DOMAIN:?infra/app/.env에 ANGLOG_DOMAIN을 넣으세요 (앵로그 README 1번 순서)}
+      # 몇 대 몇? (github.com/hae-gun/whose-fault). 인증서를 먼저 받은 뒤 .env에 넣을 것 (README 2-1-2)
+      WHOSE_FAULT_DOMAIN: ${WHOSE_FAULT_DOMAIN:?infra/app/.env에 WHOSE_FAULT_DOMAIN을 넣으세요 (README 2-1-2 순서)}
     volumes:
       - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro,Z
       - ./nginx/anglog.conf.template:/etc/nginx/templates/anglog.conf.template:ro,Z
+      - ./nginx/whose-fault.conf.template:/etc/nginx/templates/whose-fault.conf.template:ro,Z
       - ./data/letsencrypt:/etc/letsencrypt:ro,z
       - ./data/certbot-www:/var/www/certbot:z
       - wiz-data:/srv/wiz:ro
     # anglog-edge: 앵로그 스택의 web 컨테이너 하나만 붙어 있는 네트워크 (docker network create anglog-edge)
-    networks: [backend, anglog-edge]
+    # whose-fault-edge: 몇 대 몇? API 컨테이너 하나만 붙어 있는 네트워크 (docker network create whose-fault-edge)
+    networks: [backend, anglog-edge, whose-fault-edge]
     depends_on: [wiz-presence]
     restart: unless-stopped
 
@@ -83,3 +87,6 @@ networks:
   anglog-edge:
     external: true
     name: anglog-edge
+  whose-fault-edge:
+    external: true
+    name: whose-fault-edge
